@@ -131,7 +131,7 @@ namespace ArchivePasswordTestTool
             ProgramParameter.DebugMode = false;
             ProgramParameter.FastDebugMode = false;
         }
-        public static readonly string Version = "1.0.0";
+        public static readonly string Version = "1.0.1";
         public static string AppPath { get; set; }
         public static string ArchiveDecryptionProgram { get; set; }
         public static string ArchiveFile { get; set; }
