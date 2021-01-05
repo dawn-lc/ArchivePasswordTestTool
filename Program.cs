@@ -131,7 +131,7 @@ namespace ArchivePasswordTestTool
             ProgramParameter.DebugMode = false;
             ProgramParameter.FastDebugMode = false;
         }
-        public static readonly string Version = "1.0.1";
+        public static readonly string Version = "1.0.2";
         public static string AppPath { get; set; }
         public static string ArchiveDecryptionProgram { get; set; }
         public static string ArchiveFile { get; set; }
@@ -400,7 +400,7 @@ namespace ArchivePasswordTestTool
                     {
                         using (new GZipStream(Stream_Receive, CompressionMode.Decompress))
                         {
-                            using (StreamReader Stream_Reader = new StreamReader(Stream_Receive, Encoding.Default))
+                            using (StreamReader Stream_Reader = new StreamReader(Stream_Receive, Encoding.UTF8))
                             {
                                 return Stream_Reader.ReadToEnd();
                             }
@@ -411,7 +411,7 @@ namespace ArchivePasswordTestTool
                 {
                     using (Stream stream = Web_Response.GetResponseStream())
                     {
-                        using (StreamReader streamReader = new StreamReader(stream, Encoding.Default))
+                        using (StreamReader streamReader = new StreamReader(stream, Encoding.UTF8))
                         {
                             return streamReader.ReadToEnd();
                         }
@@ -529,6 +529,8 @@ namespace ArchivePasswordTestTool
 
             try
             {
+                Console.WriteLine(HttpGet("https://api.github.com/repos/dawn-lc/ArchivePasswordTestTool/releases/latest", 3000));
+                Console.ReadLine();
                 JObject ReleasesLatest = (JObject)JsonConvert.DeserializeObject(HttpGet("https://api.github.com/repos/dawn-lc/ArchivePasswordTestTool/releases/latest", 3000));
                 if (ReleasesLatest["tag_name"].ToString() != ProgramParameter.Version)
                 {
