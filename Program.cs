@@ -131,7 +131,8 @@ namespace ArchivePasswordTestTool
             ProgramParameter.DebugMode = false;
             ProgramParameter.FastDebugMode = false;
         }
-        public static readonly string Version = "1.0.2";
+        public static readonly int[] Version = new int[] { 1, 0, 3 };
+        public static readonly string VersionType = "Preview";
         public static string AppPath { get; set; }
         public static string ArchiveDecryptionProgram { get; set; }
         public static string ArchiveFile { get; set; }
@@ -145,6 +146,183 @@ namespace ArchivePasswordTestTool
         public static bool DebugMode { get; set; }
         public static bool FastDebugMode { get; set; }
     }
+    class UpgradeModule
+    {
+        /// <summary>
+        /// 对比版本号
+        /// </summary>
+        /// <param name="sourceVersion">源版本</param>
+        /// <param name="targetVersion">目标版本</param>
+        /// <returns>true 目标版本较高, false 源版本较高 或 两者相等 或 版本号格式不一致</returns>
+        private static bool CompareVersion(int[] sourceVersion, int[] targetVersion)
+        {
+            if (sourceVersion.Length == targetVersion.Length)
+            {
+                for (int i = 0; i < sourceVersion.Length; i++)
+                {
+                    if (sourceVersion[i] < targetVersion[i])
+                    {
+                        return true;
+                    }
+                }
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// 对比版本类型
+        /// </summary>
+        /// <param name="sourceVersion">源版本类型</param>
+        /// <param name="targetVersion">目标版本类型</param>
+        /// <returns>true 目标版本类型较高, false 源版本类型较高</returns>
+        private static bool CompareVersionType(string sourceVersionType, string targetVersionType)
+        {
+            List<string[]> VersionType = new List<string[]>
+            {
+                new string[] { "Final", "Full Version", "Enhance", "Standard" },
+                new string[] { "Release", "Release Candidate" },
+                new string[] { "Preview" },
+                new string[] { "Beta" },
+                new string[] { "Alpha" },
+                new string[] { "Free", "Demo" }
+            };
+            int sourceVersionTypeLevel = VersionType.Count;
+            int targetVersionLevel = VersionType.Count;
+            for (int i = 0; i < VersionType.Count; i++)
+            {
+                if (VersionType[i].Contains(sourceVersionType))
+                {
+                    sourceVersionTypeLevel = i;
+                }
+                if (VersionType[i].Contains(targetVersionType))
+                {
+                    targetVersionLevel = i;
+                }
+            }
+            if (sourceVersionTypeLevel < targetVersionLevel)
+            {
+                return true;
+            }
+            else
+            {
+                return false;
+            }
+        }
+        public static void Upgrade()
+        {
+            Console.WriteLine("有可用的更新！是否前往查看?");
+            while (true)
+            {
+                Console.Write("(按Y前往查看更新/按N退出): ");
+                switch (Console.ReadKey().Key)
+                {
+                    case ConsoleKey.Y:
+                        Console.Clear();
+                        Process.Start("https://www.bilibili.com/read/cv6101558");
+                        break;
+                    case ConsoleKey.N:
+                        return;
+                    default:
+                        Console.WriteLine();
+                        Console.WriteLine("输入错误!");
+                        continue;
+                }
+                break;
+            }
+        }
+        public static void CheckUpgrade()
+        {
+            JObject ReleasesLatestInfo = null;
+
+            string ReleasesLatestInfoData = HttpGet("https://api.github.com/repos/dawn-lc/ArchivePasswordTestTool/releases/latest", 3000);
+
+            if (ReleasesLatestInfoData != null)
+            {
+                ReleasesLatestInfo = (JObject)JsonConvert.DeserializeObject(ReleasesLatestInfoData);
+            }
+
+            if (ReleasesLatestInfo == null)
+            {
+                Console.WriteLine("检查更新失败！请检查您的网络情况。");
+                Process.Start("https://www.bilibili.com/read/cv6101558");
+            }
+            else
+            {
+                int[] LatestVersion = new int[] { };
+                for (int i = 0; i < ReleasesLatestInfo["tag_name"].ToString().Split('-')[0].Split('.').Length; i++)
+                {
+                    LatestVersion.Concat(new int[] { Convert.ToInt32(ReleasesLatestInfo["tag_name"].ToString().Split('-')[0].Split('.')[i]) });
+                }
+
+                string LatestVersionType = null;
+                if (ReleasesLatestInfo["tag_name"].ToString().Split('-').Length > 1)
+                {
+                    LatestVersionType = ReleasesLatestInfo["tag_name"].ToString().Split('-')[1];
+                }
+
+                if (CompareVersionType(ProgramParameter.VersionType, LatestVersionType))
+                {
+                    Upgrade();
+                }
+                else
+                {
+                    if (CompareVersion(ProgramParameter.Version, LatestVersion))
+                    {
+                        Upgrade();
+                    }
+                    else
+                    {
+                        Console.WriteLine("当前已是最新版本。[" + ReleasesLatestInfo["tag_name"].ToString() + "]");
+                    }
+                }
+            }
+        }
+        public static string HttpGet(string url, int timeOut)
+        {
+            ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls;
+            ServicePointManager.SecurityProtocol = (SecurityProtocolType)3072;
+            HttpWebRequest Web_Request = (HttpWebRequest)WebRequest.Create(url);
+            Web_Request.AllowAutoRedirect = false;
+            Web_Request.Timeout = timeOut;
+            Web_Request.Method = "GET";
+            Web_Request.UserAgent = "Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko) Chrome/87.0.4280.88 Safari/537.36";
+            Web_Request.ContentType = "charset=UTF-8;";
+            try
+            {
+                HttpWebResponse Web_Response = (HttpWebResponse)Web_Request.GetResponse();
+                if (Web_Response.ContentEncoding.ToLower().Contains("gzip"))
+                {
+                    using (Stream Stream_Receive = Web_Response.GetResponseStream())
+                    {
+                        using (new GZipStream(Stream_Receive, CompressionMode.Decompress))
+                        {
+                            using (StreamReader Stream_Reader = new StreamReader(Stream_Receive, Encoding.UTF8))
+                            {
+                                return Stream_Reader.ReadToEnd();
+                            }
+                        }
+                    }
+                }
+                else
+                {
+                    using (Stream stream = Web_Response.GetResponseStream())
+                    {
+                        using (StreamReader streamReader = new StreamReader(stream, Encoding.UTF8))
+                        {
+                            return streamReader.ReadToEnd();
+                        }
+                    }
+                }
+
+            }
+            catch (Exception ex)
+            {
+                if (ProgramParameter.DebugMode) { Console.WriteLine(ex.ToString()); }
+                return null;
+            }
+        }
+    }
+
     class Program
     {
         public static Assembly CurrentDomain_AssemblyResolve(object sender, ResolveEventArgs args)
@@ -381,49 +559,7 @@ namespace ArchivePasswordTestTool
                 }
             }
         }
-        public static string HttpGet(string url, int timeOut)
-        {
-            ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls;
-            ServicePointManager.SecurityProtocol = (SecurityProtocolType)3072;
-            HttpWebRequest Web_Request = (HttpWebRequest)WebRequest.Create(url);
-            Web_Request.AllowAutoRedirect = false;
-            Web_Request.Timeout = timeOut;
-            Web_Request.Method = "GET";
-            Web_Request.UserAgent = "Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko) Chrome/87.0.4280.88 Safari/537.36";
-            Web_Request.ContentType = "charset=UTF-8;";
-            try
-            {
-                HttpWebResponse Web_Response = (HttpWebResponse)Web_Request.GetResponse();
-                if (Web_Response.ContentEncoding.ToLower().Contains("gzip"))
-                {
-                    using (Stream Stream_Receive = Web_Response.GetResponseStream())
-                    {
-                        using (new GZipStream(Stream_Receive, CompressionMode.Decompress))
-                        {
-                            using (StreamReader Stream_Reader = new StreamReader(Stream_Receive, Encoding.UTF8))
-                            {
-                                return Stream_Reader.ReadToEnd();
-                            }
-                        }
-                    }
-                }
-                else
-                {
-                    using (Stream stream = Web_Response.GetResponseStream())
-                    {
-                        using (StreamReader streamReader = new StreamReader(stream, Encoding.UTF8))
-                        {
-                            return streamReader.ReadToEnd();
-                        }
-                    }
-                }
-
-            }
-            catch (Exception ex)
-            {
-                throw ex;
-            }
-        }
+        
         /// <summary>
         /// 取中间文本
         /// </summary>
@@ -527,43 +663,7 @@ namespace ArchivePasswordTestTool
                 }
             }
 
-            try
-            {
-                JObject ReleasesLatest = (JObject)JsonConvert.DeserializeObject(HttpGet("https://api.github.com/repos/dawn-lc/ArchivePasswordTestTool/releases/latest", 3000));
-                if (ReleasesLatest["tag_name"].ToString() != ProgramParameter.Version)
-                {
-                    while (true)
-                    {
-                        Console.WriteLine("有可用的更新！是否前往查看?");
-                        Console.Write("(按Y前往查看更新/按N退出): ");
-                        switch (Console.ReadKey().Key)
-                        {
-                            case ConsoleKey.Y:
-                                Console.Clear();
-                                Process.Start("https://www.bilibili.com/read/cv6101558");
-                                break;
-                            case ConsoleKey.N:
-                                return false;
-                            default:
-                                Console.WriteLine();
-                                Console.WriteLine("输入错误!");
-                                continue;
-                        }
-                        break;
-                    }
-                }
-                else
-                {
-                    Console.WriteLine("当前已是最新版本。");
-                }
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine("检查更新失败！请检查您的网络情况。");
-                Process.Start("https://www.bilibili.com/read/cv6101558");
-                if (ProgramParameter.DebugMode) { Console.WriteLine(ex.ToString()); }
-            }
-            
+           
             
             if (!File.Exists(ProgramParameter.AppPath + "7z.exe"))
             {
@@ -611,6 +711,8 @@ namespace ArchivePasswordTestTool
                     }
                 }
             }
+
+            UpgradeModule.CheckUpgrade();
 
             if (StartupParametersCheck(StartupParameters, "-F"))
             {
