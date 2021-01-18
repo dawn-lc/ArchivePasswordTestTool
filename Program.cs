@@ -131,8 +131,8 @@ namespace ArchivePasswordTestTool
             ProgramParameter.DebugMode = false;
             ProgramParameter.FastDebugMode = false;
         }
-        public static readonly int[] Version = new int[] { 1, 0, 3 };
-        public static readonly string VersionType = "Preview";
+        public static readonly int[] Version = new int[] { 1, 0, 4 };
+        public static readonly string VersionType = "Release";
         public static readonly string Developer = "dawn-lc";
         public static readonly string AppName = Assembly.GetExecutingAssembly().FullName.Substring(0, Assembly.GetExecutingAssembly().FullName.IndexOf(","));
         public static readonly string AppHomePage = "https://www.bilibili.com/read/cv6101558";
@@ -177,7 +177,7 @@ namespace ArchivePasswordTestTool
         /// </summary>
         /// <param name="sourceVersion">源版本类型</param>
         /// <param name="targetVersion">目标版本类型</param>
-        /// <returns>true 目标版本类型较高, false 源版本类型较高</returns>
+        /// <returns>true 目标版本类型较高, false 源版本类型较高 或 两者版本类型一致 或 版本类型错误</returns>
         private static bool CompareVersionType(string sourceVersionType, string targetVersionType)
         {
             List<string[]> VersionType = new List<string[]>
@@ -187,22 +187,23 @@ namespace ArchivePasswordTestTool
                 new string[] { "Preview" },
                 new string[] { "Beta" },
                 new string[] { "Alpha" },
-                new string[] { "Free", "Demo" }
+                new string[] { "Free", "Demo", "Test" }
             };
             int sourceVersionTypeLevel = VersionType.Count;
             int targetVersionLevel = VersionType.Count;
-            for (int i = 0; i < VersionType.Count; i++)
+            for (int i = 1; i < VersionType.Count; i++)
             {
                 if (VersionType[i].Contains(sourceVersionType))
                 {
-                    sourceVersionTypeLevel = i;
+                    sourceVersionTypeLevel = VersionType.Count - i;
                 }
                 if (VersionType[i].Contains(targetVersionType))
                 {
-                    targetVersionLevel = i;
+                    targetVersionLevel = VersionType.Count - i;
                 }
             }
-            if (sourceVersionTypeLevel > targetVersionLevel)
+
+            if (sourceVersionTypeLevel < targetVersionLevel)
             {
                 return true;
             }
@@ -256,9 +257,8 @@ namespace ArchivePasswordTestTool
                 int[] LatestVersion = new int[] { };
                 for (int i = 0; i < ReleasesLatestInfo["tag_name"].ToString().Split('-')[0].Split('.').Length; i++)
                 {
-                    LatestVersion.Concat(new int[] { Convert.ToInt32(ReleasesLatestInfo["tag_name"].ToString().Split('-')[0].Split('.')[i]) });
+                    LatestVersion = LatestVersion.Concat(new int[] { Convert.ToInt32(ReleasesLatestInfo["tag_name"].ToString().Split('-')[0].Split('.')[i]) }).ToArray();
                 }
-
                 string LatestVersionType = null;
                 if (ReleasesLatestInfo["tag_name"].ToString().Split('-').Length > 1)
                 {
@@ -291,7 +291,7 @@ namespace ArchivePasswordTestTool
             Web_Request.AllowAutoRedirect = false;
             Web_Request.Timeout = timeOut;
             Web_Request.Method = "GET";
-            Web_Request.UserAgent = "APP "+ string.Join(".", ProgramParameter.Version)+"-"+ ProgramParameter.VersionType+";";
+            Web_Request.UserAgent = ProgramParameter.AppName + " " + string.Join(".", ProgramParameter.Version)+"-"+ ProgramParameter.VersionType+";";
             Web_Request.ContentType = "charset=UTF-8;";
             sw.Restart();
             try
