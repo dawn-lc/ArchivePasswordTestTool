@@ -133,6 +133,9 @@ namespace ArchivePasswordTestTool
         }
         public static readonly int[] Version = new int[] { 1, 0, 3 };
         public static readonly string VersionType = "Preview";
+        public static readonly string Developer = "dawn-lc";
+        public static readonly string AppName = Assembly.GetExecutingAssembly().FullName.Substring(0, Assembly.GetExecutingAssembly().FullName.IndexOf(","));
+        public static readonly string AppHomePage = "https://www.bilibili.com/read/cv6101558";
         public static string AppPath { get; set; }
         public static string ArchiveDecryptionProgram { get; set; }
         public static string ArchiveFile { get; set; }
@@ -199,7 +202,7 @@ namespace ArchivePasswordTestTool
                     targetVersionLevel = i;
                 }
             }
-            if (sourceVersionTypeLevel < targetVersionLevel)
+            if (sourceVersionTypeLevel > targetVersionLevel)
             {
                 return true;
             }
@@ -218,7 +221,7 @@ namespace ArchivePasswordTestTool
                 {
                     case ConsoleKey.Y:
                         Console.Clear();
-                        Process.Start("https://www.bilibili.com/read/cv6101558");
+                        Process.Start(ProgramParameter.AppHomePage);
                         break;
                     case ConsoleKey.N:
                         return;
@@ -234,7 +237,9 @@ namespace ArchivePasswordTestTool
         {
             JObject ReleasesLatestInfo = null;
 
-            string ReleasesLatestInfoData = HttpGet("https://api.github.com/repos/dawn-lc/ArchivePasswordTestTool/releases/latest", 3000);
+            Console.WriteLine("检查更新中...");
+
+            string ReleasesLatestInfoData = HttpGet("https://api.github.com/repos/"+ ProgramParameter.Developer + "/"+ ProgramParameter.AppName + "/releases/latest", 3000);
 
             if (ReleasesLatestInfoData != null)
             {
@@ -244,7 +249,7 @@ namespace ArchivePasswordTestTool
             if (ReleasesLatestInfo == null)
             {
                 Console.WriteLine("检查更新失败！请检查您的网络情况。");
-                Process.Start("https://www.bilibili.com/read/cv6101558");
+                Process.Start(ProgramParameter.AppHomePage);
             }
             else
             {
@@ -272,21 +277,23 @@ namespace ArchivePasswordTestTool
                     }
                     else
                     {
-                        Console.WriteLine("当前已是最新版本。[" + ReleasesLatestInfo["tag_name"].ToString() + "]");
+                        Console.WriteLine("当前已是最新版本。[" + string.Join(".", ProgramParameter.Version) + "-" + ProgramParameter.VersionType + "]");
                     }
                 }
             }
         }
         public static string HttpGet(string url, int timeOut)
         {
+            Stopwatch sw = new Stopwatch();
             ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls;
             ServicePointManager.SecurityProtocol = (SecurityProtocolType)3072;
             HttpWebRequest Web_Request = (HttpWebRequest)WebRequest.Create(url);
             Web_Request.AllowAutoRedirect = false;
             Web_Request.Timeout = timeOut;
             Web_Request.Method = "GET";
-            Web_Request.UserAgent = "Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko) Chrome/87.0.4280.88 Safari/537.36";
+            Web_Request.UserAgent = "APP "+ string.Join(".", ProgramParameter.Version)+"-"+ ProgramParameter.VersionType+";";
             Web_Request.ContentType = "charset=UTF-8;";
+            sw.Restart();
             try
             {
                 HttpWebResponse Web_Response = (HttpWebResponse)Web_Request.GetResponse();
@@ -298,6 +305,11 @@ namespace ArchivePasswordTestTool
                         {
                             using (StreamReader Stream_Reader = new StreamReader(Stream_Receive, Encoding.UTF8))
                             {
+                                sw.Stop();
+                                if (ProgramParameter.DebugMode)
+                                {
+                                    Console.WriteLine("请求完成，耗时：" + sw.ElapsedMilliseconds+"ms");
+                                }
                                 return Stream_Reader.ReadToEnd();
                             }
                         }
@@ -309,6 +321,11 @@ namespace ArchivePasswordTestTool
                     {
                         using (StreamReader streamReader = new StreamReader(stream, Encoding.UTF8))
                         {
+                            sw.Stop();
+                            if (ProgramParameter.DebugMode)
+                            {
+                                Console.WriteLine("请求完成，耗时：" + sw.ElapsedMilliseconds + "ms");
+                            }
                             return streamReader.ReadToEnd();
                         }
                     }
@@ -325,6 +342,12 @@ namespace ArchivePasswordTestTool
 
     class Program
     {
+        /// <summary>
+        /// 程序集解析
+        /// </summary>
+        /// <param name="sender"></param>
+        /// <param name="args"></param>
+        /// <returns></returns>
         public static Assembly CurrentDomain_AssemblyResolve(object sender, ResolveEventArgs args)
         {
             string[] assemblyName = Regex.Split(args.Name, ",", RegexOptions.IgnoreCase);
