@@ -131,7 +131,7 @@ namespace ArchivePasswordTestTool
             ProgramParameter.DebugMode = false;
             ProgramParameter.FastDebugMode = false;
         }
-        public static readonly int[] Version = new int[] { 1, 0, 4 };
+        public static readonly int[] Version = new int[] { 1, 0, 5 };
         public static readonly string VersionType = "Release";
         public static readonly string Developer = "dawn-lc";
         public static readonly string AppName = Assembly.GetExecutingAssembly().FullName.Substring(0, Assembly.GetExecutingAssembly().FullName.IndexOf(","));
@@ -215,24 +215,24 @@ namespace ArchivePasswordTestTool
         public static void Upgrade()
         {
             Console.WriteLine("有可用的更新！是否前往查看?");
-            while (true)
-            {
-                Console.Write("(按Y前往查看更新/按N退出): ");
-                switch (Console.ReadKey().Key)
+                while (true)
                 {
-                    case ConsoleKey.Y:
-                        Console.Clear();
-                        Process.Start(ProgramParameter.AppHomePage);
-                        break;
-                    case ConsoleKey.N:
-                        return;
-                    default:
-                        Console.WriteLine();
-                        Console.WriteLine("输入错误!");
-                        continue;
+                    Console.Write("(按Y前往查看更新/按N退出): ");
+                    switch (Console.ReadKey().Key)
+                    {
+                        case ConsoleKey.Y:
+                            Console.Clear();
+                            Process.Start(ProgramParameter.AppHomePage);
+                            break;
+                        case ConsoleKey.N:
+                            return;
+                        default:
+                            Console.WriteLine();
+                            Console.WriteLine("输入错误!");
+                            continue;
+                    }
+                    break;
                 }
-                break;
-            }
         }
         public static void CheckUpgrade()
         {
@@ -277,7 +277,8 @@ namespace ArchivePasswordTestTool
                     }
                     else
                     {
-                        Console.WriteLine("当前已是最新版本。[" + string.Join(".", ProgramParameter.Version) + "-" + ProgramParameter.VersionType + "]");
+                        Console.WriteLine("当前本地程序已是最新版本。");
+                        Console.WriteLine("目前版本[" + string.Join(".", ProgramParameter.Version) + " - " + ProgramParameter.VersionType + "] 最新版本["+ ReleasesLatestInfo["tag_name"].ToString()+ "]");
                     }
                 }
             }
@@ -432,9 +433,10 @@ namespace ArchivePasswordTestTool
                 string[] DictionaryData;
                 try
                 {
+                    string[] NewLine = new string[] { Environment.NewLine , "\r\n", "\n", "\r"};
                     using (StreamReader sr = new StreamReader(ProgramParameter.Dictionary, EncodingType.GetType(ProgramParameter.Dictionary)))
                     {
-                        DictionaryData = sr.ReadToEnd().Split(new string[] { "\r\n" }, StringSplitOptions.None).Distinct().ToArray();
+                        DictionaryData = sr.ReadToEnd().Split(NewLine, StringSplitOptions.RemoveEmptyEntries).Distinct().ToArray();
                         sr.Close();
                     }
                 }
