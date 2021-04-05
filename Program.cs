@@ -13,333 +13,80 @@ using System.Threading;
 using Newtonsoft.Json.Linq;
 using Newtonsoft.Json;
 using System.Text.RegularExpressions;
+using module.dawnlc.me;
+using System.Threading.Tasks;
 
 namespace ArchivePasswordTestTool
 {
-    /// <summary>
-    /// 获取文件的编码格式
-    /// </summary>
-    public class EncodingType
-    {
-        /// <summary>
-        /// 给定文件的路径，读取文件的二进制数据，判断文件的编码类型
-        /// </summary>
-        /// <param name=“FILE_NAME“>文件路径</param>
-        /// <returns>文件的编码类型</returns>
-        public static System.Text.Encoding GetType(string FILE_NAME)
-        {
-            FileStream fs = new FileStream(FILE_NAME, FileMode.Open, FileAccess.Read);
-            Encoding r = GetType(fs);
-            fs.Close();
-            return r;
-        }
-
-        /// <summary>
-        /// 通过给定的文件流，判断文件的编码类型
-        /// </summary>
-        /// <param name=“fs“>文件流</param>
-        /// <returns>文件的编码类型</returns>
-        public static System.Text.Encoding GetType(Stream fs)
-        {
-            byte[] Unicode = new byte[] { 0xFF, 0xFE, 0x41 };
-            byte[] UnicodeBIG = new byte[] { 0xFE, 0xFF, 0x00 };
-            byte[] UTF8 = new byte[] { 0xEF, 0xBB, 0xBF }; //带BOM
-            Encoding reVal = Encoding.Default;
-
-            BinaryReader r = new BinaryReader(fs, System.Text.Encoding.Default);
-            int i;
-            int.TryParse(fs.Length.ToString(), out i);
-            byte[] ss = r.ReadBytes(i);
-            if (IsUTF8Bytes(ss) || (ss[0] == 0xEF && ss[1] == 0xBB && ss[2] == 0xBF))
-            {
-                reVal = Encoding.UTF8;
-            }
-            else if (ss[0] == 0xFE && ss[1] == 0xFF && ss[2] == 0x00)
-            {
-                reVal = Encoding.BigEndianUnicode;
-            }
-            else if (ss[0] == 0xFF && ss[1] == 0xFE && ss[2] == 0x41)
-            {
-                reVal = Encoding.Unicode;
-            }
-            r.Close();
-            return reVal;
-
-        }
-
-        /// <summary>
-        /// 判断是否是不带 BOM 的 UTF8 格式
-        /// </summary>
-        /// <param name=“data“></param>
-        /// <returns></returns>
-        private static bool IsUTF8Bytes(byte[] data)
-        {
-            int charByteCounter = 1; //计算当前正分析的字符应还有的字节数
-            byte curByte; //当前分析的字节.
-            for (int i = 0; i < data.Length; i++)
-            {
-                curByte = data[i];
-                if (charByteCounter == 1)
-                {
-                    if (curByte >= 0x80)
-                    {
-                        //判断当前
-                        while (((curByte <<= 1) & 0x80) != 0)
-                        {
-                            charByteCounter++;
-                        }
-                        //标记位首位若为非0 则至少以2个1开始 如:110XXXXX...........1111110X
-                        if (charByteCounter == 1 || charByteCounter > 6)
-                        {
-                            return false;
-                        }
-                    }
-                }
-                else
-                {
-                    //若是UTF-8 此时第一位必须为1
-                    if ((curByte & 0xC0) != 0x80)
-                    {
-                        return false;
-                    }
-                    charByteCounter--;
-                }
-            }
-            if (charByteCounter > 1)
-            {
-                throw new Exception("非预期的byte格式");
-            }
-            return true;
-        }
-
-    }
-
     public class ProgramParameter
     {
-        public ProgramParameter()
-        {
-            ProgramParameter.AppPath = Environment.CurrentDirectory + "\\";
-            ProgramParameter.ArchiveDecryptionProgram = null;
-            ProgramParameter.ArchiveFile = null;
-            ProgramParameter.ArchiveFileType = null;
-            ProgramParameter.FileSize = 0;
-            ProgramParameter.FileName = null;
-            ProgramParameter.Dictionary = null;
-            ProgramParameter.EncryptArchivePassword = null;
-            ProgramParameter.DecryptArchiveThreadCount = 1;
-            ProgramParameter.EncryptArchiveFileDecryptComplete = false;
-            ProgramParameter.DebugMode = false;
-            ProgramParameter.FastDebugMode = false;
-        }
-        public static readonly int[] Version = new int[] { 1, 0, 5 };
-        public static readonly string VersionType = "Release";
-        public static readonly string Developer = "dawn-lc";
         public static readonly string AppName = Assembly.GetExecutingAssembly().FullName.Substring(0, Assembly.GetExecutingAssembly().FullName.IndexOf(","));
+        public static readonly string AppPath = Environment.CurrentDirectory + "\\";
+        public static readonly int[] Version = new int[] { 1, 0, 7 };
+        public static readonly string VersionType = "Preview";
         public static readonly string AppHomePage = "https://www.bilibili.com/read/cv6101558";
-        public static string AppPath { get; set; }
-        public static string ArchiveDecryptionProgram { get; set; }
-        public static string ArchiveFile { get; set; }
-        public static string ArchiveFileType { get; set; }
-        public static long FileSize { get; set; }
-        public static string FileName { get; set; }
-        public static string Dictionary { get; set; }
-        public static string EncryptArchivePassword { get; set; }
-        public static int DecryptArchiveThreadCount { get; set; }
-        public static bool EncryptArchiveFileDecryptComplete { get; set; }
+        public static readonly string Developer = "dawn-lc";
         public static bool DebugMode { get; set; }
         public static bool FastDebugMode { get; set; }
-    }
-    class UpgradeModule
-    {
-        /// <summary>
-        /// 对比版本号
-        /// </summary>
-        /// <param name="sourceVersion">源版本</param>
-        /// <param name="targetVersion">目标版本</param>
-        /// <returns>true 目标版本较高, false 源版本较高 或 两者相等 或 版本号格式不一致</returns>
-        private static bool CompareVersion(int[] sourceVersion, int[] targetVersion)
+        public static FileInfo ArchiveDecryptionProgram { get; set; }
+        public static FileInfo ArchiveFile { get; set; }
+        public static FileInfo Dictionary { get; set; }
+        public static string EncryptArchivePassword { get; set; }
+        public static int DecryptArchiveThreadCount { get; set; }
+
+        public ProgramParameter()
         {
-            if (sourceVersion.Length == targetVersion.Length)
-            {
-                for (int i = 0; i < sourceVersion.Length; i++)
-                {
-                    if (sourceVersion[i] < targetVersion[i])
-                    {
-                        return true;
-                    }
-                }
-            }
-            return false;
-        }
+            DebugMode = false;
+            FastDebugMode = false;
 
-        /// <summary>
-        /// 对比版本类型
-        /// </summary>
-        /// <param name="sourceVersion">源版本类型</param>
-        /// <param name="targetVersion">目标版本类型</param>
-        /// <returns>true 目标版本类型较高, false 源版本类型较高 或 两者版本类型一致 或 版本类型错误</returns>
-        private static bool CompareVersionType(string sourceVersionType, string targetVersionType)
-        {
-            List<string[]> VersionType = new List<string[]>
-            {
-                new string[] { "Final", "Full Version", "Enhance", "Standard" },
-                new string[] { "Release", "Release Candidate" },
-                new string[] { "Preview" },
-                new string[] { "Beta" },
-                new string[] { "Alpha" },
-                new string[] { "Free", "Demo", "Test" }
-            };
-            int sourceVersionTypeLevel = VersionType.Count;
-            int targetVersionLevel = VersionType.Count;
-            for (int i = 1; i < VersionType.Count; i++)
-            {
-                if (VersionType[i].Contains(sourceVersionType))
-                {
-                    sourceVersionTypeLevel = VersionType.Count - i;
-                }
-                if (VersionType[i].Contains(targetVersionType))
-                {
-                    targetVersionLevel = VersionType.Count - i;
-                }
-            }
-
-            if (sourceVersionTypeLevel < targetVersionLevel)
-            {
-                return true;
-            }
-            else
-            {
-                return false;
-            }
-        }
-        public static void Upgrade()
-        {
-            Console.WriteLine("有可用的更新！是否前往查看?");
-                while (true)
-                {
-                    Console.Write("(按Y前往查看更新/按N退出): ");
-                    switch (Console.ReadKey().Key)
-                    {
-                        case ConsoleKey.Y:
-                            Console.Clear();
-                            Process.Start(ProgramParameter.AppHomePage);
-                            break;
-                        case ConsoleKey.N:
-                            return;
-                        default:
-                            Console.WriteLine();
-                            Console.WriteLine("输入错误!");
-                            continue;
-                    }
-                    break;
-                }
-        }
-        public static void CheckUpgrade()
-        {
-            JObject ReleasesLatestInfo = null;
-
-            Console.WriteLine("检查更新中...");
-
-            string ReleasesLatestInfoData = HttpGet("https://api.github.com/repos/"+ ProgramParameter.Developer + "/"+ ProgramParameter.AppName + "/releases/latest", 3000);
-
-            if (ReleasesLatestInfoData != null)
-            {
-                ReleasesLatestInfo = (JObject)JsonConvert.DeserializeObject(ReleasesLatestInfoData);
-            }
-
-            if (ReleasesLatestInfo == null)
-            {
-                Console.WriteLine("检查更新失败！请检查您的网络情况。");
-                Process.Start(ProgramParameter.AppHomePage);
-            }
-            else
-            {
-                int[] LatestVersion = new int[] { };
-                for (int i = 0; i < ReleasesLatestInfo["tag_name"].ToString().Split('-')[0].Split('.').Length; i++)
-                {
-                    LatestVersion = LatestVersion.Concat(new int[] { Convert.ToInt32(ReleasesLatestInfo["tag_name"].ToString().Split('-')[0].Split('.')[i]) }).ToArray();
-                }
-                string LatestVersionType = null;
-                if (ReleasesLatestInfo["tag_name"].ToString().Split('-').Length > 1)
-                {
-                    LatestVersionType = ReleasesLatestInfo["tag_name"].ToString().Split('-')[1];
-                }
-
-                if (CompareVersionType(ProgramParameter.VersionType, LatestVersionType))
-                {
-                    Upgrade();
-                }
-                else
-                {
-                    if (CompareVersion(ProgramParameter.Version, LatestVersion))
-                    {
-                        Upgrade();
-                    }
-                    else
-                    {
-                        Console.WriteLine("当前本地程序已是最新版本。");
-                        Console.WriteLine("目前版本[" + string.Join(".", ProgramParameter.Version) + " - " + ProgramParameter.VersionType + "] 最新版本["+ ReleasesLatestInfo["tag_name"].ToString()+ "]");
-                    }
-                }
-            }
-        }
-        public static string HttpGet(string url, int timeOut)
-        {
-            Stopwatch sw = new Stopwatch();
-            ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls;
-            ServicePointManager.SecurityProtocol = (SecurityProtocolType)3072;
-            HttpWebRequest Web_Request = (HttpWebRequest)WebRequest.Create(url);
-            Web_Request.AllowAutoRedirect = false;
-            Web_Request.Timeout = timeOut;
-            Web_Request.Method = "GET";
-            Web_Request.UserAgent = ProgramParameter.AppName + " " + string.Join(".", ProgramParameter.Version)+"-"+ ProgramParameter.VersionType+";";
-            Web_Request.ContentType = "charset=UTF-8;";
-            sw.Restart();
             try
             {
-                HttpWebResponse Web_Response = (HttpWebResponse)Web_Request.GetResponse();
-                if (Web_Response.ContentEncoding.ToLower().Contains("gzip"))
+                ArchiveDecryptionProgram = new FileInfo(AppPath + "7z.exe");
+                if (!ArchiveDecryptionProgram.Exists)
                 {
-                    using (Stream Stream_Receive = Web_Response.GetResponseStream())
-                    {
-                        using (new GZipStream(Stream_Receive, CompressionMode.Decompress))
-                        {
-                            using (StreamReader Stream_Reader = new StreamReader(Stream_Receive, Encoding.UTF8))
-                            {
-                                sw.Stop();
-                                if (ProgramParameter.DebugMode)
-                                {
-                                    Console.WriteLine("请求完成，耗时：" + sw.ElapsedMilliseconds+"ms");
-                                }
-                                return Stream_Reader.ReadToEnd();
-                            }
-                        }
-                    }
+                    IO.ExtractResFile(MethodBase.GetCurrentMethod().DeclaringType.Namespace + ".7z.exe", AppPath + "7z.exe");
                 }
                 else
                 {
-                    using (Stream stream = Web_Response.GetResponseStream())
+                    using (FileStream data = new FileStream(AppPath + "7z.exe", FileMode.Open, FileAccess.Read))
                     {
-                        using (StreamReader streamReader = new StreamReader(stream, Encoding.UTF8))
+                        if (!IO.ComparisonFile(Assembly.GetExecutingAssembly().GetManifestResourceStream(MethodBase.GetCurrentMethod().DeclaringType.Namespace + ".7z.exe"), data))
                         {
-                            sw.Stop();
-                            if (ProgramParameter.DebugMode)
+                            while (true)
                             {
-                                Console.WriteLine("请求完成，耗时：" + sw.ElapsedMilliseconds + "ms");
+                                Console.WriteLine("注意！校验到7Zip与本程序自带的不一致，可能会导致程序无法正常工作。");
+                                Console.Write("是否使用本程序自带的7Zip版本将其覆盖？(按Y覆盖/按N不覆盖): ");
+                                switch (Console.ReadKey().Key)
+                                {
+                                    case ConsoleKey.Y:
+                                        Console.Clear();
+                                        IO.ExtractResFile(MethodBase.GetCurrentMethod().DeclaringType.Namespace + ".7z.exe", AppPath + "7z.exe");
+                                        break;
+                                    case ConsoleKey.N:
+                                        break;
+                                    default:
+                                        Console.WriteLine();
+                                        Console.WriteLine("输入错误!");
+                                        continue;
+                                }
+                                break;
                             }
-                            return streamReader.ReadToEnd();
                         }
                     }
                 }
-
             }
-            catch (Exception ex)
+            catch (Exception)
             {
-                if (ProgramParameter.DebugMode) { Console.WriteLine(ex.ToString()); }
-                return null;
+                Console.WriteLine("释放7Zip时出现错误!(按任意键退出程序)");
+                Console.ReadKey();
+                Environment.Exit(0);
             }
+            EncryptArchivePassword = null;
+            DecryptArchiveThreadCount = 1;
         }
+
     }
+
 
     class Program
     {
@@ -378,125 +125,120 @@ namespace ArchivePasswordTestTool
             }
         }
 
+        public class Parameter
+        {
+            public Parameter(int Thread, string PassWord)
+            {
+                this.PassWord = PassWord;
+                this.Thread = Thread;
+            }
+
+            public string PassWord { get; }
+            public int Thread { get; }
+        }
         static void Main(string[] args)
         {
-            new ProgramParameter();
             AppDomain.CurrentDomain.AssemblyResolve += new ResolveEventHandler(CurrentDomain_AssemblyResolve);
-            
+
+            new ProgramParameter();
+
             if (Initialize(args))
             {
-                string[] Data;
-                Data = DecryptArchiveFile("t \"" + ProgramParameter.ArchiveFile + "\" -p", ProgramParameter.ArchiveDecryptionProgram);
-                if (Data[0].Contains("Testing archive:"))
+                if (ProgramParameter.ArchiveFile.Extension.ToLower().Contains("rar"))
                 {
-                    if (Data[0].Contains("Everything is Ok"))
+                    Console.WriteLine("RAR格式压缩包！由于RAR专利问题需要调用完整版7Zip！");
+                    Console.WriteLine("请确保已安装完整版7zip！(按任意键继续！)");
+                    Console.ReadKey();
+                    if (string.IsNullOrEmpty(ReadRegeditValue("SOFTWARE\\7-Zip", "Path").ToString()))
                     {
-                        Console.WriteLine("非加密压缩包！（按任意键退出）");
+                        Console.WriteLine("调用完全体7Zip失败,请检查7Zip安装情况!(按任意键退出程序)");
                         Console.ReadKey();
+                        Process.Start("https://sparanoid.com/lab/7z/");
                         return;
                     }
                     else
                     {
-                        if (Data[1].Contains("Can not open encrypted archive. Wrong password?"))
-                        {
-                            ProgramParameter.FileName = null;
-                        }
-                        else
-                        {
-                            Data = DecryptArchiveFile("l \"" + ProgramParameter.ArchiveFile + "\"", ProgramParameter.ArchiveDecryptionProgram);
-                            foreach (var item in GetContent(Data[0], "  ------------------------", "------------------- -----").Split(new string[] { "\r\n" }, StringSplitOptions.RemoveEmptyEntries))
-                            {
-                                string[] FileInfo = item.Split(new string[] { " " }, 6, StringSplitOptions.RemoveEmptyEntries);
-                                if (ProgramParameter.FileSize == 0 && Convert.ToInt64(FileInfo[4]) > 0)
-                                {
-                                    ProgramParameter.FileSize = Convert.ToInt64(FileInfo[4]);
-                                    ProgramParameter.FileName = FileInfo[5];
-                                }
-                                if (Convert.ToInt64(FileInfo[4]) != ProgramParameter.FileSize && Convert.ToInt64(FileInfo[4]) > 0)
-                                {
-                                    if (ProgramParameter.FileSize > Convert.ToInt64(FileInfo[4]))
-                                    {
-                                        ProgramParameter.FileSize = Convert.ToInt64(FileInfo[4]);
-                                        ProgramParameter.FileName = FileInfo[5];
-                                    }
-                                }
-                            }
-                        }
+                        ProgramParameter.ArchiveDecryptionProgram = new FileInfo(ReadRegeditValue("SOFTWARE\\7-Zip", "Path").ToString() + "7z.exe");
                     }
                 }
-                else
+                Dictionary<string, List<string>> returnData = RunProgram(ProgramParameter.ArchiveDecryptionProgram, new string[] { "t", "\"" + ProgramParameter.ArchiveFile.FullName + "\"", "-p" });
+                if (!returnData.TryGetValue("Output", out List<string> Output))
                 {
                     Console.WriteLine("压缩包损坏 或 不是支持的压缩包！（按任意键退出）");
                     Console.ReadKey();
                     return;
                 }
-                string[] DictionaryData;
+                else
+                {
+                    if (Output.Where(p => p != null && p.Contains("Everything is Ok")).Any())
+                    {
+                        Console.WriteLine("非加密压缩包！（按任意键退出）");
+                        Console.ReadKey();
+                        return;
+                    }
+                }
+                List<Parameter> Dictionary = new List<Parameter>();
                 try
                 {
-                    string[] NewLine = new string[] { Environment.NewLine , "\r\n", "\n", "\r"};
-                    using (StreamReader sr = new StreamReader(ProgramParameter.Dictionary, EncodingType.GetType(ProgramParameter.Dictionary)))
+                    string[] NewLine = new string[] { Environment.NewLine, "\r\n", "\n", "\r" };
+                    using (StreamReader sr = new StreamReader(ProgramParameter.Dictionary.FullName, Encoding.UTF8))
                     {
-                        DictionaryData = sr.ReadToEnd().Split(NewLine, StringSplitOptions.RemoveEmptyEntries).Distinct().ToArray();
-                        sr.Close();
-                    }
-                }
-                catch (Exception e)
-                {
-                    Console.WriteLine(e.Message);
-                    return;
-                }
-
-
-                Stopwatch sw = new Stopwatch();
-                sw.Restart();
-                ManualResetEvent[] ManualEvents = new ManualResetEvent[ProgramParameter.DecryptArchiveThreadCount];
-                int piece = 0;
-                for (int i = 0; i < ProgramParameter.DecryptArchiveThreadCount; i++)
-                {
-                    string[] DictionaryPiece = new string[] { };
-                    if ((i + 1) != ProgramParameter.DecryptArchiveThreadCount)
-                    {
-                        DictionaryPiece = DictionaryData.Skip(piece).Take(DictionaryData.Length / ProgramParameter.DecryptArchiveThreadCount).ToArray();
-                        piece += DictionaryData.Length / ProgramParameter.DecryptArchiveThreadCount;
-                    }
-                    else
-                    {
-                        DictionaryPiece = DictionaryData.Skip(piece).Take(DictionaryData.Length).ToArray();
-                    }
-
-                    ManualEvents[i] = new ManualResetEvent(false);
-                    ThreadPool.QueueUserWorkItem(new WaitCallback(DecryptArchiveFileThread), new Parameter("线程" + i.ToString(), DictionaryPiece, ManualEvents[i]));
-                }
-                WaitHandle.WaitAll(ManualEvents);
-                sw.Stop();
-                if (ProgramParameter.EncryptArchivePassword != null)
-                {
-                    string DictionaryString = ProgramParameter.EncryptArchivePassword;
-                    foreach (var item in DictionaryData.Distinct())
-                    {
-                        if (item != ProgramParameter.EncryptArchivePassword)
+                        string[] DictionaryData = sr.ReadToEnd().Split(NewLine, StringSplitOptions.RemoveEmptyEntries).Distinct().ToArray();
+                        Random r = new Random();
+                        foreach (var item in DictionaryData)
                         {
-                            DictionaryString += "\r\n" + item;
+                            Dictionary.Add(new Parameter(r.Next(0, ProgramParameter.DecryptArchiveThreadCount), item));
                         }
                     }
-                    using (StreamWriter file = new StreamWriter(ProgramParameter.Dictionary, false))
-                    {
-                        file.Write(DictionaryString);
-                        file.Close();
-                    }
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine("尝试读取密码字典时出现错误!(按任意键退出程序)");
+                    if (ProgramParameter.DebugMode) { Console.Write(ex.ToString()); }
+                    Console.ReadKey();
+                    return;
+                }
+                Stopwatch sw = new Stopwatch();
+                sw.Restart();
+
+                using (ConsoleExpand ConsoleCanvas = new ConsoleExpand())
+                {
+                    Parallel.ForEach(Dictionary, new ParallelOptions() { MaxDegreeOfParallelism = ProgramParameter.DecryptArchiveThreadCount }, (i, loopState) => {
+                        ConsoleCanvas.Print(0, i.Thread, "[" + i.Thread + "] 密码: [" + i.PassWord + "] 测试中...");
+                        returnData = RunProgram(ProgramParameter.ArchiveDecryptionProgram, new string[] { "t", "\"" + ProgramParameter.ArchiveFile.FullName + "\"", "-p\"" + i.PassWord + "\"" });
+                        if (returnData.ContainsKey("Output"))
+                        {
+                            if (returnData["Output"].Where(p => p != null && p.Contains("Everything is Ok")).Any())
+                            {
+                                ProgramParameter.EncryptArchivePassword = i.PassWord;
+                                loopState.Stop();
+                                ConsoleCanvas.Print(0, i.Thread, "[" + i.Thread + "] 密码: [" + i.PassWord + "] 正确!");
+                            }
+                            else
+                            {
+                                ConsoleCanvas.Print(0, i.Thread, "[" + i.Thread + "] 密码: [" + i.PassWord + "] 错误!");
+                            }
+                        }
+
+                    });
+                }
+                sw.Stop();
+                Console.SetCursorPosition(0, ProgramParameter.DecryptArchiveThreadCount+1);
+                if (ProgramParameter.EncryptArchivePassword != null)
+                {
                     Console.WriteLine("\r\n已找到解压密码: \r\n" + ProgramParameter.EncryptArchivePassword + "\r\n共耗时: " + sw.Elapsed.ToString(@"hh\:mm\:ss\.ffff"));
                 }
                 else
                 {
-                    Console.WriteLine("已测试 [" + DictionaryData.Length + "] 个密码, 没有找到正确的解压密码. 耗时: " + sw.Elapsed.ToString(@"hh\:mm\:ss\.ffff"));
+                    Console.WriteLine("已测试 [" + Dictionary.Count + "] 个密码, 没有找到正确的解压密码. 耗时: " + sw.Elapsed.ToString(@"hh\:mm\:ss\.ffff"));
                 }
                 Console.Write("是否保存测试结果?(按回车键保存并退出/按其他任意键不保存并退出)");
                 switch (Console.ReadKey().Key)
                 {
                     case ConsoleKey.Enter:
-                        using (StreamWriter file = new StreamWriter(ProgramParameter.AppPath + Path.GetFileName(ProgramParameter.ArchiveFile) + "[测试报告].txt", false))
+                        using (StreamWriter file = new StreamWriter(ProgramParameter.AppPath + Path.GetFileName(ProgramParameter.ArchiveFile.Name) + "[测试报告].txt", false))
                         {
-                            file.WriteLine("加密压缩包: " +ProgramParameter.ArchiveFile);
+                            file.WriteLine("加密压缩包: " + ProgramParameter.ArchiveFile);
                             file.WriteLine("字典: " + ProgramParameter.Dictionary);
                             if (ProgramParameter.EncryptArchivePassword != null)
                             {
@@ -509,7 +251,7 @@ namespace ArchivePasswordTestTool
                             file.Write("耗时: " + sw.Elapsed.ToString(@"hh\:mm\:ss\.ffff"));
                             file.Close();
                         }
-                        Process.Start("Explorer.exe", "/select, \"" + ProgramParameter.AppPath + Path.GetFileName(ProgramParameter.ArchiveFile) + "[测试报告].txt" + "\"");
+                        Process.Start("Explorer.exe", "/select, \"" + ProgramParameter.AppPath + Path.GetFileName(ProgramParameter.ArchiveFile.Name) + "[测试报告].txt" + "\"");
                         break;
                     default:
                         break;
@@ -521,21 +263,10 @@ namespace ArchivePasswordTestTool
                 Console.WriteLine("初始化失败!");
                 return;
             }
+
         }
 
-        public class Parameter
-        {
-            public Parameter(string name, string[] DictionaryData, WaitHandle doneEvent)
-            {
-                this.DictionaryData = DictionaryData;
-                this.DoneEvent = doneEvent;
-                this.Name = name;
-            }
 
-            public string[] DictionaryData { get; }
-            public WaitHandle DoneEvent { get; set; }
-            public string Name { get; }
-        }
         /// <summary>
         /// 判断键值是否存在
         /// </summary>
@@ -552,60 +283,9 @@ namespace ArchivePasswordTestTool
                 return true;
             }
         }
-        /// <summary>
-        /// Checks the file is textfile or not.
-        /// </summary>
-        /// <param name="fileName">Name of the file.</param>     
-        public static bool CheckIsTextFile(string fileName)
-        {
-            FileStream fs = new FileStream(fileName, FileMode.Open, FileAccess.Read);
-            bool isTextFile = true;
-            try
-            {
-                int i = 0;
-                int length = (int)fs.Length;
-                byte data;
-                while (i < length && isTextFile)
-                {
-                    data = (byte)fs.ReadByte();
-                    isTextFile = (data != 0); i++;
-                }
-                return isTextFile;
-            }
-            catch (Exception)
-            {
-                return false;
-            }
-            finally
-            {
-                if (fs != null)
-                {
-                    fs.Close();
-                }
-            }
-        }
-        
-        /// <summary>
-        /// 取中间文本
-        /// </summary>
-        /// <param name="Str">全文</param>
-        /// <param name="First">前文</param>
-        /// <param name="Final">后文</param>
-        /// <returns>如果Str中不包含First或Final,返回null. 如果Str中包含First和Final,返回First和Final中的文本.</returns>
-        public static string GetContent(string Str, string First, string Final)
-        {
-            if (Str.Contains(First) && Str.Contains(Final))
-            {
-                int FirstPosition = Str.IndexOf(First) + First.Length;
-                int FinalPosition = Str.IndexOf(Final, FirstPosition) - FirstPosition;
-                return Str.Substring(FirstPosition, FinalPosition);
-            }
-            else
-            {
-                return null;
-            }
 
-        }
+
+
         /// <summary>
         /// 读取注册表值
         /// </summary>
@@ -623,21 +303,25 @@ namespace ArchivePasswordTestTool
                 return null;
             }
         }
-        
-        private static bool StartupParametersCheck(List<string> StartupParameters,string ParameterFlag)
+
+        private static bool StartupParametersCheck(List<string> StartupParameters, string ParameterFlag)
         {
             if (StartupParameters.Contains(ParameterFlag))
             {
                 try
                 {
-                    if(!string.IsNullOrEmpty(StartupParameters[StartupParameters.IndexOf(ParameterFlag) + 1]))
+                    if (string.IsNullOrEmpty(StartupParameters[StartupParameters.IndexOf(ParameterFlag) + 1]) || StartupParameters[StartupParameters.IndexOf(ParameterFlag) + 1].Substring(0, 1) == "-")
+                    {
+                        throw new Exception();
+                    }
+                    else
                     {
                         return true;
                     }
                 }
                 catch (Exception ex)
                 {
-                    Console.Write("启动参数存在错误！请检查参数：["+ ParameterFlag +"]");
+                    Console.Write("启动参数存在错误！请检查参数：[" + ParameterFlag + "]");
                     Console.ReadLine();
                     if (ProgramParameter.DebugMode) { Console.Write(ex.ToString()); }
                     return false;
@@ -645,7 +329,7 @@ namespace ArchivePasswordTestTool
             }
             return false;
         }
-        
+
         private static bool Initialize(string[] args)
         {
             Console.Title = "压缩包密码测试工具";
@@ -688,80 +372,61 @@ namespace ArchivePasswordTestTool
                 }
             }
 
-           
-            
-            if (!File.Exists(ProgramParameter.AppPath + "7z.exe"))
+            using (FileStream configFile = new FileStream(ProgramParameter.AppPath + "config.json", FileMode.OpenOrCreate, FileAccess.ReadWrite))
             {
-                ExtractResFile(MethodBase.GetCurrentMethod().DeclaringType.Namespace + ".7z.exe", ProgramParameter.AppPath + "7z.exe");
-            }
-            else
-            {
-                StringBuilder MD5String = new StringBuilder();
-                foreach (var MD5byte in MD5.Create().ComputeHash(Assembly.GetExecutingAssembly().GetManifestResourceStream(MethodBase.GetCurrentMethod().DeclaringType.Namespace + ".7z.exe")))
+                JObject config = new JObject();
+                if (configFile.Length == 0)
                 {
-                    MD5String.Append(MD5byte.ToString("X2"));
+                    config.Add("CheckUpgrade", DateTime.MinValue);
+                    configFile.Write(Encoding.UTF8.GetBytes(config.ToString()), 0, Encoding.UTF8.GetBytes(config.ToString()).Length);
+                    configFile.Flush();
+                    configFile.Position = 0;
                 }
-                string Builtin7ZipHash = MD5String.ToString();
-                MD5String.Clear();
-                using (FileStream data = new FileStream(ProgramParameter.AppPath + "7z.exe", FileMode.Open, FileAccess.Read))
+                using (StreamReader configString = new StreamReader(configFile))
                 {
-                    foreach (var MD5byte in MD5.Create().ComputeHash(data))
+
+                    config = (JObject)JsonConvert.DeserializeObject(configString.ReadToEnd());
+                    Console.WriteLine("上次检查更新: " + config["CheckUpgrade"].ToObject<DateTime>().ToLocalTime().ToString());
+                    if (config["CheckUpgrade"].ToObject<DateTime>() < (DateTime.Now - new TimeSpan(1, 0, 0)))
                     {
-                        MD5String.Append(MD5byte.ToString("X2"));
-                    }
-                    data.Close();
-                }
-                string External7ZipHash = MD5String.ToString();
-                MD5String.Clear();
-                if (Builtin7ZipHash != External7ZipHash)
-                {
-                    while (true)
-                    {
-                        Console.WriteLine("注意！校验到7Zip.exe与本程序自带的不一致，可能会导致程序无法正常工作。");
-                        Console.Write("是否使用本程序自带的7Zip.exe版本将其覆盖？(按Y继续/按N退出): ");
-                        switch (Console.ReadKey().Key)
+                        Console.WriteLine("正在检查更新...");
+                        if (Upgrade.CheckUpgrade(new Uri("https://api.github.com/repos/" + ProgramParameter.Developer + "/" + ProgramParameter.AppName + "/releases/latest"), Http.Method.GET, new Dictionary<string, string>() { ["user-agent"] = ProgramParameter.AppName + " " + string.Join(".", ProgramParameter.Version) + ";" }))
                         {
-                            case ConsoleKey.Y:
-                                Console.Clear();
-                                ExtractResFile(MethodBase.GetCurrentMethod().DeclaringType.Namespace + ".7z.exe", ProgramParameter.AppPath + "7z.exe");
-                                break;
-                            case ConsoleKey.N:
-                                return false;
-                            default:
-                                Console.WriteLine();
-                                Console.WriteLine("输入错误!");
-                                continue;
+                            Console.WriteLine("当前本地程序已是最新版本。");
+                            config["CheckUpgrade"] = DateTime.Now;
                         }
-                        break;
+                        else
+                        {
+                            Console.ReadLine();
+                            return false;
+                        }
                     }
+                    configFile.Seek(0, SeekOrigin.Begin);
+                    configFile.SetLength(0);
+                    configFile.Write(Encoding.UTF8.GetBytes(config.ToString()), 0, Encoding.UTF8.GetBytes(config.ToString()).Length);
+                    configFile.Flush();
                 }
             }
 
-            UpgradeModule.CheckUpgrade();
 
             if (StartupParametersCheck(StartupParameters, "-F"))
             {
                 try
                 {
-                    ProgramParameter.ArchiveFile = Path.GetFullPath(StartupParameters[StartupParameters.IndexOf("-F") + 1]);
-                }
-                catch (Exception ex)
-                {
-                    Console.Write("启动参数存在错误！请检查参数：[-F]");
-                    Console.ReadLine();
-                    if (ProgramParameter.DebugMode) { Console.Write(ex.ToString()); }
-                    return false;
-                }
-
-                if (!File.Exists(ProgramParameter.ArchiveFile))
-                {
-                    do
+                    ProgramParameter.ArchiveFile = new FileInfo(Path.GetFullPath(StartupParameters[StartupParameters.IndexOf("-F") + 1]));
+                    while (!ProgramParameter.ArchiveFile.Exists)
                     {
-                        Console.WriteLine("没有找到您的压缩包[" + ProgramParameter.ArchiveFile + "]!");
+                        Console.WriteLine("没有找到您的压缩包[" + ProgramParameter.ArchiveFile.FullName + "]!");
                         Console.WriteLine("请将压缩包拖放到本窗口，或手动输入文件地址。(操作完成后, 按回车键继续)");
-                        ProgramParameter.ArchiveFile = Console.ReadLine();
-                        ProgramParameter.ArchiveFile = DelQuotationMarks(ProgramParameter.ArchiveFile);
-                    } while (!File.Exists(ProgramParameter.ArchiveFile));
+                        ProgramParameter.ArchiveFile = new FileInfo(Console.ReadLine());
+                    }
+                }
+                catch (Exception)
+                {
+                    Console.WriteLine("尝试读取压缩包信息时出现错误!(按任意键退出程序)");
+                    Console.ReadKey();
+                    return false;
+
                 }
             }
             else
@@ -770,174 +435,39 @@ namespace ArchivePasswordTestTool
                 {
                     Console.WriteLine("您似乎没有提供需要进行测试的压缩包地址!");
                     Console.WriteLine("请将压缩包拖放到本窗口，或手动输入文件地址。(操作完成后, 按回车键继续)");
-                    ProgramParameter.ArchiveFile = Console.ReadLine();
-                    ProgramParameter.ArchiveFile = DelQuotationMarks(ProgramParameter.ArchiveFile);
-                } while (!File.Exists(ProgramParameter.ArchiveFile));
+                    ProgramParameter.ArchiveFile = new FileInfo(Console.ReadLine());
+                } while (!ProgramParameter.ArchiveFile.Exists);
             }
 
-            if (Path.GetExtension(ProgramParameter.ArchiveFile) == string.Empty || Path.GetExtension(ProgramParameter.ArchiveFile) == null)
-            {
-                Console.WriteLine("错误的压缩包路径 或 未知的压缩包拓展名!(按任意键退出程序)");
-                Console.ReadKey();
-                return false;
-            }
-            else
-            {
-                ProgramParameter.ArchiveFileType = Path.GetExtension(ProgramParameter.ArchiveFile);
-                string[] data = DecryptArchiveFile("t \"" + ProgramParameter.ArchiveFile + "\" -p", ProgramParameter.ArchiveDecryptionProgram);
-                if (string.IsNullOrEmpty(data[0]))
-                {
-                    while (true)
-                    {
-                        Console.Write("无法识别压缩包格式! 是否继续尝试测试密码?(按Y继续/按N退出): ");
-                        switch (Console.ReadKey().Key)
-                        {
-                            case ConsoleKey.Y:
-                                Console.Clear();
-                                break;
-                            case ConsoleKey.N:
-                                return false;
-                            default:
-                                Console.WriteLine();
-                                Console.WriteLine("输入错误!");
-                                continue;
-                        }
-                        break;
-                    }
-                }
-                else
-                {
-                    if (data[0].IndexOf("Type = ") == -1)
-                    {
-                        while (true)
-                        {
-                            if (data[1].IndexOf("Can not open the file as archive") != -1)
-                            {
-                                using (BinaryReader FileData = new BinaryReader(new FileStream(ProgramParameter.ArchiveFile, FileMode.Open, FileAccess.Read)))
-                                {
-                                    string FileHeaderData=null;
-                                    for (int i = 0; i < 4; i++)
-                                    {
-                                        FileHeaderData += Convert.ToString(FileData.ReadByte(),16);
-                                    }
-                                    FileData.Close();
-                                    switch (FileHeaderData)
-                                    {
-                                        case "52617221":
-                                            Console.Clear();
-                                            Console.WriteLine("压缩包为RAR格式, 需要调用完全体7Zip! ");
-                                            Console.WriteLine("若您已经安装7Zip, 请按回车键确认继续 或 其他任意键退出程序.");
-                                            if (Console.ReadKey().Key != ConsoleKey.Enter)
-                                            {
-                                                return false;
-                                            }
-                                            Console.Clear();
-                                            if (string.IsNullOrEmpty(ReadRegeditValue("SOFTWARE\\7-Zip", "Path").ToString()))
-                                            {
-                                                Console.WriteLine("调用完全体7Zip失败,请检查7Zip安装情况!(按任意键退出程序)");
-                                                Console.ReadKey();
-                                                Process.Start("https://sparanoid.com/lab/7z/");
-                                                return false;
-                                            }
-                                            else
-                                            {
-                                                ProgramParameter.ArchiveDecryptionProgram = ReadRegeditValue("SOFTWARE\\7-Zip", "Path").ToString() + "7z.exe";
-                                            }
-                                            break;
-                                        default:
-                                            Console.Write("这似乎不是一个压缩包，请问是否继续尝试测试密码?(按Y继续/按N退出): ");
-                                            switch (Console.ReadKey().Key)
-                                            {
-                                                case ConsoleKey.Y:
-                                                    Console.Clear();
-                                                    break;
-                                                case ConsoleKey.N:
-                                                    return false;
-                                                default:
-                                                    Console.WriteLine();
-                                                    Console.WriteLine("输入错误!");
-                                                    continue;
-                                            }
-                                            break;
-                                    }
-                                }
-                                break;
-                            }
-                            else
-                            {
-                                Console.Write("压缩包被完全加密! 是否继续尝试测试密码?(按Y继续/按N退出): ");
-                                switch (Console.ReadKey().Key)
-                                {
-                                    case ConsoleKey.Y:
-                                        Console.Clear();
-                                        break;
-                                    case ConsoleKey.N:
-                                        return false;
-                                    default:
-                                        Console.WriteLine();
-                                        Console.WriteLine("输入错误!");
-                                        continue;
-                                }
-                                break;
-                            }
-                        }
-                    }
-                    else
-                    {
-                        ProgramParameter.ArchiveFileType = "." + GetContent(data[0], "Type = ", "Physical Size = ").ToLower();
-                    }
-                }
-            }
 
             if (StartupParametersCheck(StartupParameters, "-D"))
             {
-                if (File.Exists(StartupParameters[StartupParameters.IndexOf("-D") + 1]))
+                try
                 {
-                    ProgramParameter.Dictionary = StartupParameters[StartupParameters.IndexOf("-D") + 1];
-                }
-                else
-                {
-                    do
+                    ProgramParameter.Dictionary = new FileInfo(Path.GetFullPath(StartupParameters[StartupParameters.IndexOf("-D") + 1]));
+                    while (!ProgramParameter.Dictionary.Exists)
                     {
-                        Console.WriteLine("没有找到您的密码字典[" + ProgramParameter.Dictionary + "]!");
+                        Console.WriteLine("没有找到您的密码字典[" + ProgramParameter.Dictionary.FullName + "]!");
                         Console.WriteLine("请将密码字典拖放到本窗口，或手动输入文件地址。(操作完成后, 按回车键继续)");
-                        ProgramParameter.Dictionary = Console.ReadLine();
-                        ProgramParameter.Dictionary = DelQuotationMarks(ProgramParameter.Dictionary);
-                    } while (!File.Exists(ProgramParameter.Dictionary));
+                        ProgramParameter.Dictionary = new FileInfo(Console.ReadLine());
+                    }
                 }
-            }
-            else
-            {
-                if (File.Exists(ProgramParameter.AppPath + "PasswordDictionary.txt"))
+                catch (Exception)
                 {
-                    ProgramParameter.Dictionary = ProgramParameter.AppPath + "PasswordDictionary.txt";
-                }
-                else
-                {
-                    do
-                    {
-                        Console.WriteLine("您似乎没有提供您的密码字典地址!");
-                        Console.WriteLine("请将密码字典拖放到本窗口，或手动输入文件地址。(操作完成后, 按回车键继续)");
-                        ProgramParameter.Dictionary = Console.ReadLine();
-                        ProgramParameter.Dictionary = DelQuotationMarks(ProgramParameter.Dictionary);
-                    } while (!File.Exists(ProgramParameter.Dictionary));
-                }
-            }
-
-            if (Path.GetExtension(ProgramParameter.Dictionary).ToLower() != ".txt")
-            {
-                Console.WriteLine("错误的字典文件格式!(按任意键退出程序)");
-                Console.ReadKey();
-                return false;
-            }
-            else
-            {
-                if (!CheckIsTextFile(ProgramParameter.Dictionary))
-                {
-                    Console.WriteLine("错误的字典文件格式!(按任意键退出程序)");
+                    Console.WriteLine("尝试读取密码字典时出现错误!(按任意键退出程序)");
                     Console.ReadKey();
                     return false;
+
                 }
+            }
+            else
+            {
+                do
+                {
+                    Console.WriteLine("您似乎没有提供您的密码字典地址!");
+                    Console.WriteLine("请将密码字典拖放到本窗口，或手动输入文件地址。(操作完成后, 按回车键继续)");
+                    ProgramParameter.Dictionary = new FileInfo(Console.ReadLine());
+                } while (!ProgramParameter.Dictionary.Exists);
             }
 
 
@@ -965,7 +495,7 @@ namespace ArchivePasswordTestTool
                 Console.WriteLine("您似乎没有提供进行测试的线程数！");
                 do
                 {
-                    string DecryptArchiveThreadCountTemp; 
+                    string DecryptArchiveThreadCountTemp;
                     do
                     {
                         Console.Write("请输入测试密码使用的线程数(操作完成后, 按回车键继续):");
@@ -1018,53 +548,63 @@ namespace ArchivePasswordTestTool
                 inStream?.Close();
             }
         }
-        static string[] DecryptArchiveFile(string DecryptArguments, string ArchiveDecryptionProgram = null)
+        static Dictionary<string, List<string>> RunProgram(FileInfo Program, string[] Arguments)
         {
-            string Error = null;
-            string Output = null;
-            
-            if (ArchiveDecryptionProgram == null)
-            {
-                ArchiveDecryptionProgram = ProgramParameter.AppPath + "7z.exe";
-            }
             using (Process p = new Process())
             {
-                void StoreError(object o, DataReceivedEventArgs e) {
-                    Error += e.Data + "\r\n";
+                List<string> Error = new List<string>();
+                List<string> Output = new List<string>();
+                void StoreError(object o, DataReceivedEventArgs e)
+                {
+                    Error.Add(e.Data);
                 }
-                void StoreOutput(object o, DataReceivedEventArgs e) {
-                    Output += e.Data + "\r\n";
+                void StoreOutput(object o, DataReceivedEventArgs e)
+                {
+                    Output.Add(e.Data);
                 }
                 try
                 {
-                    p.StartInfo.FileName = ArchiveDecryptionProgram;
-                    p.StartInfo.Arguments = DecryptArguments;
+                    p.StartInfo.FileName = Program.FullName;
+                    p.StartInfo.Arguments = string.Join(" ", Arguments);
+                    p.StartInfo.CreateNoWindow = true;
+
                     p.StartInfo.UseShellExecute = false;
                     p.StartInfo.RedirectStandardInput = true;
                     p.StartInfo.RedirectStandardOutput = true;
                     p.StartInfo.RedirectStandardError = true;
-                    p.StartInfo.CreateNoWindow = true;
+
                     p.OutputDataReceived += StoreOutput;
                     p.ErrorDataReceived += StoreError;
+
                     p.Start();
-                    p.StandardInput.AutoFlush = true;
+
                     p.BeginErrorReadLine();
                     p.BeginOutputReadLine();
-                    p.StandardInput.WriteLine();
-                    p.WaitForExit();
-                    if (string.IsNullOrEmpty(Output)) Output = null;
-                    if (string.IsNullOrEmpty(Error)) Error = null;
-                    if (ProgramParameter.DebugMode && !ProgramParameter.FastDebugMode) {
-                        Console.Write(Output);
-                        Console.Write(Error);
+
+                    using (StreamWriter sr = p.StandardInput)
+                    {
+                        p.StandardInput.AutoFlush = true;
+                        sr.WriteLine();
                     }
-                    return new string[] { Output, Error };
+
+                    p.WaitForExit();
+
+                    if (ProgramParameter.DebugMode && !ProgramParameter.FastDebugMode)
+                    {
+                        Console.Write(string.Join(Environment.NewLine, Output.ToArray()));
+                        Console.Write(string.Join(Environment.NewLine, Error.ToArray()));
+                    }
+                    return new Dictionary<string, List<string>> { ["Output"] = Output, ["Error"] = Error };
                 }
                 catch (Exception ex)
                 {
-                    Output = ex.ToString();
-                    if (string.IsNullOrEmpty(Output)) Output = null;
-                    return new string[] { Output, Error };
+                    if (ProgramParameter.DebugMode && !ProgramParameter.FastDebugMode)
+                    {
+                        Console.Write(string.Join(Environment.NewLine, Output.ToArray()));
+                        Console.Write(string.Join(Environment.NewLine, Error.ToArray()));
+                        Console.WriteLine(ex.ToString());
+                    }
+                    return new Dictionary<string, List<string>> { ["RunTimeError"] = new List<string> { ex.ToString() } };
                 }
                 finally
                 {
@@ -1072,81 +612,7 @@ namespace ArchivePasswordTestTool
                     p.ErrorDataReceived -= StoreError;
                     p.Close();
                 }
-
             }
-        }
-
-        private static string DelQuotationMarks(string data)
-        {
-            if (data.Skip(0).Take(1).ToArray()[0] == '"')
-            {
-                data = data.Remove(0, 1);
-            }
-            if (data.Skip(data.Length - 1).Take(1).ToArray()[0] == '"')
-            {
-                data = data.Remove(data.Length - 1, 1);
-            }
-            return data;
-        }
-        private static void DecryptArchiveFileThread(object data)
-        {
-            ManualResetEvent e = (ManualResetEvent)((Parameter)data).DoneEvent;
-            string[] Dictionary = ((Parameter)data).DictionaryData;
-            Stopwatch sw = new Stopwatch();
-            for (int i = 0; i < Dictionary.Length; i++)
-            {
-                if (!ProgramParameter.EncryptArchiveFileDecryptComplete)
-                {
-                    if (ProgramParameter.EncryptArchiveFileDecryptComplete)
-                    {
-                        Console.WriteLine("[" + ((Parameter)data).Name + "] - 侦测到已有其他线程找到正确密码，本线程结束任务。");
-                        e.Set();
-                        return;
-                    }
-                    string[] Data;
-                    Console.WriteLine("[" + ((Parameter)data).Name + "] - 正在测试: [" + Dictionary[i] + "]");
-                    sw.Restart();
-                    if (ProgramParameter.FileName == null)
-                    {
-                        Data = DecryptArchiveFile("t \"" + ProgramParameter.ArchiveFile + "\" -p\"" + Dictionary[i] + "\"", ProgramParameter.ArchiveDecryptionProgram);
-                    }
-                    else
-                    {
-                        Data = DecryptArchiveFile("t \"" + ProgramParameter.ArchiveFile + "\" -p\"" + Dictionary[i] + "\" \"" + ProgramParameter.FileName + "\"", ProgramParameter.ArchiveDecryptionProgram);
-                    }
-                    sw.Stop();
-                    if (ProgramParameter.EncryptArchiveFileDecryptComplete)
-                    {
-                        Console.WriteLine("[" + ((Parameter)data).Name + "] - 侦测到已有其他线程找到正确密码，本线程结束任务。");
-                        e.Set();
-                        return;
-                    }
-                    if (Data[0] != null)
-                    {
-                        if (Data[0].Contains("Everything is Ok"))
-                        {
-                            ProgramParameter.EncryptArchiveFileDecryptComplete = true;
-                            ProgramParameter.EncryptArchivePassword = Dictionary[i];
-                            Console.WriteLine("[" + ((Parameter)data).Name + "] - 找到正确密码: [ " + Dictionary[i] + " ] [耗时: " + sw.Elapsed.ToString(@"hh\:mm\:ss\.ffff") + " ]");
-                            e.Set();
-                            return;
-                        }
-                        else
-                        {
-                            Console.WriteLine("[" + ((Parameter)data).Name + "] - 密码: [" + Dictionary[i] + "] 不正确，测试完成。[耗时: " + sw.Elapsed.ToString(@"hh\:mm\:ss\.ffff") + " ]");
-                        }
-                    }
-                }
-                else
-                {
-                    Console.WriteLine("[" + ((Parameter)data).Name + "] - 侦测到已有其他线程找到正确密码，本线程结束任务。");
-                    e.Set();
-                    return;
-                }
-            }
-            Console.WriteLine("[" + ((Parameter)data).Name + "] - 已测试: [" + Dictionary.Length + "] 个密码,未找到正确密码.");
-            e.Set();
-            return;
         }
     }
 }
