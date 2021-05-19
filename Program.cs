@@ -117,8 +117,6 @@ namespace ArchivePasswordTestTool
         
         static void Main(string[] args)
         {
-            Debugger.Launch();
-
             new ProgramParameter();
 
             AppDomain.CurrentDomain.AssemblyResolve += new ResolveEventHandler(CurrentDomain_AssemblyResolve);
