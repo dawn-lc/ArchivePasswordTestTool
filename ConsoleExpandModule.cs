@@ -1,8 +1,6 @@
-﻿using Newtonsoft.Json.Linq;
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
 using System.Threading;
 
 namespace module.dawnlc.me
@@ -13,6 +11,7 @@ namespace module.dawnlc.me
     class ConsoleExpand : IDisposable
     {
         private bool isDisposed = false;
+        private bool RenderCacheLock = false;
         /// <summary>
         /// Console 高
         /// </summary>
@@ -24,7 +23,8 @@ namespace module.dawnlc.me
 
         public static Thread RenderThread;
 
-        public static List<Content> RenderCache = new List<Content>();
+        public static List<Content> RenderCache1 = new List<Content>();
+        public static List<Content> RenderCache2 = new List<Content>();
 
         public class Content
         {
@@ -54,7 +54,8 @@ namespace module.dawnlc.me
         {
             while (true)
             {
-                List<Content> Rendering = RenderCache.Where(p => p != null).ToList();
+                RenderCacheLock = true;
+                IEnumerable<Content> Rendering = RenderCache1.Where(p => p != null);
                 foreach (var item in Rendering)
                 {
                     Console.SetCursorPosition(0, item.Row);
@@ -62,14 +63,35 @@ namespace module.dawnlc.me
                     Console.SetCursorPosition(item.Col, item.Row);
                     Console.Write(item.ContentString);
                 }
-                RenderCache = RenderCache.Except(Rendering).ToList();
+                RenderCache1 = RenderCache1.Except(Rendering).ToList();
+                RenderCache1 = RenderCache1.Union(RenderCache2).Where(p => p != null).ToList();
+                RenderCacheLock = false;
+                RenderCache2.Clear();
                 Thread.Sleep(32);
             }
         }
 
         public void Print(int Col, int Row, string Content)
         {
-            RenderCache.Add(new Content(Row, Col, Content));
+            try
+            {
+                if (!string.IsNullOrWhiteSpace(Content))
+                {
+                    if (RenderCacheLock)
+                    {
+                        RenderCache2.Add(new Content(Row, Col, Content));
+                    }
+                    else
+                    {
+                        RenderCache1.Add(new Content(Row, Col, Content));
+                    }
+                }
+                return;
+            }
+            catch (Exception)
+            {
+                return;
+            }
         }
         public void Close()
         {
@@ -86,8 +108,11 @@ namespace module.dawnlc.me
         }
         protected virtual void Dispose(bool disposing)
         {
-            List<Content> Rendering = RenderCache.Where(p => p != null).ToList();
-            foreach (var item in Rendering)
+            RenderThread.Abort();
+            RenderCacheLock = true;
+            RenderCache1 = RenderCache1.Union(RenderCache2).ToList();
+            RenderCacheLock = false;
+            foreach (var item in RenderCache1)
             {
                 Console.SetCursorPosition(0, item.Row);
                 Console.Write(new string(' ', Width));
@@ -98,7 +123,8 @@ namespace module.dawnlc.me
             {
                 if (disposing)
                 {
-                    RenderThread.Abort();
+                    RenderCache2.Clear();
+                    RenderCache1.Clear();
                 }
             }
             isDisposed = true; // 标识此对象已释放

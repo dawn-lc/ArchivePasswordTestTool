@@ -168,7 +168,7 @@ namespace module.dawnlc.me
         {
             using (Stream ResponseStream = Response.GetResponseStream())
             {
-                if (Response.ContentEncoding.ToLower().Contains("gzip"))
+                if (Response.ContentEncoding != null && Response.ContentEncoding.ToLower().Contains("gzip"))
                 {
                     using (new GZipStream(ResponseStream, CompressionMode.Decompress))
                     {
