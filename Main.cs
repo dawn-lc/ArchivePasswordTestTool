@@ -11,6 +11,7 @@ using System.Diagnostics;
 using System.Threading.Tasks;
 using System.IO;
 using module.dawnlc.me;
+using System.Threading;
 
 namespace ArchivePasswordTestTool
 {
@@ -371,6 +372,7 @@ namespace ArchivePasswordTestTool
             if (ProgramParameter.ArchiveFile.Extension.ToLower().Contains("rar"))
             {
                 Console.WriteLine("RAR格式压缩包！由于RAR专利问题需要调用完整版7Zip！");
+                Console.WriteLine("本程序将会读取注册表中的7Zip安装路径，如果不想程序读取，请直接关闭本程序。");
                 Console.WriteLine("请确保已安装完整版7zip！(按任意键继续！)");
                 Console.ReadKey();
                 if (string.IsNullOrEmpty(ReadRegeditValue("SOFTWARE\\7-Zip", "Path").ToString()))
@@ -386,8 +388,7 @@ namespace ArchivePasswordTestTool
                 }
             }
 
-            Dictionary<string, List<string>> returnData = RunProgram(ProgramParameter.ArchiveDecryptionProgram, new string[] { "t", "\"" + ProgramParameter.ArchiveFile.FullName + "\"", "-p" });
-            if (!returnData.TryGetValue("Output", out List<string> Output))
+            if (!RunProgram(ProgramParameter.ArchiveDecryptionProgram, new string[] { "t", "\"" + ProgramParameter.ArchiveFile.FullName + "\"", "-p" }).TryGetValue("Output", out List<string> Output))
             {
                 Console.WriteLine("压缩包损坏 或 不是支持的压缩包！（按任意键退出）");
                 Console.ReadKey();
@@ -433,10 +434,15 @@ namespace ArchivePasswordTestTool
             {
                 Parallel.ForEach(Dictionary, new ParallelOptions() { MaxDegreeOfParallelism = ProgramParameter.DecryptArchiveThreadCount }, (i, loopState) => {
                     ConsoleCanvas.Print(0, i.Thread, "[" + i.Thread + "] 密码: [" + i.PassWord + "] 测试中...");
-                    returnData = RunProgram(ProgramParameter.ArchiveDecryptionProgram, new string[] { "t", "\"" + ProgramParameter.ArchiveFile.FullName + "\"", "-p\"" + i.PassWord + "\"" });
-                    if (returnData.ContainsKey("Output"))
+
+                    /*
+                    Dictionary<string, List<string>> returnDataA = new Dictionary<string, List<string>> { ["Output"] = new List<string> { "test" } };
+                    Thread.Sleep(random.Next(2,5));
+                    */
+
+                    if (RunProgram(ProgramParameter.ArchiveDecryptionProgram, new string[] { "t", "\"" + ProgramParameter.ArchiveFile.FullName + "\"", "-p\"" + i.PassWord + "\"" }).TryGetValue("Output", out List<string> OutputInfo))
                     {
-                        if (returnData["Output"].Where(p => p != null && p.Contains("Everything is Ok")).Any())
+                        if (OutputInfo.Where(p => p != null && p.Contains("Everything is Ok")).Any())
                         {
                             ProgramParameter.EncryptArchivePassword = i.PassWord;
                             loopState.Stop();
@@ -447,9 +453,13 @@ namespace ArchivePasswordTestTool
                             ConsoleCanvas.Print(0, i.Thread, "[" + i.Thread + "] 密码: [" + i.PassWord + "] 错误!");
                         }
                     }
-
+                    else
+                    {
+                        ConsoleCanvas.Print(0, i.Thread, "[" + i.Thread + "] 密码: [" + i.PassWord + "] 错误!");
+                    }
                 });
             }
+
             sw.Stop();
             Console.SetCursorPosition(0, ProgramParameter.DecryptArchiveThreadCount + 1);
             if (ProgramParameter.EncryptArchivePassword != null)

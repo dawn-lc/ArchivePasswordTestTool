@@ -13,7 +13,7 @@ namespace ArchivePasswordTestTool
     {
         public static readonly string AppName = Assembly.GetExecutingAssembly().FullName.Substring(0, Assembly.GetExecutingAssembly().FullName.IndexOf(","));
         public static readonly string AppPath = Environment.CurrentDirectory + "\\";
-        public static readonly int[] Version = new int[] { 1, 0, 8 };
+        public static readonly int[] Version = new int[] { 1, 0, 9 };
         public static readonly string VersionType = "Release";
         public static readonly string AppHomePage = "https://www.bilibili.com/read/cv6101558";
         public static readonly string Developer = "dawn-lc";

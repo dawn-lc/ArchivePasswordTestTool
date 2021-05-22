@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Threading;
 
 namespace module.dawnlc.me
@@ -11,6 +10,7 @@ namespace module.dawnlc.me
     class ConsoleExpand : IDisposable
     {
         private bool isDisposed = false;
+        private bool isDisposing = false;
         private bool RenderCacheLock = false;
         /// <summary>
         /// Console 高
@@ -52,21 +52,29 @@ namespace module.dawnlc.me
 
         public void OutputCanvas()
         {
-            while (true)
+            while (!isDisposing)
             {
                 RenderCacheLock = true;
-                IEnumerable<Content> Rendering = RenderCache1.Where(p => p != null);
+                List<Content> Rendering = new List<Content>(RenderCache1);
                 foreach (var item in Rendering)
                 {
-                    Console.SetCursorPosition(0, item.Row);
-                    Console.Write(new string(' ', Width));
-                    Console.SetCursorPosition(item.Col, item.Row);
-                    Console.Write(item.ContentString);
+                    if (item != null)
+                    {
+                        Console.SetCursorPosition(0, item.Row);
+                        Console.Write(new string(' ', Width));
+                        Console.SetCursorPosition(item.Col, item.Row);
+                        Console.Write(item.ContentString);
+                    }
+
                 }
-                RenderCache1 = RenderCache1.Except(Rendering).ToList();
-                RenderCache1 = RenderCache1.Union(RenderCache2).Where(p => p != null).ToList();
+                Rendering.Clear();
+                RenderCache1.Clear();
+
+                RenderCache1.AddRange(RenderCache2);
                 RenderCacheLock = false;
+
                 RenderCache2.Clear();
+
                 Thread.Sleep(32);
             }
         }
@@ -75,22 +83,18 @@ namespace module.dawnlc.me
         {
             try
             {
-                if (!string.IsNullOrWhiteSpace(Content))
+                if (RenderCacheLock)
                 {
-                    if (RenderCacheLock)
-                    {
-                        RenderCache2.Add(new Content(Row, Col, Content));
-                    }
-                    else
-                    {
-                        RenderCache1.Add(new Content(Row, Col, Content));
-                    }
+                    RenderCache2.Add(new Content(Row, Col, Content));
                 }
-                return;
+                else
+                {
+                    RenderCache1.Add(new Content(Row, Col, Content));
+                }
             }
             catch (Exception)
             {
-                return;
+                //这里如果报错,肯定是破解速度过快.(跑完了7zip test并返回了结果只花了不到10毫秒)
             }
         }
         public void Close()
@@ -108,23 +112,35 @@ namespace module.dawnlc.me
         }
         protected virtual void Dispose(bool disposing)
         {
-            RenderThread.Abort();
-            RenderCacheLock = true;
-            RenderCache1 = RenderCache1.Union(RenderCache2).ToList();
-            RenderCacheLock = false;
-            foreach (var item in RenderCache1)
-            {
-                Console.SetCursorPosition(0, item.Row);
-                Console.Write(new string(' ', Width));
-                Console.SetCursorPosition(item.Col, item.Row);
-                Console.Write(item.ContentString);
-            }
             if (!isDisposed)
             {
                 if (disposing)
                 {
-                    RenderCache2.Clear();
-                    RenderCache1.Clear();
+                    RenderThread.Abort();
+                    isDisposing = true;
+
+                    foreach (var item in RenderCache1)
+                    {
+                        if (item != null)
+                        {
+                            Console.SetCursorPosition(0, item.Row);
+                            Console.Write(new string(' ', Width));
+                            Console.SetCursorPosition(item.Col, item.Row);
+                            Console.Write(item.ContentString);
+                        }
+                    }
+                    foreach (var item in RenderCache2)
+                    {
+                        if (item != null)
+                        {
+                            Console.SetCursorPosition(0, item.Row);
+                            Console.Write(new string(' ', Width));
+                            Console.SetCursorPosition(item.Col, item.Row);
+                            Console.Write(item.ContentString);
+                        }
+                    }
+
+                    isDisposing = false;
                 }
             }
             isDisposed = true; // 标识此对象已释放
