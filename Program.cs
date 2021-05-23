@@ -1,8 +1,6 @@
 ﻿using System;
-using System.Diagnostics;
 using System.IO;
 using System.Reflection;
-using System.Text.RegularExpressions;
 
 using module.dawnlc.me;
 
@@ -13,8 +11,8 @@ namespace ArchivePasswordTestTool
     {
         public static readonly string AppName = Assembly.GetExecutingAssembly().FullName.Substring(0, Assembly.GetExecutingAssembly().FullName.IndexOf(","));
         public static readonly string AppPath = Environment.CurrentDirectory + "\\";
-        public static readonly int[] Version = new int[] { 1, 0, 9 };
-        public static readonly string VersionType = "Release";
+        public static readonly int[] Version = new int[] { 1, 0, 10 };
+        public static readonly string VersionType = "Preview";
         public static readonly string AppHomePage = "https://www.bilibili.com/read/cv6101558";
         public static readonly string Developer = "dawn-lc";
         public static bool DebugMode { get; set; }
@@ -88,10 +86,10 @@ namespace ArchivePasswordTestTool
         /// <returns></returns>
         public static Assembly CurrentDomain_AssemblyResolve(object sender, ResolveEventArgs args)
         {
-            string[] assemblyName = Regex.Split(args.Name, ",", RegexOptions.IgnoreCase);
+            string[] assemblyName = args.Name.Split(',');
             try
             {
-                if (!assemblyName[0].Contains(System.Reflection.MethodBase.GetCurrentMethod().DeclaringType.Namespace))
+                if (!assemblyName[0].Contains(MethodBase.GetCurrentMethod().DeclaringType.Namespace))
                 {
                     switch (assemblyName[0])
                     {
@@ -103,7 +101,7 @@ namespace ArchivePasswordTestTool
             catch (IOException)
             {
                 MemoryStream memoryStream = new MemoryStream();
-                System.Reflection.Assembly.GetExecutingAssembly().GetManifestResourceStream(System.Reflection.MethodBase.GetCurrentMethod().DeclaringType.Namespace + ".Resources." + assemblyName[0] + ".dll").CopyTo(memoryStream);
+                Assembly.GetExecutingAssembly().GetManifestResourceStream(MethodBase.GetCurrentMethod().DeclaringType.Namespace + ".Resources." + assemblyName[0] + ".dll").CopyTo(memoryStream);
                 return Assembly.Load(memoryStream.ToArray());
             }
             catch (Exception ex)

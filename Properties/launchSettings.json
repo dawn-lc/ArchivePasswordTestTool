@@ -1,8 +1,7 @@
 {
   "profiles": {
     "ArchivePasswordTestTool": {
-      "commandName": "Project",
-      "commandLineArgs": "-D \"C:\\Users\\lc990\\Desktop\\字典破解\\工具 - 副本\\PasswordDictionary.txt\" -T 7 -F C:\\Users\\lc990\\Desktop\\字典破解\\空压缩包.7z"
+      "commandName": "Project"
     }
   }
 }

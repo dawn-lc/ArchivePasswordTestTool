@@ -11,7 +11,6 @@ using System.Diagnostics;
 using System.Threading.Tasks;
 using System.IO;
 using module.dawnlc.me;
-using System.Threading;
 
 namespace ArchivePasswordTestTool
 {
@@ -148,6 +147,7 @@ namespace ArchivePasswordTestTool
                     if (config["CheckUpgrade"].ToObject<DateTime>() < (DateTime.Now - new TimeSpan(1, 0, 0)))
                     {
                         Console.WriteLine("正在检查更新...");
+                        Console.WriteLine("正在从github.com获取最新版本信息...");
                         if (Upgrade.CheckUpgrade(new Uri("https://api.github.com/repos/" + ProgramParameter.Developer + "/" + ProgramParameter.AppName + "/releases/latest"), Http.Method.GET, new Dictionary<string, string>() { ["user-agent"] = ProgramParameter.AppName + " " + string.Join(".", ProgramParameter.Version) + ";" }))
                         {
                             Console.WriteLine("当前本地程序已是最新版本。");
@@ -432,6 +432,10 @@ namespace ArchivePasswordTestTool
 
             using (ConsoleExpand ConsoleCanvas = new ConsoleExpand())
             {
+                for (int i = 0; i < ProgramParameter.DecryptArchiveThreadCount; i++)
+                {
+                    ConsoleCanvas.Print(0, i, "[" + i + "] 启动中...");
+                }
                 Parallel.ForEach(Dictionary, new ParallelOptions() { MaxDegreeOfParallelism = ProgramParameter.DecryptArchiveThreadCount }, (i, loopState) => {
                     ConsoleCanvas.Print(0, i.Thread, "[" + i.Thread + "] 密码: [" + i.PassWord + "] 测试中...");
 

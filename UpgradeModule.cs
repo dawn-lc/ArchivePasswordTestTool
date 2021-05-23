@@ -6,7 +6,6 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using System.Net;
-using System.Text;
 
 namespace module.dawnlc.me
 {
@@ -17,20 +16,27 @@ namespace module.dawnlc.me
         /// </summary>
         /// <param name="sourceVersion">源版本</param>
         /// <param name="targetVersion">目标版本</param>
-        /// <returns>true 目标版本较高, false 源版本较高 或 两者相等</returns>
+        /// <returns> 1 目标版本较高, 0 两者版本一致, -1 源版本较高</returns>
         /// <exception cref="ArgumentException"></exception>
-        private static bool ComparisonVersion(int[] sourceVersion, int[] targetVersion)
+        private static int ComparisonVersion(int[] sourceVersion, int[] targetVersion)
         {
             if (sourceVersion.Length == targetVersion.Length)
             {
                 for (int i = 0; i < sourceVersion.Length; i++)
                 {
-                    if (sourceVersion[i] < targetVersion[i])
+                    if (sourceVersion[i] != targetVersion[i])
                     {
-                        return true;
+                        if (sourceVersion[i] < targetVersion[i])
+                        {
+                            return 1;
+                        }
+                        else
+                        {
+                            return -1;
+                        }
                     }
                 }
-                return false;
+                return 0;
             }
             else
             {
@@ -43,9 +49,9 @@ namespace module.dawnlc.me
         /// </summary>
         /// <param name="sourceVersion">源版本类型</param>
         /// <param name="targetVersion">目标版本类型</param>
-        /// <returns>true 目标版本类型较高, false 源版本类型较高 或 两者版本类型一致</returns>
+        /// <returns> 1 目标版本类型较高, 0 两者版本类型一致, -1 源版本类型较高</returns>
         /// <exception cref="ArgumentException"></exception>
-        private static bool ComparisonVersionType(string sourceVersionType, string targetVersionType)
+        private static int ComparisonVersionType(string sourceVersionType, string targetVersionType)
         {
             List<List<string>> VersionType = new List<List<string>>
             {
@@ -64,11 +70,11 @@ namespace module.dawnlc.me
                 int targetVersionLevel = VersionType.Count;
                 for (int i = 1; i < VersionType.Count; i++)
                 {
-                    if (VersionType[i].Contains(sourceVersionType))
+                    if (VersionType[i].Contains(sourceVersionType.ToLower()))
                     {
                         sourceVersionTypeLevel = VersionType.Count - i;
                     }
-                    if (VersionType[i].Contains(targetVersionType))
+                    if (VersionType[i].Contains(targetVersionType.ToLower()))
                     {
                         targetVersionLevel = VersionType.Count - i;
                     }
@@ -76,11 +82,18 @@ namespace module.dawnlc.me
 
                 if (sourceVersionTypeLevel < targetVersionLevel)
                 {
-                    return true;
+                    return 1;
                 }
                 else
                 {
-                    return false;
+                    if (sourceVersionTypeLevel == targetVersionLevel)
+                    {
+                        return 0;
+                    }
+                    else
+                    {
+                        return -1;
+                    }
                 }
             }
             else
@@ -97,24 +110,46 @@ namespace module.dawnlc.me
                     if (ReleasesLatestInfoData.GetResponseStatusCode() == HttpStatusCode.OK)
                     {
                         JObject ReleasesLatestInfo = (JObject)JsonConvert.DeserializeObject(ReleasesLatestInfoData.GetResponseString());
-                        List<int> LatestVersion = new List<int>();
-                        for (int i = 0; i < ReleasesLatestInfo["tag_name"].ToString().Split('-')[0].Split('.').Length; i++)
-                        {
-                            LatestVersion.Add(Convert.ToInt32(ReleasesLatestInfo["tag_name"].ToString().Split('-')[0].Split('.')[i]));
-                        }
-                        string LatestVersionType = null;
-                        if (ReleasesLatestInfo["tag_name"].ToString().Split('-').Length > 1)
-                        {
-                            LatestVersionType = ReleasesLatestInfo["tag_name"].ToString().Split('-')[1];
-                        }
 
-                        if (!ComparisonVersionType(ProgramParameter.VersionType, LatestVersionType))
+                        List<int> LatestVersion = new List<int>();
+
+                        string LatestVersionType = null;
+
+                        try
                         {
-                            if (!ComparisonVersion(ProgramParameter.Version, LatestVersion.ToArray()))
+                            List<string> LatestVersionData = new List<string>(ReleasesLatestInfo["tag_name"].ToString().Split('-'));
+                            LatestVersionType = LatestVersionData[1];
+                            foreach (var item in LatestVersionData[0].Split('.'))
                             {
-                                return true;
+                                LatestVersion.Add(Convert.ToInt32(item));
                             }
                         }
+                        catch (Exception)
+                        {
+                            Console.WriteLine("检查更新失败！请联系开发者进行修复。");
+                            Process.Start(ProgramParameter.AppHomePage);
+                            throw new Exception("错误的版本信息格式! "+ ReleasesLatestInfo.ToString());
+                        }
+
+                        switch (ComparisonVersion(ProgramParameter.Version, LatestVersion.ToArray()))
+                        {
+                            case 1:
+                                break;
+                            case 0:
+                                switch (ComparisonVersionType(ProgramParameter.VersionType, LatestVersionType))
+                                {
+                                    case 1:
+                                        break;
+                                    case 0:
+                                        return true;
+                                    case -1:
+                                        return true;
+                                }
+                                break;
+                            case -1:
+                                return true;
+                        }
+
                         Console.WriteLine("当前版本不是最新的，请前往下载最新版本。");
                         Process.Start(ProgramParameter.AppHomePage);
                         return false;
