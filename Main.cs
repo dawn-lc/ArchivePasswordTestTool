@@ -80,7 +80,7 @@ namespace ArchivePasswordTestTool
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine(ex.ToString());
+                    Console.WriteLine("启动参数存在错误！请检查参数：[" + ParameterFlag + "]");
                     if (ProgramParameter.DebugMode) { Console.Write(ex.ToString()); }
                     throw ex;
                 }
@@ -146,7 +146,6 @@ namespace ArchivePasswordTestTool
                     Console.WriteLine("上次检查更新: " + config["CheckUpgrade"].ToObject<DateTime>().ToLocalTime().ToString());
                     if (config["CheckUpgrade"].ToObject<DateTime>() < (DateTime.Now - new TimeSpan(1, 0, 0)))
                     {
-                        Console.WriteLine("正在检查更新...");
                         Console.WriteLine("正在从github.com获取最新版本信息...");
                         if (Upgrade.CheckUpgrade(new Uri("https://api.github.com/repos/" + ProgramParameter.Developer + "/" + ProgramParameter.AppName + "/releases/latest"), Http.Method.GET, new Dictionary<string, string>() { ["user-agent"] = ProgramParameter.AppName + " " + string.Join(".", ProgramParameter.Version) + ";" }))
                         {
@@ -179,12 +178,10 @@ namespace ArchivePasswordTestTool
                         ProgramParameter.ArchiveFile = new FileInfo(Console.ReadLine());
                     }
                 }
-                catch (Exception)
+                catch (Exception ex)
                 {
-                    Console.WriteLine("尝试读取压缩包信息时出现错误!(按任意键退出程序)");
-                    Console.ReadKey();
-                    return false;
-
+                    Console.WriteLine("尝试读取压缩包信息时出现错误!");
+                    throw ex;
                 }
             }
             else
@@ -210,12 +207,10 @@ namespace ArchivePasswordTestTool
                         ProgramParameter.Dictionary = new FileInfo(Console.ReadLine());
                     }
                 }
-                catch (Exception)
+                catch (Exception ex)
                 {
-                    Console.WriteLine("尝试读取密码字典时出现错误!(按任意键退出程序)");
-                    Console.ReadKey();
-                    return false;
-
+                    Console.WriteLine("尝试读取密码字典时出现错误!");
+                    throw ex;
                 }
             }
             else
@@ -238,9 +233,8 @@ namespace ArchivePasswordTestTool
                 catch (Exception ex)
                 {
                     Console.Write("启动参数存在错误！请检查参数：[-T]");
-                    Console.ReadLine();
                     if (ProgramParameter.DebugMode) { Console.Write(ex.ToString()); }
-                    return false;
+                    throw ex;
                 }
                 if (ProgramParameter.DecryptArchiveThreadCount > (Environment.ProcessorCount - 1))
                 {
@@ -334,7 +328,9 @@ namespace ArchivePasswordTestTool
                         Console.Write(string.Join(Environment.NewLine, Error.ToArray()));
                         Console.WriteLine(ex.ToString());
                     }
-                    return new Dictionary<string, List<string>> { ["RunTimeError"] = new List<string> { ex.ToString() } };
+                    Console.WriteLine("执行 "+ Program.FullName + string.Join(" ", Arguments)+ " 失败！");
+                    throw ex;
+                    //return new Dictionary<string, List<string>> { ["RunTimeError"] = new List<string> { ex.ToString() } };
                 }
                 finally
                 {
@@ -362,6 +358,8 @@ namespace ArchivePasswordTestTool
             catch (Exception ex)
             {
                 ravenClient.Capture(new SentryEvent(ex));
+                Console.WriteLine("错误信息已上报(按任意键退出程序)");
+                Console.ReadKey();
             }
             return;
         }
@@ -377,8 +375,7 @@ namespace ArchivePasswordTestTool
                 Console.ReadKey();
                 if (string.IsNullOrEmpty(ReadRegeditValue("SOFTWARE\\7-Zip", "Path").ToString()))
                 {
-                    Console.WriteLine("调用完全体7Zip失败,请检查7Zip安装情况!(按任意键退出程序)");
-                    Console.ReadKey();
+                    Console.WriteLine("调用完全体7Zip失败,请检查7Zip安装情况!");
                     Process.Start("https://sparanoid.com/lab/7z/");
                     throw new Exception("7Zip Error!");
                 }
@@ -390,8 +387,7 @@ namespace ArchivePasswordTestTool
 
             if (!RunProgram(ProgramParameter.ArchiveDecryptionProgram, new string[] { "t", "\"" + ProgramParameter.ArchiveFile.FullName + "\"", "-p" }).TryGetValue("Output", out List<string> Output))
             {
-                Console.WriteLine("压缩包损坏 或 不是支持的压缩包！（按任意键退出）");
-                Console.ReadKey();
+                Console.WriteLine("压缩包损坏 或 不是支持的压缩包！");
                 throw new Exception("ArchiveFile Error!");
             }
             else
@@ -421,9 +417,8 @@ namespace ArchivePasswordTestTool
             }
             catch (Exception ex)
             {
-                Console.WriteLine("尝试读取密码字典时出现错误!(按任意键退出程序)");
+                Console.WriteLine("尝试读取密码字典时出现错误!");
                 if (ProgramParameter.DebugMode) { Console.Write(ex.ToString()); }
-                Console.ReadKey();
                 throw ex;
             }
 

@@ -128,7 +128,7 @@ namespace module.dawnlc.me
                         {
                             Console.WriteLine("检查更新失败！请联系开发者进行修复。");
                             Process.Start(ProgramParameter.AppHomePage);
-                            throw new Exception("错误的版本信息格式! "+ ReleasesLatestInfo.ToString());
+                            throw new Exception("错误的版本信息格式! \r\n" + ReleasesLatestInfo.ToString());
                         }
 
                         switch (ComparisonVersion(ProgramParameter.Version, LatestVersion.ToArray()))
@@ -158,7 +158,7 @@ namespace module.dawnlc.me
                     {
                         Console.WriteLine("检查更新失败！请检查您的网络情况。");
                         Process.Start(ProgramParameter.AppHomePage);
-                        return false;
+                        throw new Exception("检查更新失败！\r\n" + ReleasesLatestInfoData.GetResponseStatusCode() + "\r\n" + ReleasesLatestInfoData.GetResponseString());
                     }
                 }
             }
@@ -167,7 +167,7 @@ namespace module.dawnlc.me
                 Console.WriteLine("检查更新失败！请检查您的网络情况。");
                 Console.WriteLine(ex.ToString());
                 Process.Start(ProgramParameter.AppHomePage);
-                return false;
+                throw new Exception("检查更新失败！\r\n" + ex.ToString());
             }
 
         }
