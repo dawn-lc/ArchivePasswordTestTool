@@ -71,35 +71,42 @@ namespace module.dawnlc.me
         {
             private bool isDisposed = false;
             public DirectoryInfo DirectoryInfo { get; set; }
-            public FileInfo[] FileInfos { get; set; }
+            public List<FileInfo> FileInfos { get; set; }
             public List<FileTree> ChildDirectory { get; set; }
+            public FileTree()
+            {
+                DirectoryInfo = null;
+                FileInfos = new List<FileInfo>() { };
+                ChildDirectory = new List<FileTree>() { };
+            }
             public FileTree(string path)
             {
-                this.DirectoryInfo = new DirectoryInfo(path);
-                this.FileInfos = this.DirectoryInfo.GetFiles();
-                this.ChildDirectory = new List<FileTree>() { };
-                foreach (var item in this.DirectoryInfo.GetDirectories())
+                DirectoryInfo = new DirectoryInfo(path);
+                FileInfos = DirectoryInfo.GetFiles().ToList();
+                ChildDirectory = new List<FileTree>() { };
+                foreach (var Directory in DirectoryInfo.GetDirectories())
                 {
-                    this.ChildDirectory.Add(new FileTree(item.FullName));
+                    ChildDirectory.Add(new FileTree(Directory.FullName));
                 }
             }
-            public FileInfo[] GetFileInfosAll(FileTree fileTree = null)
+            public List<FileInfo> GetAllFileInfos(FileTree fileTree = null)
             {
                 if (fileTree == null) fileTree = this;
-                FileInfo[] fileInfos = fileTree.FileInfos;
-                foreach (var ChildDirectory in fileTree.ChildDirectory)
+                List<FileInfo> fileInfos = fileTree.FileInfos;
+                foreach (FileTree ChildDirectory in fileTree.ChildDirectory)
                 {
-                    fileInfos = fileInfos.Union(this.GetFileInfosAll(ChildDirectory)).ToArray();
+                    fileInfos.AddRange(GetAllFileInfos(ChildDirectory));
                 }
                 return fileInfos;
             }
-            public DirectoryInfo[] GetDirectoryInfosAll(FileTree fileTree = null)
+            public List<DirectoryInfo> GetAllDirectoryInfos(FileTree fileTree = null)
             {
                 if (fileTree == null) fileTree = this;
-                DirectoryInfo[] DirectoryInfos = new DirectoryInfo[] { fileTree.DirectoryInfo };
-                foreach (var ChildDirectory in fileTree.ChildDirectory)
+                List<DirectoryInfo> DirectoryInfos = new List<DirectoryInfo> { };
+                if (fileTree.DirectoryInfo != null) DirectoryInfos.Add(fileTree.DirectoryInfo);
+                foreach (FileTree ChildDirectory in fileTree.ChildDirectory)
                 {
-                    DirectoryInfos = DirectoryInfos.Union(this.GetDirectoryInfosAll(ChildDirectory)).ToArray();
+                    DirectoryInfos.AddRange(GetAllDirectoryInfos(ChildDirectory));
                 }
                 return DirectoryInfos;
             }
@@ -118,20 +125,17 @@ namespace module.dawnlc.me
             }
             protected virtual void Dispose(bool disposing)
             {
-                if (!this.isDisposed)
+                if (!isDisposed)
                 {
                     if (disposing)
                     {
-                        this.DirectoryInfo = null;
-                        this.FileInfos = null;
-                        foreach (var ChildDirectory in this.ChildDirectory)
+                        foreach (FileTree ChildDirectory in this.ChildDirectory)
                         {
                             ChildDirectory.Close();
                         }
-                        this.ChildDirectory = null;
                     }
                 }
-                this.isDisposed = true;
+                isDisposed = true;
             }
         }
         public static byte[] StreamRead(Stream stream, long a, long b)

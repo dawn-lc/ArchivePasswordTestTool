@@ -95,6 +95,8 @@ namespace module.dawnlc.me
             catch (Exception)
             {
                 //这里如果报错,肯定是破解速度过快.(跑完了7zip test并返回了结果只花了不到10毫秒)
+                //不过不影响，漏显示一行不算什么大问题（笑
+                //摸了
             }
         }
         public void Close()

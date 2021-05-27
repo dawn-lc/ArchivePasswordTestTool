@@ -11,6 +11,7 @@ using System.Diagnostics;
 using System.Threading.Tasks;
 using System.IO;
 using module.dawnlc.me;
+using System.Threading;
 
 namespace ArchivePasswordTestTool
 {
@@ -175,7 +176,7 @@ namespace ArchivePasswordTestTool
                     {
                         Console.WriteLine("没有找到您的压缩包[" + ProgramParameter.ArchiveFile.FullName + "]!");
                         Console.WriteLine("请将压缩包拖放到本窗口，或手动输入文件地址。(操作完成后, 按回车键继续)");
-                        ProgramParameter.ArchiveFile = new FileInfo(Console.ReadLine());
+                        ProgramParameter.ArchiveFile = new FileInfo(Path.GetFullPath(Console.ReadLine()));
                     }
                 }
                 catch (Exception ex)
@@ -190,7 +191,7 @@ namespace ArchivePasswordTestTool
                 {
                     Console.WriteLine("您似乎没有提供需要进行测试的压缩包地址!");
                     Console.WriteLine("请将压缩包拖放到本窗口，或手动输入文件地址。(操作完成后, 按回车键继续)");
-                    ProgramParameter.ArchiveFile = new FileInfo(Console.ReadLine());
+                    ProgramParameter.ArchiveFile = new FileInfo(Path.GetFullPath(Console.ReadLine()));
                 } while (!ProgramParameter.ArchiveFile.Exists);
             }
 
@@ -204,7 +205,7 @@ namespace ArchivePasswordTestTool
                     {
                         Console.WriteLine("没有找到您的密码字典[" + ProgramParameter.Dictionary.FullName + "]!");
                         Console.WriteLine("请将密码字典拖放到本窗口，或手动输入文件地址。(操作完成后, 按回车键继续)");
-                        ProgramParameter.Dictionary = new FileInfo(Console.ReadLine());
+                        ProgramParameter.Dictionary = new FileInfo(Path.GetFullPath(Console.ReadLine()));
                     }
                 }
                 catch (Exception ex)
@@ -219,7 +220,7 @@ namespace ArchivePasswordTestTool
                 {
                     Console.WriteLine("您似乎没有提供您的密码字典地址!");
                     Console.WriteLine("请将密码字典拖放到本窗口，或手动输入文件地址。(操作完成后, 按回车键继续)");
-                    ProgramParameter.Dictionary = new FileInfo(Console.ReadLine());
+                    ProgramParameter.Dictionary = new FileInfo(Path.GetFullPath(Console.ReadLine()));
                 } while (!ProgramParameter.Dictionary.Exists);
             }
 
@@ -431,15 +432,17 @@ namespace ArchivePasswordTestTool
                 {
                     ConsoleCanvas.Print(0, i, "[" + i + "] 启动中...");
                 }
+                Random random = new Random();
                 Parallel.ForEach(Dictionary, new ParallelOptions() { MaxDegreeOfParallelism = ProgramParameter.DecryptArchiveThreadCount }, (i, loopState) => {
                     ConsoleCanvas.Print(0, i.Thread, "[" + i.Thread + "] 密码: [" + i.PassWord + "] 测试中...");
 
                     /*
                     Dictionary<string, List<string>> returnDataA = new Dictionary<string, List<string>> { ["Output"] = new List<string> { "test" } };
-                    Thread.Sleep(random.Next(2,5));
+                    
                     */
-
-                    if (RunProgram(ProgramParameter.ArchiveDecryptionProgram, new string[] { "t", "\"" + ProgramParameter.ArchiveFile.FullName + "\"", "-p\"" + i.PassWord + "\"" }).TryGetValue("Output", out List<string> OutputInfo))
+                    //RunProgram(ProgramParameter.ArchiveDecryptionProgram, new string[] { "t", "\"" + ProgramParameter.ArchiveFile.FullName + "\"", "-p\"" + i.PassWord + "\"" })
+                    Thread.Sleep(random.Next(2, 5));
+                    if (new Dictionary<string, List<string>> { ["Output"] = new List<string> { "test" } }.TryGetValue("Output", out List<string> OutputInfo))
                     {
                         if (OutputInfo.Where(p => p != null && p.Contains("Everything is Ok")).Any())
                         {

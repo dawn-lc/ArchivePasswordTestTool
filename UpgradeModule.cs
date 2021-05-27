@@ -16,7 +16,7 @@ namespace module.dawnlc.me
         /// </summary>
         /// <param name="sourceVersion">源版本</param>
         /// <param name="targetVersion">目标版本</param>
-        /// <returns> 1 目标版本较高, 0 两者版本一致, -1 源版本较高</returns>
+        /// <returns><see langword="1"/> 目标版本类型较高<br /><see langword="0"/> 两者版本类型一致<br /><see langword="-1"/> 源版本类型较高</returns> 
         /// <exception cref="ArgumentException"></exception>
         private static int ComparisonVersion(int[] sourceVersion, int[] targetVersion)
         {
@@ -49,7 +49,7 @@ namespace module.dawnlc.me
         /// </summary>
         /// <param name="sourceVersion">源版本类型</param>
         /// <param name="targetVersion">目标版本类型</param>
-        /// <returns> 1 目标版本类型较高, 0 两者版本类型一致, -1 源版本类型较高</returns>
+        /// <returns><see langword="1"/> 目标版本类型较高<br /><see langword="0"/> 两者版本类型一致<br /><see langword="-1"/> 源版本类型较高</returns> 
         /// <exception cref="ArgumentException"></exception>
         private static int ComparisonVersionType(string sourceVersionType, string targetVersionType)
         {
