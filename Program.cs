@@ -9,19 +9,19 @@ namespace ArchivePasswordTestTool
 {
     public class ProgramParameter
     {
-        public static readonly string AppName = Assembly.GetExecutingAssembly().FullName.Substring(0, Assembly.GetExecutingAssembly().FullName.IndexOf(","));
-        public static readonly string AppPath = Environment.CurrentDirectory + "\\";
-        public static readonly int[] Version = new int[] { 1, 0, 10 };
-        public static readonly string VersionType = "Release";
-        public static readonly string AppHomePage = "https://www.bilibili.com/read/cv6101558";
-        public static readonly string Developer = "dawn-lc";
-        public static bool DebugMode { get; set; }
-        public static bool FastDebugMode { get; set; }
-        public static FileInfo ArchiveDecryptionProgram { get; set; }
-        public static FileInfo ArchiveFile { get; set; }
-        public static FileInfo Dictionary { get; set; }
-        public static string EncryptArchivePassword { get; set; }
-        public static int DecryptArchiveThreadCount { get; set; }
+        public readonly string AppName = Assembly.GetExecutingAssembly().FullName.Substring(0, Assembly.GetExecutingAssembly().FullName.IndexOf(","));
+        public readonly string AppPath = Environment.CurrentDirectory + "\\";
+        public readonly int[] Version = new int[] { 1, 0, 11 };
+        public readonly string VersionType = "Release";
+        public readonly string AppHomePage = "https://www.bilibili.com/read/cv6101558";
+        public readonly string Developer = "dawn-lc";
+        public bool DebugMode { get; set; }
+        public bool FastDebugMode { get; set; }
+        public FileInfo ArchiveDecryptionProgram { get; set; }
+        public FileInfo ArchiveFile { get; set; }
+        public FileInfo Dictionary { get; set; }
+        public string EncryptArchivePassword { get; set; }
+        public int DecryptArchiveThreadCount { get; set; }
 
         public ProgramParameter()
         {
@@ -30,14 +30,17 @@ namespace ArchivePasswordTestTool
 
             try
             {
-                ArchiveDecryptionProgram = new FileInfo(AppPath + "7z.exe");
-                if (!ArchiveDecryptionProgram.Exists)
+                if (!Directory.Exists(AppPath + "Bin\\"))
                 {
-                    IO.ExtractResFile(MethodBase.GetCurrentMethod().DeclaringType.Namespace + ".Resources.7z.exe", AppPath + "7z.exe");
+                    Directory.CreateDirectory(AppPath + "Bin\\");
+                }
+                if (!File.Exists(AppPath + "Bin\\7z.exe"))
+                {
+                    IO.ExtractResFile(MethodBase.GetCurrentMethod().DeclaringType.Namespace + ".Resources.7z.exe", AppPath + "Bin\\7z.exe");
                 }
                 else
                 {
-                    using (FileStream data = new FileStream(AppPath + "7z.exe", FileMode.Open, FileAccess.Read))
+                    using (FileStream data = new FileStream(AppPath + "Bin\\7z.exe", FileMode.Open, FileAccess.Read))
                     {
                         if (!IO.ComparisonFile(Assembly.GetExecutingAssembly().GetManifestResourceStream(MethodBase.GetCurrentMethod().DeclaringType.Namespace + ".Resources.7z.exe"), data))
                         {
@@ -49,13 +52,13 @@ namespace ArchivePasswordTestTool
                                 {
                                     case ConsoleKey.Y:
                                         Console.Clear();
-                                        IO.ExtractResFile(MethodBase.GetCurrentMethod().DeclaringType.Namespace + ".7z.exe", AppPath + "7z.exe");
+                                        File.Delete(AppPath + "Bin\\7z.exe");
+                                        IO.ExtractResFile(MethodBase.GetCurrentMethod().DeclaringType.Namespace + ".7z.exe", AppPath + "Bin\\7z.exe");
                                         break;
                                     case ConsoleKey.N:
                                         break;
                                     default:
-                                        Console.WriteLine();
-                                        Console.WriteLine("输入错误!");
+                                        Console.Clear();
                                         continue;
                                 }
                                 break;
@@ -63,10 +66,11 @@ namespace ArchivePasswordTestTool
                         }
                     }
                 }
+                ArchiveDecryptionProgram = new FileInfo(AppPath + "Bin\\7z.exe");
             }
             catch (Exception)
             {
-                Console.WriteLine("释放7Zip时出现错误!(按任意键退出程序)");
+                Console.WriteLine("自检时出现错误！请确认读写权限是否开放或磁盘空间是否不足。(按任意键退出程序)");
                 Console.ReadKey();
                 Environment.Exit(0);
             }
@@ -74,39 +78,40 @@ namespace ArchivePasswordTestTool
             DecryptArchiveThreadCount = 1;
         }
     }
-
-
+    
     class Program
     {
-        /// <summary>
-        /// 重定向程序集解析
-        /// </summary>
-        /// <param name="sender"></param>
-        /// <param name="args"></param>
-        /// <returns></returns>
+        public static ProgramParameter programParameter = new ProgramParameter();
         public static Assembly CurrentDomain_AssemblyResolve(object sender, ResolveEventArgs args)
         {
             string[] assemblyName = args.Name.Split(',');
+            DirectoryInfo DirectoryInfo = new DirectoryInfo(programParameter.AppPath + "Bin\\");
             try
             {
+                if (!DirectoryInfo.Exists)
+                {
+                    Directory.CreateDirectory(DirectoryInfo.FullName);
+                }
                 if (!assemblyName[0].Contains(MethodBase.GetCurrentMethod().DeclaringType.Namespace))
                 {
                     switch (assemblyName[0])
                     {
                         default:
-                            return Assembly.LoadFrom(ProgramParameter.AppPath + assemblyName[0] + ".dll");
+                            return Assembly.LoadFrom(DirectoryInfo.FullName + assemblyName[0] + ".dll");
                     }
                 }
             }
             catch (IOException)
             {
-                MemoryStream memoryStream = new MemoryStream();
-                Assembly.GetExecutingAssembly().GetManifestResourceStream(MethodBase.GetCurrentMethod().DeclaringType.Namespace + ".Resources." + assemblyName[0] + ".dll").CopyTo(memoryStream);
-                return Assembly.Load(memoryStream.ToArray());
+                using (MemoryStream assembly = new MemoryStream())
+                {
+                    Assembly.GetExecutingAssembly().GetManifestResourceStream(MethodBase.GetCurrentMethod().DeclaringType.Namespace + ".Resources." + assemblyName[0] + ".dll").CopyTo(assembly);
+                    return Assembly.Load(assembly.ToArray());
+                }
             }
             catch (Exception ex)
             {
-                Console.WriteLine("加载程序集出错！请前往：" + ProgramParameter.AppHomePage + " 提交错误信息。");
+                Console.WriteLine("加载程序集出错！请前往：" + programParameter.AppHomePage + " 提交错误信息。");
                 Console.WriteLine(ex.ToString());
             }
             return null;
@@ -115,11 +120,9 @@ namespace ArchivePasswordTestTool
         
         static void Main(string[] args)
         {
-            new ProgramParameter();
-
             AppDomain.CurrentDomain.AssemblyResolve += new ResolveEventHandler(CurrentDomain_AssemblyResolve);
 
-            Main main = new Main(args);
+            Main main = new Main(args, programParameter);
             
         }
 

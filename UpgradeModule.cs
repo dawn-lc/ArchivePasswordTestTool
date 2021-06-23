@@ -101,7 +101,7 @@ namespace module.dawnlc.me
                 throw new ArgumentException("版本类型无法识别");
             }
         }
-        public static bool CheckUpgrade(Uri uri, Http.Method method, Dictionary<string, string> headers)
+        public static bool CheckUpgrade(Uri uri, Http.Method method, Dictionary<string, string> headers,int[] version,string versionType)
         {
             try
             {
@@ -127,16 +127,15 @@ namespace module.dawnlc.me
                         catch (Exception)
                         {
                             Console.WriteLine("检查更新失败！请联系开发者进行修复。");
-                            Process.Start(ProgramParameter.AppHomePage);
                             throw new Exception("错误的版本信息格式! \r\n" + ReleasesLatestInfo.ToString());
                         }
 
-                        switch (ComparisonVersion(ProgramParameter.Version, LatestVersion.ToArray()))
+                        switch (ComparisonVersion(version, LatestVersion.ToArray()))
                         {
                             case 1:
                                 break;
                             case 0:
-                                switch (ComparisonVersionType(ProgramParameter.VersionType, LatestVersionType))
+                                switch (ComparisonVersionType(versionType, LatestVersionType))
                                 {
                                     case 1:
                                         break;
@@ -151,13 +150,11 @@ namespace module.dawnlc.me
                         }
 
                         Console.WriteLine("当前版本不是最新的，请前往下载最新版本。");
-                        Process.Start(ProgramParameter.AppHomePage);
                         return false;
                     }
                     else
                     {
                         Console.WriteLine("检查更新失败！请检查您的网络情况。");
-                        Process.Start(ProgramParameter.AppHomePage);
                         throw new Exception("检查更新失败！\r\n" + ReleasesLatestInfoData.GetResponseStatusCode() + "\r\n" + ReleasesLatestInfoData.GetResponseString());
                     }
                 }
@@ -166,7 +163,6 @@ namespace module.dawnlc.me
             {
                 Console.WriteLine("检查更新失败！请检查您的网络情况。");
                 Console.WriteLine(ex.ToString());
-                Process.Start(ProgramParameter.AppHomePage);
                 throw new Exception("检查更新失败！\r\n" + ex.ToString());
             }
 

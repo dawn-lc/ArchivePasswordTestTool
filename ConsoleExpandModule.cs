@@ -120,7 +120,6 @@ namespace module.dawnlc.me
                 {
                     RenderThread.Abort();
                     isDisposing = true;
-
                     foreach (var item in RenderCache1)
                     {
                         if (item != null)
