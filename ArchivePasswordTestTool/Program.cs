@@ -146,11 +146,11 @@ namespace ArchivePasswordTestTool
                 {
                     if (StartupParametersCheck(args, "D"))
                     {
-                        config.Dictionary = GetParameter(args, "D", "PasswordDictionary.txt");
+                        config.Dictionary = GetParameter(args, "D", "PasswordDictionary.txt").Replace("\"", "");
                     }
                     else
                     {
-                        config.Dictionary = AnsiConsole.Ask("请输入需要进行测试的密码字典路径[[或将密码字典拖至本窗口]]", "PasswordDictionary.txt");
+                        config.Dictionary = AnsiConsole.Ask("请输入需要进行测试的密码字典路径[[或将密码字典拖至本窗口]]", "PasswordDictionary.txt").Replace("\"", "");
                     }
 
                     if (File.Exists(config.Dictionary))
@@ -162,11 +162,11 @@ namespace ArchivePasswordTestTool
                 {
                     if (StartupParametersCheck(args, "F"))
                     {
-                        ArchiveFile = GetParameter(args, "F", AnsiConsole.Ask<string>("请输入需要进行测试的压缩包路径[[或将压缩包拖至本窗口]]:"));
+                        ArchiveFile = GetParameter(args, "F", AnsiConsole.Ask<string>("请输入需要进行测试的压缩包路径[[或将压缩包拖至本窗口]]:")).Replace("\"", "");
                     }
                     else
                     {
-                        ArchiveFile = AnsiConsole.Ask<string>("请输入需要进行测试的压缩包路径[[或将压缩包拖至本窗口]]:");
+                        ArchiveFile = AnsiConsole.Ask<string>("请输入需要进行测试的压缩包路径[[或将压缩包拖至本窗口]]:").Replace("\"","");
                     }
                     if (File.Exists(ArchiveFile))
                     {
