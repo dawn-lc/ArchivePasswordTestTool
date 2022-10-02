@@ -121,105 +121,111 @@ namespace ArchivePasswordTestTool
                 o.TracesSampleRate = 1.0;
             }))
             {
-                string ArchiveFile;
-                await AnsiConsole.Status().StartAsync("初始化...", async ctx => {
-                    await Initialization(ctx);
-                });
-                if (config.Libs.Any(i => !i.Exists))
+                try
                 {
-                    await AnsiConsole.Progress().AutoClear(true).HideCompleted(true).StartAsync(async ctx =>
-                    {
-                        foreach (var item in config.Libs.Where(i => !i.Exists))
-                        {
-                            await HTTP.DownloadAsync(await HTTP.GetAsync(new Uri(item.DownloadUrl), new Dictionary<string, IEnumerable<string>>() { ["user-agent"] = new List<string>() { AppName + " " + string.Join(".", Version) } }), $"lib/{item.Name}", ctx.AddTask($"下载 {item.Name}"), item.Name);
-                        }
-                        if (!File.Exists("PasswordDictionary.txt"))
-                        {
-                            await HTTP.DownloadAsync(await HTTP.GetAsync(new Uri("https://raw.githubusercontent.com/baidusama/EroPassword/main/PasswordDictionary.txt"), new Dictionary<string, IEnumerable<string>>() { ["user-agent"] = new List<string>() { AppName + " " + string.Join(".", Version) } }), "PasswordDictionary.txt", ctx.AddTask($"下载 PasswordDictionary.txt"), "PasswordDictionary.txt");
-                        }
+                    await AnsiConsole.Status().StartAsync("初始化...", async ctx => {
+                        await Initialization(ctx);
                     });
-                    AnsiConsole.Confirm("下载完成，请重启软件以完成更新。", true);
-                    Environment.Exit(0);
-                }
-                AnsiConsole.Clear();
-
-                while (true)
-                {
-                    if (StartupParametersCheck(args, "D"))
+                    if (config.Libs.Any(i => !i.Exists))
                     {
-                        config.Dictionary = GetParameter(args, "D", "PasswordDictionary.txt").Replace("\"", "");
-                    }
-                    else
-                    {
-                        config.Dictionary = AnsiConsole.Ask("请输入需要进行测试的密码字典路径[[或将密码字典拖至本窗口]]", "PasswordDictionary.txt").Replace("\"", "");
-                    }
-
-                    if (File.Exists(config.Dictionary))
-                    {
-                        break;
-                    }
-                }
-                while (true)
-                {
-                    if (StartupParametersCheck(args, "F"))
-                    {
-                        ArchiveFile = GetParameter(args, "F", AnsiConsole.Ask<string>("请输入需要进行测试的压缩包路径[[或将压缩包拖至本窗口]]:")).Replace("\"", "");
-                    }
-                    else
-                    {
-                        ArchiveFile = AnsiConsole.Ask<string>("请输入需要进行测试的压缩包路径[[或将压缩包拖至本窗口]]:").Replace("\"","");
-                    }
-                    if (File.Exists(ArchiveFile))
-                    {
-                        break;
-                    }
-                }
-
-                string? EncryptArchivePassword = null;
-                string[] Dictionary = File.ReadAllLines(config.Dictionary);
-
-                AnsiConsole.WriteLine($"字典内包含: {Dictionary.Length} 条密码。");
-                SevenZipBase.SetLibraryPath("lib/7z.dll");
-                await AnsiConsole.Progress().AutoClear(true).HideCompleted(true).StartAsync(async ctx =>
-                {
-                    var Test = ctx.AddTask($"测试进度");
-                    Parallel.ForEach(Dictionary, new ParallelOptions() { MaxDegreeOfParallelism = Environment.ProcessorCount - 1 }, (i, loopState) =>
-                    {
-                        try
+                        await AnsiConsole.Progress().AutoClear(true).HideCompleted(true).StartAsync(async ctx =>
                         {
-                            using var temp = new SevenZipExtractor(ArchiveFile, i);
-                            Test.Increment((double)1 / Dictionary.Length * 100);
-                            if (temp.Check())
+                            foreach (var item in config.Libs.Where(i => !i.Exists))
                             {
-                                EncryptArchivePassword = i;
-                                loopState.Break();
+                                await HTTP.DownloadAsync(await HTTP.GetAsync(new Uri(item.DownloadUrl), new Dictionary<string, IEnumerable<string>>() { ["user-agent"] = new List<string>() { AppName + " " + string.Join(".", Version) } }), $"lib/{item.Name}", ctx.AddTask($"下载 {item.Name}"), item.Name);
                             }
-                        }
-                        catch (Exception)
-                        {
-                        }
-                    });
-                    Test.Increment(100);
-                    Test.StopTask();
-                });
-                AnsiConsole.WriteLine(EncryptArchivePassword != null ? $"已找到解压密码: {EncryptArchivePassword}" : "没有找到正确的解压密码！");
-                if (AnsiConsole.Confirm("是否保存测试结果?", true))
-                {
-                    using (StreamWriter file = new($"{ArchiveFile}[测试报告].txt", false))
+                            if (!File.Exists("PasswordDictionary.txt"))
+                            {
+                                await HTTP.DownloadAsync(await HTTP.GetAsync(new Uri("https://raw.githubusercontent.com/baidusama/EroPassword/main/PasswordDictionary.txt"), new Dictionary<string, IEnumerable<string>>() { ["user-agent"] = new List<string>() { AppName + " " + string.Join(".", Version) } }), "PasswordDictionary.txt", ctx.AddTask($"下载 PasswordDictionary.txt"), "PasswordDictionary.txt");
+                            }
+                        });
+                        AnsiConsole.Confirm("下载完成，请重启软件以完成更新。", true);
+                        Environment.Exit(0);
+                    }
+                    AnsiConsole.Clear();
+                    string ArchiveFile;
+                    while (true)
                     {
-                        file.WriteLine("加密压缩包: " + ArchiveFile);
-                        file.WriteLine("字典: " + config.Dictionary);
-                        if (EncryptArchivePassword != null)
+                        if (StartupParametersCheck(args, "D"))
                         {
-                            file.WriteLine("解压密码: " + EncryptArchivePassword);
+                            config.Dictionary = GetParameter(args, "D", "PasswordDictionary.txt").Replace("\"", "");
                         }
                         else
                         {
-                            file.WriteLine("没有找到正确的解压密码！");
+                            config.Dictionary = AnsiConsole.Ask("请输入需要进行测试的密码字典路径[[或将密码字典拖至本窗口]]", "PasswordDictionary.txt").Replace("\"", "");
                         }
-                        file.Close();
+
+                        if (File.Exists(config.Dictionary))
+                        {
+                            break;
+                        }
                     }
-                    Process.Start("Explorer.exe", $"/select, \"{ArchiveFile}[测试报告].txt\"");
+                    while (true)
+                    {
+                        if (StartupParametersCheck(args, "F"))
+                        {
+                            ArchiveFile = GetParameter(args, "F", AnsiConsole.Ask<string>("请输入需要进行测试的压缩包路径[[或将压缩包拖至本窗口]]:")).Replace("\"", "");
+                        }
+                        else
+                        {
+                            ArchiveFile = AnsiConsole.Ask<string>("请输入需要进行测试的压缩包路径[[或将压缩包拖至本窗口]]:").Replace("\"", "");
+                        }
+                        if (File.Exists(ArchiveFile))
+                        {
+                            break;
+                        }
+                    }
+
+                    string? EncryptArchivePassword = null;
+                    string[] Dictionary = File.ReadAllLines(config.Dictionary);
+
+                    AnsiConsole.WriteLine($"字典内包含: {Dictionary.Length} 条密码。");
+                    SevenZipBase.SetLibraryPath("lib/7z.dll");
+                    await AnsiConsole.Progress().AutoClear(true).HideCompleted(true).StartAsync(async ctx =>
+                    {
+                        var Test = ctx.AddTask($"测试进度");
+                        Parallel.ForEach(Dictionary, new ParallelOptions() { MaxDegreeOfParallelism = Environment.ProcessorCount - 1 }, (i, loopState) =>
+                        {
+                            try
+                            {
+                                using var temp = new SevenZipExtractor(ArchiveFile, i);
+                                Test.Increment((double)1 / Dictionary.Length * 100);
+                                if (temp.Check())
+                                {
+                                    EncryptArchivePassword = i;
+                                    loopState.Break();
+                                }
+                            }
+                            catch (Exception)
+                            {
+                            }
+                        });
+                        Test.Increment(100);
+                        Test.StopTask();
+                    });
+                    AnsiConsole.WriteLine(EncryptArchivePassword != null ? $"已找到解压密码: {EncryptArchivePassword}" : "没有找到正确的解压密码！");
+                    if (AnsiConsole.Confirm("是否保存测试结果?", true))
+                    {
+                        using (StreamWriter file = new($"{ArchiveFile}[测试报告].txt", false))
+                        {
+                            file.WriteLine("加密压缩包: " + ArchiveFile);
+                            file.WriteLine("字典: " + config.Dictionary);
+                            if (EncryptArchivePassword != null)
+                            {
+                                file.WriteLine("解压密码: " + EncryptArchivePassword);
+                            }
+                            else
+                            {
+                                file.WriteLine("没有找到正确的解压密码！");
+                            }
+                            file.Close();
+                        }
+                        Process.Start("Explorer.exe", $"/select, \"{ArchiveFile}[测试报告].txt\"");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    SentrySdk.CaptureException(ex);
                 }
             }
         }
