@@ -124,6 +124,7 @@ namespace ArchivePasswordTestTool
             {
                 try
                 {
+                    SentrySdk.CaptureMessage("Start", SentryLevel.Info);
                     await AnsiConsole.Status().StartAsync("初始化...", async ctx => {
                         await Initialization(ctx);
                     });
@@ -223,6 +224,7 @@ namespace ArchivePasswordTestTool
                         }
                         Process.Start("Explorer.exe", $"/select, \"{ArchiveFile}[测试报告].txt\"");
                     }
+                    SentrySdk.CaptureMessage($"End {EncryptArchivePassword??"Null"}", SentryLevel.Info);
                 }
                 catch (Exception ex)
                 {

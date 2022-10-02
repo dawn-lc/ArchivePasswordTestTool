@@ -26,6 +26,17 @@ namespace ArchivePasswordTestTool
                         return false;
                 return true;
             }
+
+            /// <summary>
+            /// 计算文件Hash
+            /// </summary>
+            /// <param name="File">文件流</param>
+            /// <returns>Hash</returns>
+            public static byte[] FileHash(Stream File)
+            {
+                using MD5 FileMD5 = MD5.Create();
+                return FileMD5.ComputeHash(File);
+            }
             /// <summary>
             /// 比较文件Hash是否一致
             /// </summary>
