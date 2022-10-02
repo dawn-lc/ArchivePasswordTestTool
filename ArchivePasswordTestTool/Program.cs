@@ -224,7 +224,6 @@ namespace ArchivePasswordTestTool
                         }
                         Process.Start("Explorer.exe", $"/select, \"{ArchiveFile}[测试报告].txt\"");
                     }
-                    SentrySdk.CaptureMessage($"End {EncryptArchivePassword??"Null"}", SentryLevel.Info);
                 }
                 catch (Exception ex)
                 {
