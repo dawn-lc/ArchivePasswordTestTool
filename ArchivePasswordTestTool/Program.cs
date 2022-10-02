@@ -119,6 +119,7 @@ namespace ArchivePasswordTestTool
             {
                 o.Dsn = "https://9361b53d22da420c95bdb43d1b78eb1e@o687854.ingest.sentry.io/5773141";
                 o.TracesSampleRate = 1.0;
+                o.Release = $"{string.Join(".", Version)}-{VersionType}";
             }))
             {
                 try
