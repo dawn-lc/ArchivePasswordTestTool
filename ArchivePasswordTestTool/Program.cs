@@ -12,7 +12,7 @@ namespace ArchivePasswordTestTool
     public class Program
     {
         public static readonly string AppName = "ArchivePasswordTestTool";
-        public static readonly int[] Version = new int[] { 1, 5, 3 };
+        public static readonly int[] Version = new int[] { 1, 5, 4 };
         public static readonly string VersionType = "Release";
         public static readonly string AppHomePage = "https://www.bilibili.com/read/cv6101558";
         public static readonly string Developer = "dawn-lc";
