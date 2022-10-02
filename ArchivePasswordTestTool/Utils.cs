@@ -344,7 +344,7 @@ namespace ArchivePasswordTestTool
             {
                 return await Constructor(head, timeout).PutAsync(url, content);
             }
-            public static async void DownloadAsync(HttpResponseMessage response, string path, ProgressTask task, string? name)
+            public static async Task DownloadAsync(HttpResponseMessage response, string path, ProgressTask task, string? name)
             {
                 if (File.Exists(path))
                 {

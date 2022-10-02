@@ -12,7 +12,7 @@ namespace ArchivePasswordTestTool
     public class Program
     {
         public static readonly string AppName = "ArchivePasswordTestTool";
-        public static readonly int[] Version = new int[] { 1, 5, 2 };
+        public static readonly int[] Version = new int[] { 1, 5, 3 };
         public static readonly string VersionType = "Release";
         public static readonly string AppHomePage = "https://www.bilibili.com/read/cv6101558";
         public static readonly string Developer = "dawn-lc";
@@ -109,11 +109,9 @@ namespace ArchivePasswordTestTool
                 }
                 Warn($"{item.Name} 运行库缺少或损坏! ");
                 item.Exists = false;
+                config.CheckUpgrade = new();
             }
-            if (!File.Exists("PasswordDictionary.txt"))
-            {
-                File.WriteAllText("PasswordDictionary.txt", "");
-            }
+            File.WriteAllText($"config.json", JsonSerializer.Serialize(config));
         }
         static async Task Main(string[] args)
         {
@@ -133,11 +131,14 @@ namespace ArchivePasswordTestTool
                     {
                         foreach (var item in config.Libs.Where(i => !i.Exists))
                         {
-                            HTTP.DownloadAsync(await HTTP.GetAsync(new Uri(item.DownloadUrl), new Dictionary<string, IEnumerable<string>>() { ["user-agent"] = new List<string>() { AppName + " " + string.Join(".", Version) } }), $"lib/{item.Name}", ctx.AddTask($"下载 {item.Name}"), item.Name);
+                            await HTTP.DownloadAsync(await HTTP.GetAsync(new Uri(item.DownloadUrl), new Dictionary<string, IEnumerable<string>>() { ["user-agent"] = new List<string>() { AppName + " " + string.Join(".", Version) } }), $"lib/{item.Name}", ctx.AddTask($"下载 {item.Name}"), item.Name);
+                        }
+                        if (!File.Exists("PasswordDictionary.txt"))
+                        {
+                            await HTTP.DownloadAsync(await HTTP.GetAsync(new Uri("https://raw.githubusercontent.com/baidusama/EroPassword/main/PasswordDictionary.txt"), new Dictionary<string, IEnumerable<string>>() { ["user-agent"] = new List<string>() { AppName + " " + string.Join(".", Version) } }), "PasswordDictionary.txt", ctx.AddTask($"下载 PasswordDictionary.txt"), "PasswordDictionary.txt");
                         }
                     });
-                    Log("下载完成，请重启软件以完成更新。");
-                    await Task.Delay(5000);
+                    AnsiConsole.Confirm("下载完成，请重启软件以完成更新。", true);
                     Environment.Exit(0);
                 }
                 AnsiConsole.Clear();
@@ -174,20 +175,32 @@ namespace ArchivePasswordTestTool
                     }
                 }
 
-                SevenZipBase.SetLibraryPath("lib/7z.dll");
                 string? EncryptArchivePassword = null;
-                await AnsiConsole.Status().StartAsync("测试密码中...", async ctx => {
-                    Parallel.ForEach(File.ReadAllLines(config.Dictionary), new ParallelOptions() { MaxDegreeOfParallelism = Environment.ProcessorCount - 1 }, (i, loopState) =>
+                string[] Dictionary = File.ReadAllLines(config.Dictionary);
+
+                AnsiConsole.WriteLine($"字典内包含: {Dictionary.Length} 条密码。");
+                SevenZipBase.SetLibraryPath("lib/7z.dll");
+                await AnsiConsole.Progress().AutoClear(true).HideCompleted(true).StartAsync(async ctx =>
+                {
+                    var Test = ctx.AddTask($"测试进度");
+                    Parallel.ForEach(Dictionary, new ParallelOptions() { MaxDegreeOfParallelism = Environment.ProcessorCount - 1 }, (i, loopState) =>
                     {
-                        using var temp = new SevenZipExtractor(ArchiveFile, i);
-                        if (temp.Check())
+                        try
                         {
-                            EncryptArchivePassword = i;
-                            loopState.Break();
+                            using var temp = new SevenZipExtractor(ArchiveFile, i);
+                            Test.Increment((double)1 / Dictionary.Length * 100);
+                            if (temp.Check())
+                            {
+                                EncryptArchivePassword = i;
+                                loopState.Break();
+                            }
+                        }
+                        catch (Exception)
+                        {
                         }
                     });
-                    ctx.Status("测试结束。");
-                    await Task.Delay(500);
+                    Test.Increment(100);
+                    Test.StopTask();
                 });
                 AnsiConsole.WriteLine(EncryptArchivePassword != null ? $"已找到解压密码: {EncryptArchivePassword}" : "没有找到正确的解压密码！");
                 if (AnsiConsole.Confirm("是否保存测试结果?", true))
