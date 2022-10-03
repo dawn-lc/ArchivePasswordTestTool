@@ -12,7 +12,7 @@ namespace ArchivePasswordTestTool
     public class Program
     {
         public static readonly string AppName = "ArchivePasswordTestTool";
-        public static readonly int[] Version = new int[] { 1, 5, 4 };
+        public static readonly int[] Version = new int[] { 1, 5, 5 };
         public static readonly string VersionType = "Release";
         public static readonly string AppHomePage = "https://www.bilibili.com/read/cv6101558";
         public static readonly string Developer = "dawn-lc";
@@ -118,13 +118,15 @@ namespace ArchivePasswordTestTool
             using (SentrySdk.Init(o =>
             {
                 o.Dsn = "https://9361b53d22da420c95bdb43d1b78eb1e@o687854.ingest.sentry.io/5773141";
+                o.DiagnosticLevel = SentryLevel.Debug;
+                o.IsGlobalModeEnabled = true;
                 o.TracesSampleRate = 1.0;
                 o.Release = $"{string.Join(".", Version)}-{VersionType}";
+                o.AutoSessionTracking = true;
             }))
             {
                 try
                 {
-                    SentrySdk.CaptureMessage("Start", SentryLevel.Info);
                     await AnsiConsole.Status().StartAsync("初始化...", async ctx => {
                         await Initialization(ctx);
                     });
