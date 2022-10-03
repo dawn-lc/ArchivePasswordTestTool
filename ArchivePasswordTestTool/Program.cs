@@ -12,7 +12,7 @@ namespace ArchivePasswordTestTool
     public class Program
     {
         public static readonly string AppName = "ArchivePasswordTestTool";
-        public static readonly int[] Version = new int[] { 1, 5, 5 };
+        public static readonly int[] Version = new int[] { 1, 5, 6 };
         public static readonly string VersionType = "Release";
         public static readonly string AppHomePage = "https://www.bilibili.com/read/cv6101558";
         public static readonly string Developer = "dawn-lc";
@@ -28,6 +28,7 @@ namespace ArchivePasswordTestTool
         public class Config
         {
             public DateTime CheckUpgrade { get; set; } = new();
+            public bool IsLatestVersion { get; set; } = false;
             public List<Lib> Libs { get; set; } = new();
             public string Dictionary { get; set; } = "PasswordDictionary.txt";
         }
@@ -43,26 +44,21 @@ namespace ArchivePasswordTestTool
                 try
                 {
                     HttpResponseMessage Info = await HTTP.GetAsync(new Uri($"https://api.github.com/repos/{Developer}/{AppName}/releases/latest"), new Dictionary<string, IEnumerable<string>>() { ["user-agent"] = new List<string>() { AppName + " " + string.Join(".", Version) } });
-                    if (Info.StatusCode != HttpStatusCode.OK)
-                    {
-                        Error("检查更新失败！请检查您的网络情况。");
-                        throw new Exception($"检查更新失败！\r\n{ Info.StatusCode }\r\n{ await Info.Content.ReadAsStringAsync() }");
-                    }
-                    else
+                    if (Info.StatusCode == HttpStatusCode.OK)
                     {
                         Upgrade.ReleasesInfo? LatestInfo = JsonSerializer.Deserialize<Upgrade.ReleasesInfo>(await Info.Content.ReadAsStringAsync());
                         if (LatestInfo != null)
                         {
+                            config.Libs.Clear();
                             if (Upgrade.CheckUpgrade(LatestInfo, Version, VersionType))
                             {
-                                Log("当前本地程序已是最新版本。");
+                                config.IsLatestVersion = true;
                                 config.CheckUpgrade = DateTime.Now;
-                                config.Libs.Clear();
                                 foreach (var item in (LatestInfo.Body ?? "").Split("\r\n"))
                                 {
                                     if (!string.IsNullOrEmpty(item) && item[0..4] == "lib." && LatestInfo.Assets.Any(i => i.Name == item.Split(":")[0]))
                                     {
-                                        LatestInfo.Assets.Find(i => i.Name == item.Split(":")[0]).Label = item.Split(":")[1];
+                                        LatestInfo.Assets.Find(i => i.Name == item.Split(":")[0])!.Label = item.Split(":")[1];
                                     }
                                 }
                                 foreach (var item in LatestInfo.Assets)
@@ -74,15 +70,13 @@ namespace ArchivePasswordTestTool
                                 }
                                 File.WriteAllText($"config.json", JsonSerializer.Serialize(config));
                             }
-                            else
-                            {
-                                Warn("版本不是最新的, 请下载最新版。");
-                                Process.Start("explorer.exe", AppHomePage);
-                                throw new Exception("版本过低！");
-                            }
                         }
                     }
-                    
+                    else
+                    {
+                        Error("检查更新失败！请检查您的网络情况。");
+                        throw new Exception($"检查更新失败！\r\n{ Info.StatusCode }\r\n{ await Info.Content.ReadAsStringAsync() }");
+                    }
                 }
                 catch (Exception ex)
                 {
@@ -130,6 +124,15 @@ namespace ArchivePasswordTestTool
                     await AnsiConsole.Status().StartAsync("初始化...", async ctx => {
                         await Initialization(ctx);
                     });
+                    if (!config.IsLatestVersion)
+                    {
+                        Warn("当前版本不是最新的，请前往下载最新版本。");
+                        if (AnsiConsole.Confirm("是否打开软件发布页?", true))
+                        {
+                            Process.Start(new ProcessStartInfo(AppHomePage) { UseShellExecute = true });
+                        }
+                        Environment.Exit(0);
+                    }
                     if (config.Libs.Any(i => !i.Exists))
                     {
                         await AnsiConsole.Progress().AutoClear(true).HideCompleted(true).StartAsync(async ctx =>
@@ -143,7 +146,10 @@ namespace ArchivePasswordTestTool
                                 await HTTP.DownloadAsync(await HTTP.GetAsync(new Uri("https://raw.githubusercontent.com/baidusama/EroPassword/main/PasswordDictionary.txt"), new Dictionary<string, IEnumerable<string>>() { ["user-agent"] = new List<string>() { AppName + " " + string.Join(".", Version) } }), "PasswordDictionary.txt", ctx.AddTask($"下载 PasswordDictionary.txt"), "PasswordDictionary.txt");
                             }
                         });
-                        AnsiConsole.Confirm("下载完成，请重启软件以完成更新。", true);
+                        if (AnsiConsole.Confirm("下载完成，请重启软件以完成更新。", true))
+                        {
+                            Process.Start(Environment.ProcessPath!);
+                        }
                         Environment.Exit(0);
                     }
                     AnsiConsole.Clear();
@@ -168,7 +174,7 @@ namespace ArchivePasswordTestTool
                     {
                         if (StartupParametersCheck(args, "F"))
                         {
-                            ArchiveFile = GetParameter(args, "F", AnsiConsole.Ask<string>("请输入需要进行测试的压缩包路径[[或将压缩包拖至本窗口]]:")).Replace("\"", "");
+                            ArchiveFile = GetParameter(args, "F", "").Replace("\"", "");
                         }
                         else
                         {
@@ -224,7 +230,17 @@ namespace ArchivePasswordTestTool
                             }
                             file.Close();
                         }
-                        Process.Start("Explorer.exe", $"/select, \"{ArchiveFile}[测试报告].txt\"");
+                        switch (Environment.OSVersion.Platform)
+                        {
+                            case PlatformID.Win32S:
+                            case PlatformID.Win32Windows:
+                            case PlatformID.Win32NT:
+                            case PlatformID.WinCE:
+                                Process.Start("explorer.exe", $"/select, \"{ArchiveFile}[测试报告].txt\"");
+                                break;
+                            default:
+                                break;
+                        }
                     }
                 }
                 catch (Exception ex)

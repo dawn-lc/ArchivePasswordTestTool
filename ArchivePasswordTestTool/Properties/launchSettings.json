@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "ArchivePasswordTestTool": {
+      "commandName": "Project",
+      "commandLineArgs": ""
+    }
+  }
+}

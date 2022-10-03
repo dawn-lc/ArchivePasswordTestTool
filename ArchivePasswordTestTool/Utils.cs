@@ -90,15 +90,15 @@ namespace ArchivePasswordTestTool
             }
             public static void Log(string value)
             {
-                AnsiConsole.MarkupLine($"[bold][[{DateTime.Now}]] [lime]Info[/][/] {value}");
+                AnsiConsole.MarkupLine($"[bold][[{DateTime.Now}]] [lime]I[/][/] {value}");
             }
             public static void Warn(string value)
             {
-                AnsiConsole.MarkupLine($"[bold][[{DateTime.Now}]] [orangered1]Warning[/][/] {value}");
+                AnsiConsole.MarkupLine($"[bold][[{DateTime.Now}]] [orangered1]W[/][/] {value}");
             }
             public static void Error(string value)
             {
-                AnsiConsole.MarkupLine($"[bold][[{DateTime.Now}]] [red]Error[/][/] {value}");
+                AnsiConsole.MarkupLine($"[bold][[{DateTime.Now}]] [red]E[/][/] {value}");
             }
             public static bool StartupParametersCheck(List<string> Parameters, string Flag)
             {
@@ -293,7 +293,6 @@ namespace ArchivePasswordTestTool
                         case -1:
                             return true;
                     }
-                    Warn("当前版本不是最新的，请前往下载最新版本。");
                     return false;
                 }
                 catch (Exception)
@@ -357,23 +356,30 @@ namespace ArchivePasswordTestTool
             }
             public static async Task DownloadAsync(HttpResponseMessage response, string path, ProgressTask task, string? name)
             {
-                if (File.Exists(path))
+                try
                 {
-                    File.Delete(path);
+                    if (File.Exists(path))
+                    {
+                        File.Delete(path);
+                    }
+                    byte[] buffer = new byte[8192];
+                    Stream ResponseStream = await response.Content.ReadAsStreamAsync();
+                    using var destination = new FileStream(path, FileMode.OpenOrCreate);
+                    long contentLength = response.Content.Headers.ContentLength ?? 0;
+                    int bytesRead;
+                    while ((bytesRead = await ResponseStream.ReadAsync(buffer).ConfigureAwait(false)) != 0)
+                    {
+                        await destination.WriteAsync(buffer.AsMemory(0, bytesRead)).ConfigureAwait(false);
+                        task.Increment((double)bytesRead / contentLength * 100);
+                    }
+                    task.Increment(100);
+                    task.StopTask();
+                    Log($"{name} 下载完成");
                 }
-                byte[] buffer = new byte[8192];
-                Stream ResponseStream = await response.Content.ReadAsStreamAsync();
-                using var destination = new FileStream(path, FileMode.OpenOrCreate);
-                long contentLength = response.Content.Headers.ContentLength ?? 0;
-                int bytesRead;
-                while ((bytesRead = await ResponseStream.ReadAsync(buffer).ConfigureAwait(false)) != 0)
+                catch (Exception ex)
                 {
-                    await destination.WriteAsync(buffer.AsMemory(0, bytesRead)).ConfigureAwait(false);
-                    task.Increment((double)bytesRead / contentLength * 100);
+                    throw new($"Downloading {name ?? response.RequestMessage?.RequestUri?.ToString() ?? path} \r\n {ex}");
                 }
-                task.Increment(100);
-                task.StopTask();
-                Log($"{name} 下载完成");
             }
         }
     }
