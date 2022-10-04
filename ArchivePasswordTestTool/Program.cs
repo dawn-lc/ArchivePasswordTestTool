@@ -109,6 +109,12 @@ namespace ArchivePasswordTestTool
         }
         static async Task Main(string[] args)
         {
+            if (Process.GetProcessesByName(AppName).Where(p=> p.MainModule!.FileName != null && p.MainModule.FileName == Environment.ProcessPath).Count() > 1)
+            {
+                Warn("当前目录中存在正在运行的本程序，如需多开请将本程序复制至其他文件夹后运行。(按任意键退出...)");
+                Console.ReadKey(true);
+                Environment.Exit(0);
+            }
             using (SentrySdk.Init(o =>
             {
                 o.Dsn = "https://9361b53d22da420c95bdb43d1b78eb1e@o687854.ingest.sentry.io/5773141";
