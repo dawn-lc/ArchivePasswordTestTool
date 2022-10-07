@@ -317,16 +317,18 @@ namespace ArchivePasswordTestTool
             public static HttpClient Constructor(Dictionary<string, IEnumerable<string>>? head, TimeSpan? timeout)
             {
                 HttpClientHandler clientHandler = new() { 
-                    AutomaticDecompression = DecompressionMethods.GZip
+                    AutomaticDecompression = DecompressionMethods.GZip,
+                    AllowAutoRedirect = true
                 };
                 clientHandler.ServerCertificateCustomValidationCallback = (sender, cert, chain, sslPolicyErrors) => { return true; };
                 HttpClient Client = new(clientHandler);
                 Client.DefaultRequestHeaders.Clear();
-                Client.Timeout = timeout ?? DefaultTimeout;
+                Client.DefaultRequestHeaders.Add("user-agent", $"{Program.AppName} {string.Join(".", Program.Version)}-{Program.VersionType}");
                 foreach (KeyValuePair<string, IEnumerable<string>> item in head ?? new())
                 {
                     Client.DefaultRequestHeaders.Add(item.Key, item.Value);
                 }
+                Client.Timeout = timeout ?? DefaultTimeout;
                 return Client;
             }
             public static HttpClient Constructor(Dictionary<string, string>? head = null, TimeSpan? timeout = null)
@@ -339,6 +341,10 @@ namespace ArchivePasswordTestTool
                 return Constructor(heads, timeout ?? DefaultTimeout);
             }
             public static async Task<HttpResponseMessage> GetAsync(Uri url, Dictionary<string, IEnumerable<string>>? head = null, TimeSpan? timeout = null)
+            {
+                return await Constructor(head, timeout).GetAsync(url);
+            }
+            public static async Task<HttpResponseMessage> GetStreamAsync(Uri url, Dictionary<string, IEnumerable<string>>? head = null, TimeSpan? timeout = null)
             {
                 return await Constructor(head, timeout).GetAsync(url, HttpCompletionOption.ResponseHeadersRead);
             }
@@ -373,7 +379,6 @@ namespace ArchivePasswordTestTool
                         task.Increment((double)bytesRead / contentLength * 100);
                     }
                     task.Increment(100);
-                    task.StopTask();
                     Log($"{name} 下载完成");
                 }
                 catch (Exception ex)

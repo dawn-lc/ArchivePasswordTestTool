@@ -164,12 +164,12 @@ namespace ArchivePasswordTestTool
                         {
                             foreach (var item in config.Libs.Where(i => !i.Exists))
                             {
-                                await HTTP.DownloadAsync(await HTTP.GetAsync(new Uri(item.DownloadUrl), new Dictionary<string, IEnumerable<string>>() { ["user-agent"] = new List<string>() { AppName + " " + string.Join(".", Version) } }), $"lib/{item.Name}", ctx.AddTask($"下载 {item.Name}"), item.Name);
+                                await HTTP.DownloadAsync(await HTTP.GetStreamAsync(new Uri(item.DownloadUrl)), $"lib/{item.Name}", ctx.AddTask($"下载 {item.Name}"), item.Name);
                             }
                             if (!File.Exists("PasswordDictionary.txt"))
                             {
                                 Warn("没有找到默认字典 PasswordDictionary.txt 正在下载由 [link=https://github.com/baidusama]baidusama[/] 提供的 [link=https://github.com/baidusama/EroPassword]EroPassword[/]");
-                                await HTTP.DownloadAsync(await HTTP.GetAsync(new Uri("https://raw.githubusercontent.com/baidusama/EroPassword/main/PasswordDictionary.txt"), new Dictionary<string, IEnumerable<string>>() { ["user-agent"] = new List<string>() { AppName + " " + string.Join(".", Version) } }), "PasswordDictionary.txt", ctx.AddTask($"下载 PasswordDictionary.txt"), "PasswordDictionary.txt");
+                                await HTTP.DownloadAsync(await HTTP.GetStreamAsync(new Uri("https://raw.githubusercontent.com/baidusama/EroPassword/main/PasswordDictionary.txt")), "PasswordDictionary.txt", ctx.AddTask($"下载 PasswordDictionary.txt"), "PasswordDictionary.txt");
                             }
                         });
                         if (AnsiConsole.Confirm("下载完成，请重启软件以完成更新。", true))
@@ -179,36 +179,34 @@ namespace ArchivePasswordTestTool
                         Environment.Exit(0);
                     }
                     AnsiConsole.Clear();
-                    while (true)
+                    AnsiConsole.Write(Figgle.FiggleFonts.Standard.Render(AppName));
+                    if (StartupParametersCheck(args, "D") && File.Exists(GetParameter(args, "D", "PasswordDictionary.txt").Replace("\"", "")))
                     {
-                        if (StartupParametersCheck(args, "D"))
-                        {
-                            config.Dictionary = GetParameter(args, "D", "PasswordDictionary.txt").Replace("\"", "");
-                        }
-                        else
-                        {
-                            config.Dictionary = AnsiConsole.Ask("请输入需要进行测试的密码字典路径[[或将密码字典拖至本窗口]]", "PasswordDictionary.txt").Replace("\"", "");
-                        }
-
-                        if (File.Exists(config.Dictionary))
-                        {
-                            break;
-                        }
+                        config.Dictionary = GetParameter(args, "D", "PasswordDictionary.txt").Replace("\"", "");
                     }
-                    while (true)
+                    else
                     {
-                        if (StartupParametersCheck(args, "F"))
+                        config.Dictionary = AnsiConsole.Prompt(new TextPrompt<string>("请输入密码字典路径[[或将密码字典拖至本窗口后，按回车键确认]]:")
+                        .PromptStyle("dodgerblue1")
+                        .ValidationErrorMessage("[red]这甚至不是一个字符串! 你是怎么做到的?[/]")
+                        .Validate(path =>
                         {
-                            ArchiveFile = GetParameter(args, "F", "").Replace("\"", "");
-                        }
-                        else
+                            return File.Exists(path.Replace("\"", "")) ? ValidationResult.Success() : ValidationResult.Error("[red]没有找到文件，请重新输入[/]");
+                        })).Replace("\"", "");
+                    }
+                    if (StartupParametersCheck(args, "F") && File.Exists(GetParameter(args, "F", "").Replace("\"", "")))
+                    {
+                        ArchiveFile = GetParameter(args, "F", "").Replace("\"", "");
+                    }
+                    else
+                    {
+                        ArchiveFile = AnsiConsole.Prompt(new TextPrompt<string>("请输入压缩包路径[[或将压缩包拖至本窗口后，按回车键确认]]:")
+                        .PromptStyle("dodgerblue1")
+                        .ValidationErrorMessage("[red]这甚至不是一个字符串! 你是怎么做到的?[/]")
+                        .Validate(path =>
                         {
-                            ArchiveFile = AnsiConsole.Ask<string>("请输入需要进行测试的压缩包路径[[或将压缩包拖至本窗口]]:").Replace("\"", "");
-                        }
-                        if (File.Exists(ArchiveFile))
-                        {
-                            break;
-                        }
+                            return File.Exists(path.Replace("\"", "")) ? ValidationResult.Success() : ValidationResult.Error("[red]没有找到文件，请重新输入[/]");
+                        })).Replace("\"", "");
                     }
 
 
