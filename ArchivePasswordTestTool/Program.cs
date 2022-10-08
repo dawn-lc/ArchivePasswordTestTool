@@ -164,6 +164,7 @@ namespace ArchivePasswordTestTool
                         {
                             foreach (var item in Config.Libs.Where(i => !i.Exists))
                             {
+                                Log($"{item.Name} 开始下载");
                                 await HTTP.DownloadAsync(await HTTP.GetStreamAsync(new Uri(item.DownloadUrl!)), $"lib/{item.Name}", ctx.AddTask($"下载 {item.Name}"), item.Name);
                             }
                             if (!File.Exists("PasswordDictionary.txt"))
@@ -214,15 +215,15 @@ namespace ArchivePasswordTestTool
                     DictionaryCount = Dictionary.Length;
                     AnsiConsole.WriteLine($"字典内包含: {Dictionary.Length} 条密码。");
                     SevenZipBase.SetLibraryPath("lib/7z.dll");
-                    await AnsiConsole.Progress().AutoClear(true).HideCompleted(true).Columns(new ProgressColumn[] {
+                    AnsiConsole.Progress().AutoClear(true).HideCompleted(true).Columns(new ProgressColumn[] {
                         new TaskDescriptionColumn(),
                         new ProgressBarColumn(),
                         new PercentageColumn(),
                         new RemainingTimeColumn()
-                    }).StartAsync(async ctx => {
+                    }).Start(ctx => {
                         
                         var Test = ctx.AddTask($"测试进度");
-                        Parallel.ForEach(Dictionary, new ParallelOptions() { MaxDegreeOfParallelism = Environment.ProcessorCount - 1 }, (i, loopState) =>
+                        Parallel.ForEach(Dictionary, (i, loopState) =>
                         {
                             try
                             {
@@ -242,6 +243,7 @@ namespace ArchivePasswordTestTool
                         Test.StopTask();
                     });
                     AnsiConsole.WriteLine(EncryptArchivePassword != null ? $"已找到解压密码: {EncryptArchivePassword}" : "没有找到正确的解压密码！");
+
                     if (AnsiConsole.Confirm("是否保存测试结果?", true))
                     {
                         using (StreamWriter file = new($"{ArchiveFile}[测试报告].txt", false))
@@ -280,6 +282,8 @@ namespace ArchivePasswordTestTool
                         level: BreadcrumbLevel.Error
                     );
                     SentrySdk.CaptureException(ex);
+                    Error($"无法处理的错误。\r\n错误日志已提交，请等待开发者修复。(程序将在5秒后退出)\r\n{ex}");
+                    await Task.Delay(5000);
                 }
             }
         }

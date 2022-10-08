@@ -98,7 +98,7 @@ namespace ArchivePasswordTestTool
             }
             public static void Error(string value)
             {
-                AnsiConsole.MarkupLine($"[bold][[{DateTime.Now}]] [red]E[/][/] {value}");
+                AnsiConsole.MarkupLine($"[bold][[{DateTime.Now}]] [red]E[/][/] {value.EscapeMarkup()}");
             }
             public static bool StartupParametersCheck(List<string> Parameters, string Flag)
             {
@@ -314,7 +314,7 @@ namespace ArchivePasswordTestTool
                     SslOptions = new()
                     {
                         //清除SNI防止被嗅探
-                        //TargetHost = string.Empty
+                        TargetHost = string.Empty
                     }
                 });
                 protected override void Dispose(bool disposing)
