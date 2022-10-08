@@ -98,7 +98,7 @@ namespace ArchivePasswordTestTool
             }
             public static void Error(string value)
             {
-                AnsiConsole.MarkupLine($"[bold][[{DateTime.Now}]] [red]E[/][/] {value}");
+                AnsiConsole.MarkupLine($"[bold][[{DateTime.Now}]] [red]E[/][/] {value.EscapeMarkup()}");
             }
             public static bool StartupParametersCheck(List<string> Parameters, string Flag)
             {
@@ -144,33 +144,33 @@ namespace ArchivePasswordTestTool
                 public class Asset
                 {
                     [JsonPropertyName("name")]
-                    public string Name { get; set; }
+                    public string? Name { get; set; }
                     [JsonPropertyName("label")]
-                    public string Label { get; set; }
+                    public string? Label { get; set; }
                     [JsonPropertyName("content_type")]
-                    public string ContentType { get; set; }
+                    public string? ContentType { get; set; }
                     [JsonPropertyName("created_at")]
-                    public string CreatedAt { get; set; }
+                    public string? CreatedAt { get; set; }
                     [JsonPropertyName("updated_at")]
-                    public string UpdatedAt { get; set; }
+                    public string? UpdatedAt { get; set; }
                     [JsonPropertyName("browser_download_url")]
-                    public string DownloadUrl { get; set; }
+                    public string? DownloadUrl { get; set; }
                 }
 
                 [JsonPropertyName("tag_name")]
-                public string TagName { get; set; }
+                public string? TagName { get; set; }
                 [JsonPropertyName("target_commitish")]
-                public string TargetCommitish { get; set; }
+                public string? TargetCommitish { get; set; }
                 [JsonPropertyName("name")]
-                public string Name { get; set; }
+                public string? Name { get; set; }
                 [JsonPropertyName("prerelease")]
                 public bool Prerelease { get; set; }
                 [JsonPropertyName("created_at")]
-                public string CreatedAt { get; set; }
+                public string? CreatedAt { get; set; }
                 [JsonPropertyName("published_at")]
-                public string PublishedAt { get; set; }
+                public string? PublishedAt { get; set; }
                 [JsonPropertyName("assets")]
-                public List<Asset> Assets { get; set; }
+                public List<Asset>? Assets { get; set; }
                 [JsonPropertyName("body")]
                 public string? Body { get; set; }
             }
@@ -268,7 +268,7 @@ namespace ArchivePasswordTestTool
             {
                 try
                 {
-                    List<string> LatestVersionData = new(LatestInfo.TagName.Split('-'));
+                    List<string> LatestVersionData = new(LatestInfo.TagName!.Split('-'));
                     List<int> LatestVersion = new();
                     string LatestVersionType = LatestVersionData[1];
                     foreach (var item in LatestVersionData[0].Split('.'))
@@ -304,6 +304,30 @@ namespace ArchivePasswordTestTool
         }
         public static class HTTP
         {
+            //防DNS污染暂时不加入
+            //private static LookupClient DNSClient { get; set; } = new(new LookupClientOptions(IPAddress.Parse("114.114.114.114")) { UseTcpOnly = true });
+
+            public class ClientHandler : HttpClientHandler
+            {
+                private readonly HttpMessageInvoker Handler = new(new SocketsHttpHandler()
+                {
+                    SslOptions = new()
+                    {
+                        //清除SNI防止被嗅探
+                        TargetHost = string.Empty
+                    }
+                });
+                protected override void Dispose(bool disposing)
+                {
+                    base.Dispose(disposing);
+                    Handler.Dispose();
+                }
+                protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+                {
+                    return await Handler.SendAsync(request, cancellationToken);
+                }
+            }
+
             public static HttpRequestMessage CreateRequest(Uri url, HttpMethod method, HttpContent? content)
             {
                 return new HttpRequestMessage()
@@ -316,14 +340,16 @@ namespace ArchivePasswordTestTool
             private static readonly TimeSpan DefaultTimeout = new(0, 0, 1, 0);
             public static HttpClient Constructor(Dictionary<string, IEnumerable<string>>? head, TimeSpan? timeout)
             {
-                HttpClientHandler clientHandler = new() { 
+
+                HttpClientHandler clientHandler = new ClientHandler
+                {
                     AutomaticDecompression = DecompressionMethods.GZip,
-                    AllowAutoRedirect = true
+                    AllowAutoRedirect = true,
+                    ServerCertificateCustomValidationCallback = (sender, cert, chain, sslPolicyErrors) => { return true; }
                 };
-                clientHandler.ServerCertificateCustomValidationCallback = (sender, cert, chain, sslPolicyErrors) => { return true; };
                 HttpClient Client = new(clientHandler);
                 Client.DefaultRequestHeaders.Clear();
-                Client.DefaultRequestHeaders.Add("user-agent", $"{Program.AppName} {string.Join(".", Program.Version)}-{Program.VersionType}");
+                Client.DefaultRequestHeaders.Add("user-agent", new List<string>() { $"{Program.AppName} {string.Join(".", Program.Version)}-{Program.VersionType}" });
                 foreach (KeyValuePair<string, IEnumerable<string>> item in head ?? new())
                 {
                     Client.DefaultRequestHeaders.Add(item.Key, item.Value);
