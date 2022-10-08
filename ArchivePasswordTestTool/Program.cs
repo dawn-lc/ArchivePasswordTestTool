@@ -44,7 +44,7 @@ namespace ArchivePasswordTestTool
                 ctx.Status("正在获取最新版本信息...");
                 try
                 {
-                    HttpResponseMessage Info = await HTTP.GetAsync(new Uri($"https://api.github.com/repos/{Developer}/{AppName}/releases/latest"), new Dictionary<string, IEnumerable<string>>() { ["user-agent"] = new List<string>() { AppName + " " + string.Join(".", Version) } });
+                    HttpResponseMessage Info = await HTTP.GetAsync(new Uri($"https://api.github.com/repos/{Developer}/{AppName}/releases/latest"));
                     if (Info.StatusCode == HttpStatusCode.OK)
                     {
                         Upgrade.ReleasesInfo? LatestInfo = JsonSerializer.Deserialize<Upgrade.ReleasesInfo>(await Info.Content.ReadAsStringAsync());
@@ -169,7 +169,7 @@ namespace ArchivePasswordTestTool
                             if (!File.Exists("PasswordDictionary.txt"))
                             {
                                 Warn("没有找到默认字典 PasswordDictionary.txt 正在下载由 [link=https://github.com/baidusama]baidusama[/] 提供的 [link=https://github.com/baidusama/EroPassword]EroPassword[/]");
-                                await HTTP.DownloadAsync(await HTTP.GetStreamAsync(new Uri("https://raw.githubusercontent.com/baidusama/EroPassword/main/PasswordDictionary.txt")), "PasswordDictionary.txt", ctx.AddTask($"下载 PasswordDictionary.txt"), "PasswordDictionary.txt");
+                                await HTTP.DownloadAsync(await HTTP.GetStreamAsync(new Uri("https://github.com/baidusama/EroPassword/raw/main/PasswordDictionary.txt")), "PasswordDictionary.txt", ctx.AddTask($"下载 PasswordDictionary.txt"), "PasswordDictionary.txt");
                             }
                         });
                         if (AnsiConsole.Confirm("下载完成，请重启软件以完成更新。", true))

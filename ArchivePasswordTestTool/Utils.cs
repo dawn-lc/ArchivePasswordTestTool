@@ -1,5 +1,8 @@
-﻿using Spectre.Console;
+﻿using DnsClient;
+using Spectre.Console;
 using System.Net;
+using System.Net.Security;
+using System.Net.Sockets;
 using System.Security.Cryptography;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -304,6 +307,39 @@ namespace ArchivePasswordTestTool
         }
         public static class HTTP
         {
+            private static LookupClient DNSClient { get; set; } = new(IPAddress.Parse("114.114.114.114")) { UseTcpOnly = true};
+            
+            public class ClientHandler : HttpClientHandler
+            {
+                private readonly HttpMessageInvoker _handler = new(new SocketsHttpHandler
+                {
+                    ConnectCallback = async (context, ct) =>
+                    {
+                        var socket = new Socket(SocketType.Stream, ProtocolType.Tcp);
+                        //防dns污染
+                        await socket.ConnectAsync((await DNSClient.GetHostEntryAsync(context.DnsEndPoint.Host)).AddressList[0], 443, cancellationToken: ct);
+                        var sslStream = new SslStream(new NetworkStream(socket, true), false, delegate { return true; });
+                        await sslStream.AuthenticateAsClientAsync("windowsupdate.microsoft.com");//移除SNI
+                        return sslStream;
+                    }
+                });
+
+                protected override void Dispose(bool disposing)
+                {
+                    base.Dispose(disposing);
+                    _handler.Dispose();
+                }
+
+                protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+                {
+                    request.RequestUri = new UriBuilder(request.RequestUri!)
+                    {
+                        Scheme = "http"
+                    }.Uri;
+                    return await _handler.SendAsync(request, cancellationToken);
+                }
+            }
+
             public static HttpRequestMessage CreateRequest(Uri url, HttpMethod method, HttpContent? content)
             {
                 return new HttpRequestMessage()
@@ -316,10 +352,18 @@ namespace ArchivePasswordTestTool
             private static readonly TimeSpan DefaultTimeout = new(0, 0, 1, 0);
             public static HttpClient Constructor(Dictionary<string, IEnumerable<string>>? head, TimeSpan? timeout)
             {
-                HttpClientHandler clientHandler = new() { 
+                
+                HttpClientHandler clientHandler = new ClientHandler() { 
                     AutomaticDecompression = DecompressionMethods.GZip,
                     AllowAutoRedirect = true
                 };
+                /*
+                HttpClientHandler clientHandler = new()
+                {
+                    AutomaticDecompression = DecompressionMethods.GZip,
+                    AllowAutoRedirect = true
+                };
+                */
                 clientHandler.ServerCertificateCustomValidationCallback = (sender, cert, chain, sslPolicyErrors) => { return true; };
                 HttpClient Client = new(clientHandler);
                 Client.DefaultRequestHeaders.Clear();
@@ -346,7 +390,16 @@ namespace ArchivePasswordTestTool
             }
             public static async Task<HttpResponseMessage> GetStreamAsync(Uri url, Dictionary<string, IEnumerable<string>>? head = null, TimeSpan? timeout = null)
             {
-                return await Constructor(head, timeout).GetAsync(url, HttpCompletionOption.ResponseHeadersRead);
+                try
+                {
+                    return await Constructor(head, timeout).GetAsync(url, HttpCompletionOption.ResponseHeadersRead);
+                }
+                catch (Exception ex)
+                {
+
+                    throw ex;
+                }
+                
             }
             public static async Task<HttpResponseMessage> PostAsync(Uri url, HttpContent content, Dictionary<string, IEnumerable<string>>? head = null, TimeSpan? timeout = null)
             {
