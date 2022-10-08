@@ -16,16 +16,16 @@ namespace ArchivePasswordTestTool
         public static readonly string VersionType = "Release";
         public static readonly string AppHomePage = "https://www.bilibili.com/read/cv6101558";
         public static readonly string Developer = "dawn-lc";
-        public static Config config { get; set; }
+        public static ConfigType? Config { get; set; }
         public class Lib
         {
-            public string Name { get; set; }
-            public string Hash { get; set; }
-            public string DownloadUrl { get; set; }
+            public string? Name { get; set; }
+            public string? Hash { get; set; }
+            public string? DownloadUrl { get; set; }
             public bool Exists { get; set; }
         }
 
-        public class Config
+        public class ConfigType
         {
             public DateTime CheckUpgrade { get; set; } = new();
             public bool IsLatestVersion { get; set; } = false;
@@ -36,10 +36,10 @@ namespace ArchivePasswordTestTool
         private static async Task Initialization(StatusContext ctx)
         {
             ctx.Status("加载配置文件...");
-            config = await DeserializeJSONFileAsync<Config>("config.json");
-            Log($"上次检查更新:{config.CheckUpgrade.ToLocalTime()}");
+            Config = await DeserializeJSONFileAsync<ConfigType>("config.json");
+            Log($"上次检查更新:{Config.CheckUpgrade.ToLocalTime()}");
             ctx.Status("检查版本信息...");
-            if (config.CheckUpgrade < (DateTime.Now - new TimeSpan(1, 0, 0, 0)))
+            if (Config.CheckUpgrade < (DateTime.Now - new TimeSpan(1, 0, 0, 0)))
             {
                 ctx.Status("正在获取最新版本信息...");
                 try
@@ -50,33 +50,33 @@ namespace ArchivePasswordTestTool
                         Upgrade.ReleasesInfo? LatestInfo = JsonSerializer.Deserialize<Upgrade.ReleasesInfo>(await Info.Content.ReadAsStringAsync());
                         if (LatestInfo != null)
                         {
-                            config.Libs.Clear();
+                            Config.Libs.Clear();
                             if (Upgrade.CheckUpgrade(LatestInfo, Version, VersionType))
                             {
                                 foreach (var item in (LatestInfo.Body ?? "").Split("\r\n"))
                                 {
-                                    if (!string.IsNullOrEmpty(item) && item[0..4] == "lib." && LatestInfo.Assets.Any(i => i.Name == item.Split(":")[0]))
+                                    if (!string.IsNullOrEmpty(item) && item[0..4] == "lib." && LatestInfo.Assets!.Any(i => i.Name == item.Split(":")[0]))
                                     {
-                                        LatestInfo.Assets.Find(i => i.Name == item.Split(":")[0])!.Label = item.Split(":")[1];
+                                        LatestInfo.Assets!.Find(i => i.Name == item.Split(":")[0])!.Label = item.Split(":")[1];
                                     }
                                 }
-                                foreach (var item in LatestInfo.Assets)
+                                foreach (var item in LatestInfo.Assets!)
                                 {
-                                    if (item.Name.Contains("lib."))
+                                    if (item.Name!.Contains("lib."))
                                     {
-                                        config.Libs.Add(new() { Name = item.Name.Replace("lib.", ""), DownloadUrl = item.DownloadUrl, Hash = item.Label });
+                                        Config.Libs.Add(new() { Name = item.Name.Replace("lib.", ""), DownloadUrl = item.DownloadUrl, Hash = item.Label });
                                     }
                                 }
-                                config.CheckUpgrade = DateTime.Now;
-                                config.IsLatestVersion = true;
+                                Config.CheckUpgrade = DateTime.Now;
+                                Config.IsLatestVersion = true;
                                 ctx.Status("正在保存新版本配置文件...");
-                                File.WriteAllText($"config.json", JsonSerializer.Serialize(config));
+                                File.WriteAllText($"config.json", JsonSerializer.Serialize(Config));
                             }
                         }
                     }
                     else
                     {
-                        if (config.CheckUpgrade < (DateTime.Now - new TimeSpan(30, 0, 0, 0)))
+                        if (Config.CheckUpgrade < (DateTime.Now - new TimeSpan(30, 0, 0, 0)))
                         {
                             Error("检查更新失败！请检查您的网络情况。");
                             throw new Exception($"检查更新失败！\r\n错误码 { Info.StatusCode }");
@@ -85,7 +85,7 @@ namespace ArchivePasswordTestTool
                 }
                 catch (Exception ex)
                 {
-                    if (config.CheckUpgrade < (DateTime.Now - new TimeSpan(30, 0, 0, 0)))
+                    if (Config.CheckUpgrade < (DateTime.Now - new TimeSpan(30, 0, 0, 0)))
                     {
                         Error("检查更新失败！请检查您的网络情况。");
                         throw new Exception($"检查更新失败！\r\n {ex}");
@@ -97,12 +97,12 @@ namespace ArchivePasswordTestTool
             {
                 Directory.CreateDirectory("lib");
             }
-            foreach (var item in config.Libs)
+            foreach (var item in Config.Libs)
             {
                 if (File.Exists($"lib/{item.Name}"))
                 {
                     using var file = File.OpenRead($"lib/{item.Name}");
-                    if (ComparisonFileHash(file, Convert.FromBase64String(item.Hash)))
+                    if (ComparisonFileHash(file, Convert.FromBase64String(item.Hash!)))
                     {
                         Log($"{item.Name} 校验成功 ");
                         item.Exists = true;
@@ -111,10 +111,10 @@ namespace ArchivePasswordTestTool
                 }
                 Warn($"{item.Name} 运行库缺少或损坏! ");
                 item.Exists = false;
-                config.CheckUpgrade = new();
+                Config.CheckUpgrade = new();
             }
             ctx.Status("正在保存配置文件...");
-            File.WriteAllText($"config.json", JsonSerializer.Serialize(config));
+            File.WriteAllText($"config.json", JsonSerializer.Serialize(Config));
         }
         static async Task Main(string[] args)
         {
@@ -144,7 +144,7 @@ namespace ArchivePasswordTestTool
                     {
                         await Initialization(ctx);
                     });
-                    if (!config.IsLatestVersion)
+                    if (!Config!.IsLatestVersion)
                     {
                         Warn("当前版本不是最新的，请前往下载最新版本。");
                         if (AnsiConsole.Confirm("是否打开软件发布页?", true))
@@ -153,7 +153,7 @@ namespace ArchivePasswordTestTool
                         }
                         Environment.Exit(0);
                     }
-                    if (config.Libs.Any(i => !i.Exists))
+                    if (Config!.Libs.Any(i => !i.Exists))
                     {
                         await AnsiConsole.Progress().AutoClear(true).HideCompleted(true).Columns(new ProgressColumn[] {
                             new TaskDescriptionColumn(),
@@ -162,9 +162,9 @@ namespace ArchivePasswordTestTool
                             new RemainingTimeColumn()
                         }).StartAsync(async ctx =>
                         {
-                            foreach (var item in config.Libs.Where(i => !i.Exists))
+                            foreach (var item in Config.Libs.Where(i => !i.Exists))
                             {
-                                await HTTP.DownloadAsync(await HTTP.GetStreamAsync(new Uri(item.DownloadUrl)), $"lib/{item.Name}", ctx.AddTask($"下载 {item.Name}"), item.Name);
+                                await HTTP.DownloadAsync(await HTTP.GetStreamAsync(new Uri(item.DownloadUrl!)), $"lib/{item.Name}", ctx.AddTask($"下载 {item.Name}"), item.Name);
                             }
                             if (!File.Exists("PasswordDictionary.txt"))
                             {
@@ -182,11 +182,11 @@ namespace ArchivePasswordTestTool
                     AnsiConsole.Write(Figgle.FiggleFonts.Standard.Render(AppName));
                     if (StartupParametersCheck(args, "D") && File.Exists(GetParameter(args, "D", "PasswordDictionary.txt").Replace("\"", "")))
                     {
-                        config.Dictionary = GetParameter(args, "D", "PasswordDictionary.txt").Replace("\"", "");
+                        Config.Dictionary = GetParameter(args, "D", "PasswordDictionary.txt").Replace("\"", "");
                     }
                     else
                     {
-                        config.Dictionary = AnsiConsole.Prompt(new TextPrompt<string>("请输入密码字典路径[[或将密码字典拖至本窗口后，按回车键确认]]:")
+                        Config.Dictionary = AnsiConsole.Prompt(new TextPrompt<string>("请输入密码字典路径[[或将密码字典拖至本窗口后，按回车键确认]]:")
                         .PromptStyle("dodgerblue1")
                         .ValidationErrorMessage("[red]这甚至不是一个字符串! 你是怎么做到的?[/]")
                         .Validate(path =>
@@ -210,7 +210,7 @@ namespace ArchivePasswordTestTool
                     }
 
 
-                    string[] Dictionary = File.ReadAllLines(config.Dictionary);
+                    string[] Dictionary = File.ReadAllLines(Config.Dictionary);
                     DictionaryCount = Dictionary.Length;
                     AnsiConsole.WriteLine($"字典内包含: {Dictionary.Length} 条密码。");
                     SevenZipBase.SetLibraryPath("lib/7z.dll");
@@ -247,7 +247,7 @@ namespace ArchivePasswordTestTool
                         using (StreamWriter file = new($"{ArchiveFile}[测试报告].txt", false))
                         {
                             file.WriteLine("加密压缩包: " + ArchiveFile);
-                            file.WriteLine("字典: " + config.Dictionary);
+                            file.WriteLine("字典: " + Config.Dictionary);
                             if (EncryptArchivePassword != null)
                             {
                                 file.WriteLine("解压密码: " + EncryptArchivePassword);
@@ -275,7 +275,7 @@ namespace ArchivePasswordTestTool
                 {
                     //ArchiveFile 可能会泄露您的个人隐私数据, 如有意见请直接注释这个函数
                     SentrySdk.AddBreadcrumb(
-                        message: $"Config {JsonSerializer.Serialize(config)}\r\nArchiveFile {ArchiveFile ?? "NULL"}\r\nEncryptArchivePassword {EncryptArchivePassword ?? "NULL"}\r\nDictionaryCount {DictionaryCount}",
+                        message: $"Config {JsonSerializer.Serialize(Config)}\r\nArchiveFile {ArchiveFile ?? "NULL"}\r\nEncryptArchivePassword {EncryptArchivePassword ?? "NULL"}\r\nDictionaryCount {DictionaryCount}",
                         category: "Error",
                         level: BreadcrumbLevel.Error
                     );

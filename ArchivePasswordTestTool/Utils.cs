@@ -1,8 +1,5 @@
-﻿using DnsClient;
-using Spectre.Console;
+﻿using Spectre.Console;
 using System.Net;
-using System.Net.Security;
-using System.Net.Sockets;
 using System.Security.Cryptography;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -147,33 +144,33 @@ namespace ArchivePasswordTestTool
                 public class Asset
                 {
                     [JsonPropertyName("name")]
-                    public string Name { get; set; }
+                    public string? Name { get; set; }
                     [JsonPropertyName("label")]
-                    public string Label { get; set; }
+                    public string? Label { get; set; }
                     [JsonPropertyName("content_type")]
-                    public string ContentType { get; set; }
+                    public string? ContentType { get; set; }
                     [JsonPropertyName("created_at")]
-                    public string CreatedAt { get; set; }
+                    public string? CreatedAt { get; set; }
                     [JsonPropertyName("updated_at")]
-                    public string UpdatedAt { get; set; }
+                    public string? UpdatedAt { get; set; }
                     [JsonPropertyName("browser_download_url")]
-                    public string DownloadUrl { get; set; }
+                    public string? DownloadUrl { get; set; }
                 }
 
                 [JsonPropertyName("tag_name")]
-                public string TagName { get; set; }
+                public string? TagName { get; set; }
                 [JsonPropertyName("target_commitish")]
-                public string TargetCommitish { get; set; }
+                public string? TargetCommitish { get; set; }
                 [JsonPropertyName("name")]
-                public string Name { get; set; }
+                public string? Name { get; set; }
                 [JsonPropertyName("prerelease")]
                 public bool Prerelease { get; set; }
                 [JsonPropertyName("created_at")]
-                public string CreatedAt { get; set; }
+                public string? CreatedAt { get; set; }
                 [JsonPropertyName("published_at")]
-                public string PublishedAt { get; set; }
+                public string? PublishedAt { get; set; }
                 [JsonPropertyName("assets")]
-                public List<Asset> Assets { get; set; }
+                public List<Asset>? Assets { get; set; }
                 [JsonPropertyName("body")]
                 public string? Body { get; set; }
             }
@@ -271,7 +268,7 @@ namespace ArchivePasswordTestTool
             {
                 try
                 {
-                    List<string> LatestVersionData = new(LatestInfo.TagName.Split('-'));
+                    List<string> LatestVersionData = new(LatestInfo.TagName!.Split('-'));
                     List<int> LatestVersion = new();
                     string LatestVersionType = LatestVersionData[1];
                     foreach (var item in LatestVersionData[0].Split('.'))
@@ -307,36 +304,27 @@ namespace ArchivePasswordTestTool
         }
         public static class HTTP
         {
-            private static LookupClient DNSClient { get; set; } = new(IPAddress.Parse("114.114.114.114")) { UseTcpOnly = true};
-            
+            //防DNS污染暂时不加入
+            //private static LookupClient DNSClient { get; set; } = new(new LookupClientOptions(IPAddress.Parse("114.114.114.114")) { UseTcpOnly = true });
+
             public class ClientHandler : HttpClientHandler
             {
-                private readonly HttpMessageInvoker _handler = new(new SocketsHttpHandler
+                private readonly HttpMessageInvoker Handler = new(new SocketsHttpHandler()
                 {
-                    ConnectCallback = async (context, ct) =>
+                    SslOptions = new()
                     {
-                        var socket = new Socket(SocketType.Stream, ProtocolType.Tcp);
-                        //防dns污染
-                        await socket.ConnectAsync((await DNSClient.GetHostEntryAsync(context.DnsEndPoint.Host)).AddressList[0], 443, cancellationToken: ct);
-                        var sslStream = new SslStream(new NetworkStream(socket, true), false, delegate { return true; });
-                        await sslStream.AuthenticateAsClientAsync("windowsupdate.microsoft.com");//移除SNI
-                        return sslStream;
+                        //清除SNI防止被嗅探
+                        //TargetHost = string.Empty
                     }
                 });
-
                 protected override void Dispose(bool disposing)
                 {
                     base.Dispose(disposing);
-                    _handler.Dispose();
+                    Handler.Dispose();
                 }
-
                 protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
                 {
-                    request.RequestUri = new UriBuilder(request.RequestUri!)
-                    {
-                        Scheme = "http"
-                    }.Uri;
-                    return await _handler.SendAsync(request, cancellationToken);
+                    return await Handler.SendAsync(request, cancellationToken);
                 }
             }
 
@@ -352,22 +340,16 @@ namespace ArchivePasswordTestTool
             private static readonly TimeSpan DefaultTimeout = new(0, 0, 1, 0);
             public static HttpClient Constructor(Dictionary<string, IEnumerable<string>>? head, TimeSpan? timeout)
             {
-                
-                HttpClientHandler clientHandler = new ClientHandler() { 
-                    AutomaticDecompression = DecompressionMethods.GZip,
-                    AllowAutoRedirect = true
-                };
-                /*
-                HttpClientHandler clientHandler = new()
+
+                HttpClientHandler clientHandler = new ClientHandler
                 {
                     AutomaticDecompression = DecompressionMethods.GZip,
-                    AllowAutoRedirect = true
+                    AllowAutoRedirect = true,
+                    ServerCertificateCustomValidationCallback = (sender, cert, chain, sslPolicyErrors) => { return true; }
                 };
-                */
-                clientHandler.ServerCertificateCustomValidationCallback = (sender, cert, chain, sslPolicyErrors) => { return true; };
                 HttpClient Client = new(clientHandler);
                 Client.DefaultRequestHeaders.Clear();
-                Client.DefaultRequestHeaders.Add("user-agent", $"{Program.AppName} {string.Join(".", Program.Version)}-{Program.VersionType}");
+                Client.DefaultRequestHeaders.Add("user-agent", new List<string>() { $"{Program.AppName} {string.Join(".", Program.Version)}-{Program.VersionType}" });
                 foreach (KeyValuePair<string, IEnumerable<string>> item in head ?? new())
                 {
                     Client.DefaultRequestHeaders.Add(item.Key, item.Value);
@@ -390,16 +372,7 @@ namespace ArchivePasswordTestTool
             }
             public static async Task<HttpResponseMessage> GetStreamAsync(Uri url, Dictionary<string, IEnumerable<string>>? head = null, TimeSpan? timeout = null)
             {
-                try
-                {
-                    return await Constructor(head, timeout).GetAsync(url, HttpCompletionOption.ResponseHeadersRead);
-                }
-                catch (Exception ex)
-                {
-
-                    throw ex;
-                }
-                
+                return await Constructor(head, timeout).GetAsync(url, HttpCompletionOption.ResponseHeadersRead);
             }
             public static async Task<HttpResponseMessage> PostAsync(Uri url, HttpContent content, Dictionary<string, IEnumerable<string>>? head = null, TimeSpan? timeout = null)
             {
