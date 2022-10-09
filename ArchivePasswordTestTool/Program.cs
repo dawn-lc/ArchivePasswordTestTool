@@ -133,7 +133,6 @@ namespace ArchivePasswordTestTool
                 o.TracesSampleRate = 1.0;
                 o.Release = $"{string.Join(".", Version)}-{VersionType}";
                 o.AutoSessionTracking = true;
-                o.IsEnvironmentUser = true;
                 SentrySdk.ConfigureScope(s =>
                 {
                     s.User = new()
@@ -292,10 +291,10 @@ namespace ArchivePasswordTestTool
                         category: "Error",
                         level: BreadcrumbLevel.Error
                     );
-                    
                     SentrySdk.CaptureException(ex);
                     Error($"无法处理的错误。\r\n错误日志已提交，请等待开发者修复。(程序将在5秒后退出)\r\n{ex}");
                     await Task.Delay(5000);
+                    throw;
                 }
             }
         }
