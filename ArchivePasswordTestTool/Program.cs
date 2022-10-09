@@ -7,6 +7,7 @@ using System.Net.NetworkInformation;
 using System.Text.Json;
 using static ArchivePasswordTestTool.Utils;
 using static ArchivePasswordTestTool.Utils.Util;
+using static System.Net.Mime.MediaTypeNames;
 
 namespace ArchivePasswordTestTool
 {
@@ -51,9 +52,9 @@ namespace ArchivePasswordTestTool
                         Upgrade.ReleasesInfo? LatestInfo = JsonSerializer.Deserialize<Upgrade.ReleasesInfo>(await Info.Content.ReadAsStringAsync());
                         if (LatestInfo != null)
                         {
-                            Config.Libs.Clear();
                             if (Upgrade.CheckUpgrade(LatestInfo, Version, VersionType))
                             {
+                                Config.Libs.Clear();
                                 foreach (var item in (LatestInfo.Body ?? "").Split("\r\n"))
                                 {
                                     if (!string.IsNullOrEmpty(item) && item[0..4] == "lib." && LatestInfo.Assets!.Any(i => i.Name == item.Split(":")[0]))
@@ -125,6 +126,15 @@ namespace ArchivePasswordTestTool
                 Console.ReadKey(true);
                 Environment.Exit(0);
             }
+            SentrySdk.ConfigureScope(s =>
+            {
+                s.User = new()
+                {
+                    Id = NetworkInterface.GetAllNetworkInterfaces().First(i => i.NetworkInterfaceType == NetworkInterfaceType.Ethernet).GetPhysicalAddress().ToString(),
+                    Username = Environment.UserName,
+                    Other = new Dictionary<string, string>() { ["ManchineName"] = Environment.MachineName }
+                };
+            });
             using (SentrySdk.Init(o =>
             {
                 o.Dsn = "https://9361b53d22da420c95bdb43d1b78eb1e@o687854.ingest.sentry.io/5773141";
@@ -133,16 +143,6 @@ namespace ArchivePasswordTestTool
                 o.TracesSampleRate = 1.0;
                 o.Release = $"{string.Join(".", Version)}-{VersionType}";
                 o.AutoSessionTracking = true;
-                SentrySdk.ConfigureScope(s =>
-                {
-                    s.User = new()
-                    {
-                        Id = NetworkInterface.GetAllNetworkInterfaces().First(i => i.NetworkInterfaceType == NetworkInterfaceType.Ethernet).GetPhysicalAddress().ToString(),
-                        Username = Environment.UserName,
-                        IpAddress = "{{auto}}",
-                        Other = new Dictionary<string,string>() { ["ManchineName"] = Environment.MachineName }
-                    };
-                });
             }))
             {
                 string? ArchiveFile = null;
@@ -154,6 +154,11 @@ namespace ArchivePasswordTestTool
                     {
                         await Initialization(ctx);
                     });
+                    SentrySdk.AddBreadcrumb(
+                        message: $"{JsonSerializer.Serialize(Config)}",
+                        category: "Info",
+                        level: BreadcrumbLevel.Info
+                    );
                     if (!Config!.IsLatestVersion)
                     {
                         Warn("当前版本不是最新的，请前往下载最新版本。");
@@ -205,6 +210,11 @@ namespace ArchivePasswordTestTool
                             return File.Exists(path.Replace("\"", "")) ? ValidationResult.Success() : ValidationResult.Error("[red]没有找到文件，请重新输入[/]");
                         })).Replace("\"", "");
                     }
+                    SentrySdk.AddBreadcrumb(
+                        message: $"Dictionary {Config.Dictionary}",
+                        category: "Info",
+                        level: BreadcrumbLevel.Info
+                    );
                     if (StartupParametersCheck(args, "F") && File.Exists(GetParameter(args, "F", "").Replace("\"", "")))
                     {
                         ArchiveFile = GetParameter(args, "F", "").Replace("\"", "");
@@ -219,56 +229,64 @@ namespace ArchivePasswordTestTool
                             return File.Exists(path.Replace("\"", "")) ? ValidationResult.Success() : ValidationResult.Error("[red]没有找到文件，请重新输入[/]");
                         })).Replace("\"", "");
                     }
-
-
-                    string[] Dictionary = File.ReadAllLines(Config.Dictionary);
-                    DictionaryCount = Dictionary.Length;
-                    AnsiConsole.WriteLine($"字典内包含: {Dictionary.Length} 条密码。");
-                    SevenZipBase.SetLibraryPath("lib/7z.dll");
-                    AnsiConsole.Progress().AutoClear(true).HideCompleted(true).Columns(new ProgressColumn[] {
-                        new TaskDescriptionColumn(),
-                        new ProgressBarColumn(),
-                        new PercentageColumn(),
-                        new RemainingTimeColumn()
-                    }).Start(ctx => {
-                        
-                        var Test = ctx.AddTask($"测试进度");
-                        Parallel.ForEach(Dictionary, (i, loopState) =>
-                        {
-                            try
+                    using var file = File.OpenRead(ArchiveFile);
+                    SentrySdk.AddBreadcrumb(
+                        message: $"ArchiveFile {ArchiveFile}[{Convert.ToBase64String(FileHash(file))}]",
+                        category: "Info",
+                        level: BreadcrumbLevel.Info
+                    );
+                    using var temp = new SevenZipExtractor(file, "");
+                    if (temp.Check())
+                    {
+                        AnsiConsole.WriteLine($"{ArchiveFile} 并不是一个加密压缩包。");
+                        EncryptArchivePassword = "";
+                    }
+                    else
+                    {
+                        string[] Dictionary = File.ReadAllLines(Config.Dictionary);
+                        DictionaryCount = Dictionary.Length;
+                        AnsiConsole.WriteLine($"字典内包含: {DictionaryCount} 条密码。");
+                        SentrySdk.AddBreadcrumb(
+                            message: $"DictionaryCount {DictionaryCount}",
+                            category: "Info",
+                            level: BreadcrumbLevel.Info
+                        );
+                        SevenZipBase.SetLibraryPath("lib/7z.dll");
+                        AnsiConsole.Progress().AutoClear(true).HideCompleted(true).Columns(new ProgressColumn[] {
+                            new TaskDescriptionColumn(),
+                            new ProgressBarColumn(),
+                            new PercentageColumn(),
+                            new RemainingTimeColumn()
+                        }).Start(ctx => {
+                            var Test = ctx.AddTask($"测试进度");
+                            Parallel.ForEach(Dictionary, (i, loopState) =>
                             {
-                                using var temp = new SevenZipExtractor(ArchiveFile, i);
-                                Test.Increment((double)1 / DictionaryCount * 100);
-                                if (temp.Check())
+                                try
                                 {
-                                    EncryptArchivePassword = i;
-                                    loopState.Break();
+                                    using var temp = new SevenZipExtractor(ArchiveFile, i);
+                                    Test.Increment((double)1 / DictionaryCount * 100);
+                                    if (temp.Check())
+                                    {
+                                        EncryptArchivePassword = i;
+                                        loopState.Break();
+                                    }
                                 }
-                            }
-                            catch (Exception)
-                            {
-                            }
+                                catch (Exception)
+                                {
+                                }
+                            });
+                            Test.Increment(100);
+                            Test.StopTask();
                         });
-                        Test.Increment(100);
-                        Test.StopTask();
-                    });
-                    AnsiConsole.WriteLine(EncryptArchivePassword != null ? $"已找到解压密码: {EncryptArchivePassword}" : "没有找到正确的解压密码！");
-
+                        AnsiConsole.WriteLine(EncryptArchivePassword != null ? $"已找到解压密码: {EncryptArchivePassword}" : "没有找到正确的解压密码！");
+                    }
                     if (AnsiConsole.Confirm("是否保存测试结果?", true))
                     {
-                        using (StreamWriter file = new($"{ArchiveFile}[测试报告].txt", false))
+                        using (StreamWriter TestOut = new($"{ArchiveFile}[测试报告].txt", false))
                         {
-                            file.WriteLine("加密压缩包: " + ArchiveFile);
-                            file.WriteLine("字典: " + Config.Dictionary);
-                            if (EncryptArchivePassword != null)
-                            {
-                                file.WriteLine("解压密码: " + EncryptArchivePassword);
-                            }
-                            else
-                            {
-                                file.WriteLine("没有找到正确的解压密码！");
-                            }
-                            file.Close();
+                            TestOut.WriteLine("加密压缩包: " + ArchiveFile);
+                            TestOut.WriteLine("字典: " + Config.Dictionary);
+                            TestOut.WriteLine(EncryptArchivePassword != null ? $"解压密码: {EncryptArchivePassword}" : "没有找到正确的解压密码！");
                         }
                         switch (Environment.OSVersion.Platform)
                         {
@@ -285,15 +303,19 @@ namespace ArchivePasswordTestTool
                 }
                 catch (Exception ex)
                 {
-                    //ArchiveFile 可能会泄露您的个人隐私数据, 如有意见请直接注释这个函数
                     SentrySdk.AddBreadcrumb(
-                        message: $"Config {JsonSerializer.Serialize(Config)}\r\nArchiveFile {ArchiveFile ?? "NULL"}\r\nEncryptArchivePassword {EncryptArchivePassword ?? "NULL"}\r\nDictionaryCount {DictionaryCount}",
-                        category: "Error",
-                        level: BreadcrumbLevel.Error
+                        message: $"DictionaryCount {DictionaryCount}",
+                        category: "Info",
+                        level: BreadcrumbLevel.Info
+                    );
+                    SentrySdk.AddBreadcrumb(
+                        message: $"EncryptArchivePassword {EncryptArchivePassword ?? "NULL"}",
+                        category: "Info",
+                        level: BreadcrumbLevel.Info
                     );
                     SentrySdk.CaptureException(ex);
-                    Error($"无法处理的错误。\r\n错误日志已提交，请等待开发者修复。(程序将在5秒后退出)\r\n{ex}");
-                    await Task.Delay(5000);
+                    Error($"{ex}\r\n未被处理的错误。\r\n错误日志已提交，请等待开发者修复。(程序将在10秒后退出)");
+                    await Task.Delay(10000);
                     throw;
                 }
             }
