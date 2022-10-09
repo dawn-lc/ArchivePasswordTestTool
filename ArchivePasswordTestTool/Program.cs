@@ -3,6 +3,7 @@ using SevenZip;
 using Spectre.Console;
 using System.Diagnostics;
 using System.Net;
+using System.Net.NetworkInformation;
 using System.Text.Json;
 using static ArchivePasswordTestTool.Utils;
 using static ArchivePasswordTestTool.Utils.Util;
@@ -132,9 +133,19 @@ namespace ArchivePasswordTestTool
                 o.TracesSampleRate = 1.0;
                 o.Release = $"{string.Join(".", Version)}-{VersionType}";
                 o.AutoSessionTracking = true;
+                o.IsEnvironmentUser = true;
+                SentrySdk.ConfigureScope(s =>
+                {
+                    s.User = new()
+                    {
+                        Id = NetworkInterface.GetAllNetworkInterfaces().First(i => i.NetworkInterfaceType == NetworkInterfaceType.Ethernet).GetPhysicalAddress().ToString(),
+                        Username = Environment.UserName,
+                        IpAddress = "{{auto}}",
+                        Other = new Dictionary<string,string>() { ["ManchineName"] = Environment.MachineName }
+                    };
+                });
             }))
             {
-
                 string? ArchiveFile = null;
                 string? EncryptArchivePassword = null;
                 long DictionaryCount = 0;
@@ -281,6 +292,7 @@ namespace ArchivePasswordTestTool
                         category: "Error",
                         level: BreadcrumbLevel.Error
                     );
+                    
                     SentrySdk.CaptureException(ex);
                     Error($"无法处理的错误。\r\n错误日志已提交，请等待开发者修复。(程序将在5秒后退出)\r\n{ex}");
                     await Task.Delay(5000);
