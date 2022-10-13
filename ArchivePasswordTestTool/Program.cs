@@ -50,37 +50,33 @@ namespace ArchivePasswordTestTool
                     HttpResponseMessage Info = await HTTP.GetAsync(new Uri($"https://api.github.com/repos/{Developer}/{AppName}/releases/latest"));
                     if (Info.StatusCode == HttpStatusCode.OK)
                     {
-                        Upgrade.ReleasesInfo? LatestInfo = JsonSerializer.Deserialize<Upgrade.ReleasesInfo>(await Info.Content.ReadAsStringAsync());
-                        if (LatestInfo != null)
+                        Upgrade.ReleasesInfo LatestInfo = JsonSerializer.Deserialize<Upgrade.ReleasesInfo>(await Info.Content.ReadAsStringAsync()) ?? throw new ArgumentNullException("LatestInfo",$"无法解析的回应。{await Info.Content.ReadAsStringAsync()}");
+                        if (Upgrade.CheckUpgrade(LatestInfo, Version, VersionType))
                         {
-                            if (Upgrade.CheckUpgrade(LatestInfo, Version, VersionType))
+                            Config.Libs.Clear();
+                            foreach (var item in (LatestInfo.Body ?? "").Split("\r\n"))
                             {
-                                Config.Libs.Clear();
-                                foreach (var item in (LatestInfo.Body ?? "").Split("\r\n"))
+                                if (!string.IsNullOrEmpty(item) && item[0..4] == "lib." && LatestInfo.Assets!.Any(i => i.Name == item.Split(":")[0]))
                                 {
-                                    if (!string.IsNullOrEmpty(item) && item[0..4] == "lib." && LatestInfo.Assets!.Any(i => i.Name == item.Split(":")[0]))
-                                    {
-                                        LatestInfo.Assets!.Find(i => i.Name == item.Split(":")[0])!.Label = item.Split(":")[1];
-                                    }
+                                    LatestInfo.Assets!.Find(i => i.Name == item.Split(":")[0])!.Label = item.Split(":")[1];
                                 }
-                                foreach (var item in LatestInfo.Assets!)
-                                {
-                                    if (item.Name!.Contains("lib."))
-                                    {
-                                        Config.Libs.Add(new() { Name = item.Name.Replace("lib.", ""), DownloadUrl = item.DownloadUrl, Hash = item.Label });
-                                    }
-                                }
-                                Config.CheckUpgrade = DateTime.Now;
-                                Config.IsLatestVersion = true;
-                                ctx.Status("正在保存新版本配置文件...");
-                                File.WriteAllText($"config.json", JsonSerializer.Serialize(Config));
                             }
+                            foreach (var item in LatestInfo.Assets!)
+                            {
+                                if (item.Name!.Contains("lib."))
+                                {
+                                    Config.Libs.Add(new() { Name = item.Name.Replace("lib.", ""), DownloadUrl = item.DownloadUrl, Hash = item.Label });
+                                }
+                            }
+                            Config.CheckUpgrade = DateTime.Now;
+                            Config.IsLatestVersion = true;
+                            ctx.Status("正在保存新版本配置文件...");
+                            File.WriteAllText($"config.json", JsonSerializer.Serialize(Config));
                         }
                     }
                     else
                     {
-                        Error("检查更新失败！请检查您的网络情况。");
-                        throw new Exception($"检查更新失败！\r\n错误码 {Info.StatusCode}");
+                        throw new HttpRequestException($"状态码 {Info.StatusCode}");
                     }
                 }
                 catch (Exception ex)
@@ -91,6 +87,10 @@ namespace ArchivePasswordTestTool
                         throw new Exception($"检查更新失败！\r\n {ex}");
                     }
                 }
+            }
+            else
+            {
+                Config.IsLatestVersion = true;
             }
             ctx.Status("正在检查运行环境...");
             if (!Directory.Exists("lib"))
