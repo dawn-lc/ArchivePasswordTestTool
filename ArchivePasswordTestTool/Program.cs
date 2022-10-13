@@ -7,14 +7,13 @@ using System.Net.NetworkInformation;
 using System.Text.Json;
 using static ArchivePasswordTestTool.Utils;
 using static ArchivePasswordTestTool.Utils.Util;
-using static System.Net.Mime.MediaTypeNames;
 
 namespace ArchivePasswordTestTool
 {
     public class Program
     {
         public static readonly string AppName = "ArchivePasswordTestTool";
-        public static readonly int[] Version = new int[] { 1, 5, 7 };
+        public static readonly int[] Version = new int[] { 1, 5, 8 };
         public static readonly string VersionType = "Release";
         public static readonly string AppHomePage = "https://www.bilibili.com/read/cv6101558";
         public static readonly string Developer = "dawn-lc";
@@ -81,7 +80,7 @@ namespace ArchivePasswordTestTool
                         if (Config.CheckUpgrade < (DateTime.Now - new TimeSpan(30, 0, 0, 0)))
                         {
                             Error("检查更新失败！请检查您的网络情况。");
-                            throw new Exception($"检查更新失败！\r\n错误码 { Info.StatusCode }");
+                            throw new Exception($"检查更新失败！\r\n错误码 {Info.StatusCode}");
                         }
                     }
                 }
@@ -126,15 +125,7 @@ namespace ArchivePasswordTestTool
                 Console.ReadKey(true);
                 Environment.Exit(0);
             }
-            SentrySdk.ConfigureScope(s =>
-            {
-                s.User = new()
-                {
-                    Id = NetworkInterface.GetAllNetworkInterfaces().First(i => i.NetworkInterfaceType == NetworkInterfaceType.Ethernet).GetPhysicalAddress().ToString(),
-                    Username = Environment.UserName,
-                    Other = new Dictionary<string, string>() { ["ManchineName"] = Environment.MachineName }
-                };
-            });
+
             using (SentrySdk.Init(o =>
             {
                 o.Dsn = "https://9361b53d22da420c95bdb43d1b78eb1e@o687854.ingest.sentry.io/5773141";
@@ -145,6 +136,14 @@ namespace ArchivePasswordTestTool
                 o.AutoSessionTracking = true;
             }))
             {
+                SentrySdk.ConfigureScope(s =>
+                {
+                    s.User = new()
+                    {
+                        Id = NetworkInterface.GetAllNetworkInterfaces().First(i => i.NetworkInterfaceType == NetworkInterfaceType.Ethernet).GetPhysicalAddress().ToString(),
+                        Username = Environment.UserName
+                    };
+                });
                 string? ArchiveFile = null;
                 string? EncryptArchivePassword = null;
                 long DictionaryCount = 0;
@@ -182,11 +181,6 @@ namespace ArchivePasswordTestTool
                                 Log($"{item.Name} 开始下载");
                                 await HTTP.DownloadAsync(await HTTP.GetStreamAsync(new Uri(item.DownloadUrl!)), $"lib/{item.Name}", ctx.AddTask($"下载 {item.Name}"), item.Name);
                             }
-                            if (!File.Exists("PasswordDictionary.txt"))
-                            {
-                                Warn("没有找到默认字典 PasswordDictionary.txt 正在下载由 [link=https://github.com/baidusama]baidusama[/] 提供的 [link=https://github.com/baidusama/EroPassword]EroPassword[/]");
-                                await HTTP.DownloadAsync(await HTTP.GetStreamAsync(new Uri("https://github.com/baidusama/EroPassword/raw/main/PasswordDictionary.txt")), "PasswordDictionary.txt", ctx.AddTask($"下载 PasswordDictionary.txt"), "PasswordDictionary.txt");
-                            }
                         });
                         if (AnsiConsole.Confirm("下载完成，请重启软件以完成更新。", true))
                         {
@@ -202,13 +196,21 @@ namespace ArchivePasswordTestTool
                     }
                     else
                     {
-                        Config.Dictionary = AnsiConsole.Prompt(new TextPrompt<string>("请输入密码字典路径[[或将密码字典拖至本窗口后，按回车键确认]]:")
-                        .PromptStyle("dodgerblue1")
-                        .ValidationErrorMessage("[red]这甚至不是一个字符串! 你是怎么做到的?[/]")
-                        .Validate(path =>
+                        if (Environment.OSVersion.Platform.ToString().ToLowerInvariant().Contains("win") && File.Exists("ArchivePasswordTestToolGUI.exe"))
                         {
-                            return File.Exists(path.Replace("\"", "")) ? ValidationResult.Success() : ValidationResult.Error("[red]没有找到文件，请重新输入[/]");
-                        })).Replace("\"", "");
+                            Process.Start("ArchivePasswordTestToolGUI.exe");
+                            Environment.Exit(0);
+                        }
+                        else
+                        {
+                            Config.Dictionary = AnsiConsole.Prompt(new TextPrompt<string>("请输入密码字典路径[[或将密码字典拖至本窗口后，按回车键确认]]:")
+                            .PromptStyle("dodgerblue1")
+                            .ValidationErrorMessage("[red]这甚至不是一个字符串! 你是怎么做到的?[/]")
+                            .Validate(path =>
+                            {
+                                return File.Exists(path.Replace("\"", "")) ? ValidationResult.Success() : ValidationResult.Error("[red]没有找到文件，请重新输入[/]");
+                            })).Replace("\"", "");
+                        }
                     }
                     SentrySdk.AddBreadcrumb(
                         message: $"Dictionary {Config.Dictionary}",
@@ -221,13 +223,21 @@ namespace ArchivePasswordTestTool
                     }
                     else
                     {
-                        ArchiveFile = AnsiConsole.Prompt(new TextPrompt<string>("请输入压缩包路径[[或将压缩包拖至本窗口后，按回车键确认]]:")
-                        .PromptStyle("dodgerblue1")
-                        .ValidationErrorMessage("[red]这甚至不是一个字符串! 你是怎么做到的?[/]")
-                        .Validate(path =>
+                        if (Environment.OSVersion.Platform.ToString().ToLowerInvariant().Contains("win") && File.Exists("ArchivePasswordTestToolGUI.exe"))
                         {
-                            return File.Exists(path.Replace("\"", "")) ? ValidationResult.Success() : ValidationResult.Error("[red]没有找到文件，请重新输入[/]");
-                        })).Replace("\"", "");
+                            Process.Start("ArchivePasswordTestToolGUI.exe");
+                            Environment.Exit(0);
+                        }
+                        else
+                        {
+                            ArchiveFile = AnsiConsole.Prompt(new TextPrompt<string>("请输入压缩包路径[[或将压缩包拖至本窗口后，按回车键确认]]:")
+                            .PromptStyle("dodgerblue1")
+                            .ValidationErrorMessage("[red]这甚至不是一个字符串! 你是怎么做到的?[/]")
+                            .Validate(path =>
+                            {
+                                return File.Exists(path.Replace("\"", "")) ? ValidationResult.Success() : ValidationResult.Error("[red]没有找到文件，请重新输入[/]");
+                            })).Replace("\"", "");
+                        }
                     }
                     using var file = File.OpenRead(ArchiveFile);
                     SentrySdk.AddBreadcrumb(
@@ -257,7 +267,8 @@ namespace ArchivePasswordTestTool
                             new ProgressBarColumn(),
                             new PercentageColumn(),
                             new RemainingTimeColumn()
-                        }).Start(ctx => {
+                        }).Start(ctx =>
+                        {
                             var Test = ctx.AddTask($"测试进度");
                             Parallel.ForEach(Dictionary, (i, loopState) =>
                             {
