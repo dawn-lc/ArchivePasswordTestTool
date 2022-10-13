@@ -244,6 +244,7 @@ namespace ArchivePasswordTestTool
                         category: "Info",
                         level: BreadcrumbLevel.Info
                     );
+                    SevenZipBase.SetLibraryPath("lib/7z.dll");
                     using var temp = new SevenZipExtractor(file, "");
                     if (temp.Check())
                     {
@@ -260,7 +261,6 @@ namespace ArchivePasswordTestTool
                             category: "Info",
                             level: BreadcrumbLevel.Info
                         );
-                        SevenZipBase.SetLibraryPath("lib/7z.dll");
                         AnsiConsole.Progress().AutoClear(true).HideCompleted(true).Columns(new ProgressColumn[] {
                             new TaskDescriptionColumn(),
                             new ProgressBarColumn(),
