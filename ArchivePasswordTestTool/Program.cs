@@ -5,6 +5,7 @@ using System.Diagnostics;
 using System.Net;
 using System.Net.NetworkInformation;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using static ArchivePasswordTestTool.Utils;
 using static ArchivePasswordTestTool.Utils.Util;
 
@@ -29,6 +30,7 @@ namespace ArchivePasswordTestTool
         public class ConfigType
         {
             public DateTime CheckUpgrade { get; set; } = new();
+            [JsonIgnore]
             public bool IsLatestVersion { get; set; } = false;
             public List<Lib> Libs { get; set; } = new();
             public string Dictionary { get; set; } = "PasswordDictionary.txt";
@@ -77,11 +79,8 @@ namespace ArchivePasswordTestTool
                     }
                     else
                     {
-                        if (Config.CheckUpgrade < (DateTime.Now - new TimeSpan(30, 0, 0, 0)))
-                        {
-                            Error("检查更新失败！请检查您的网络情况。");
-                            throw new Exception($"检查更新失败！\r\n错误码 {Info.StatusCode}");
-                        }
+                        Error("检查更新失败！请检查您的网络情况。");
+                        throw new Exception($"检查更新失败！\r\n错误码 {Info.StatusCode}");
                     }
                 }
                 catch (Exception ex)
