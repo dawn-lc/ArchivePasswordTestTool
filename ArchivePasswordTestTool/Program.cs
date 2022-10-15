@@ -65,7 +65,7 @@ namespace ArchivePasswordTestTool
                             {
                                 if (item.Name!.Contains("lib."))
                                 {
-                                    Config.Libs.Add(new() { Name = item.Name.Replace("lib.", ""), DownloadUrl = item.DownloadUrl, Hash = item.Label });
+                                    Config.Libs.Add(new() { Name = item.Name!.Replace("lib.", ""), DownloadUrl = item.DownloadUrl, Hash = item.Label });
                                 }
                             }
                             Config.CheckUpgrade = DateTime.Now;
@@ -76,7 +76,7 @@ namespace ArchivePasswordTestTool
                     }
                     else
                     {
-                        throw new HttpRequestException($"状态码 {Info.StatusCode}");
+                        throw new HttpRequestException($"状态码 {((int)Info.StatusCode)}\r\n{await Info.Content.ReadAsStringAsync()}");
                     }
                 }
                 catch (Exception ex)
@@ -168,6 +168,7 @@ namespace ArchivePasswordTestTool
                     }
                     if (Config!.Libs.Any(i => !i.Exists))
                     {
+                        Warn("存在文件缺失或损坏，开始修复...");
                         await AnsiConsole.Progress().AutoClear(true).HideCompleted(true).Columns(new ProgressColumn[] {
                             new TaskDescriptionColumn(),
                             new ProgressBarColumn(),
@@ -175,11 +176,9 @@ namespace ArchivePasswordTestTool
                             new RemainingTimeColumn()
                         }).StartAsync(async ctx =>
                         {
-                            foreach (var item in Config.Libs.Where(i => !i.Exists))
-                            {
-                                Log($"{item.Name} 开始下载");
+                            await Parallel.ForEachAsync(Config.Libs.Where(i => !i.Exists), async (item, loopState) => {
                                 await HTTP.DownloadAsync(await HTTP.GetStreamAsync(new Uri(item.DownloadUrl!)), $"lib/{item.Name}", ctx.AddTask($"下载 {item.Name}"), item.Name);
-                            }
+                            });
                         });
                         if (AnsiConsole.Confirm("下载完成，请重启软件以完成更新。", true))
                         {
@@ -244,7 +243,7 @@ namespace ArchivePasswordTestTool
                         category: "Info",
                         level: BreadcrumbLevel.Info
                     );
-                    SevenZipBase.SetLibraryPath("lib/7z.dll");
+
                     using var temp = new SevenZipExtractor(file, "");
                     if (temp.Check())
                     {
