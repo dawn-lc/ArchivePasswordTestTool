@@ -1,5 +1,4 @@
 ﻿using Sentry;
-using SevenZip;
 using Spectre.Console;
 using System.Diagnostics;
 using System.Net;
@@ -244,8 +243,8 @@ namespace ArchivePasswordTestTool
                         level: BreadcrumbLevel.Info
                     );
 
-                    using var temp = new SevenZipExtractor(file, "");
-                    if (temp.Check())
+                    //todo 检查压缩包是否加密
+                    if (file.Check())
                     {
                         AnsiConsole.WriteLine($"{ArchiveFile} 并不是一个加密压缩包。");
                         EncryptArchivePassword = "";
@@ -272,6 +271,7 @@ namespace ArchivePasswordTestTool
                             {
                                 try
                                 {
+                                    //
                                     using var temp = new SevenZipExtractor(ArchiveFile, i);
                                     Test.Increment((double)1 / DictionaryCount * 100);
                                     if (temp.Check())
