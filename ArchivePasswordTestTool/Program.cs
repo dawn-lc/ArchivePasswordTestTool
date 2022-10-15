@@ -168,6 +168,7 @@ namespace ArchivePasswordTestTool
                     }
                     if (Config!.Libs.Any(i => !i.Exists))
                     {
+                        Warn("存在文件缺少或损坏，开始下载修复...");
                         await AnsiConsole.Progress().AutoClear(true).HideCompleted(true).Columns(new ProgressColumn[] {
                             new TaskDescriptionColumn(),
                             new ProgressBarColumn(),
@@ -175,13 +176,13 @@ namespace ArchivePasswordTestTool
                             new RemainingTimeColumn()
                         }).StartAsync(async ctx =>
                         {
-                            foreach (var item in Config.Libs.Where(i => !i.Exists))
+                            await Parallel.ForEachAsync(Config.Libs.Where(l => l.Exists), async (item, f) =>
                             {
                                 Log($"{item.Name} 开始下载");
                                 await HTTP.DownloadAsync(await HTTP.GetStreamAsync(new Uri(item.DownloadUrl!)), $"lib/{item.Name}", ctx.AddTask($"下载 {item.Name}"), item.Name);
-                            }
+                            });
                         });
-                        if (AnsiConsole.Confirm("下载完成，请重启软件以完成更新。", true))
+                        if (AnsiConsole.Confirm("下载完成，请重启软件以完成更新或修复。", true))
                         {
                             Process.Start(Environment.ProcessPath!);
                         }
@@ -324,7 +325,7 @@ namespace ArchivePasswordTestTool
                         level: BreadcrumbLevel.Info
                     );
                     SentrySdk.CaptureException(ex);
-                    Error($"{ex}\r\n未被处理的错误。\r\n错误日志已提交，请等待开发者修复。(程序将在10秒后退出)");
+                    Error($"{ex.ToString().EscapeMarkup()}\r\n[red]未被处理的错误。[/]\r\n错误日志已提交，请等待开发者修复。(程序将在10秒后退出)");
                     await Task.Delay(10000);
                     throw;
                 }

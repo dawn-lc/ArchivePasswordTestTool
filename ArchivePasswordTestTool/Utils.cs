@@ -98,7 +98,7 @@ namespace ArchivePasswordTestTool
             }
             public static void Error(string value)
             {
-                AnsiConsole.MarkupLine($"[bold][[{DateTime.Now}]] [red]E[/][/] {value.EscapeMarkup()}");
+                AnsiConsole.MarkupLine($"[bold][[{DateTime.Now}]] [red]E[/][/] {value}");
             }
             public static bool StartupParametersCheck(List<string> Parameters, string Flag)
             {
@@ -304,10 +304,8 @@ namespace ArchivePasswordTestTool
         }
         public static class HTTP
         {
-            //防DNS污染暂时不加入
-            //private static LookupClient DNSClient { get; set; } = new(new LookupClientOptions(IPAddress.Parse("114.114.114.114")) { UseTcpOnly = true });
-
-            public class ClientHandler : HttpClientHandler
+            private static ClientPool Handler { get; set; } = new(1, new(0, 1, 0));
+            private class ClientHandler : HttpClientHandler
             {
                 private readonly HttpMessageInvoker Handler = new(new SocketsHttpHandler()
                 {
@@ -327,64 +325,172 @@ namespace ArchivePasswordTestTool
                     return await Handler.SendAsync(request, cancellationToken);
                 }
             }
-
-            public static HttpRequestMessage CreateRequest(Uri url, HttpMethod method, HttpContent? content)
+            private class ClientPool : IDisposable
             {
-                return new HttpRequestMessage()
+                private class Client : IDisposable
                 {
-                    RequestUri = url,
-                    Method = method,
-                    Content = content,
-                };
-            }
-            private static readonly TimeSpan DefaultTimeout = new(0, 0, 1, 0);
-            public static HttpClient Constructor(Dictionary<string, IEnumerable<string>>? head, TimeSpan? timeout)
-            {
-
-                HttpClientHandler clientHandler = new ClientHandler
-                {
-                    AutomaticDecompression = DecompressionMethods.GZip,
-                    AllowAutoRedirect = true,
-                    ServerCertificateCustomValidationCallback = (sender, cert, chain, sslPolicyErrors) => { return true; }
-                };
-                HttpClient Client = new(clientHandler);
-                Client.DefaultRequestHeaders.Clear();
-                Client.DefaultRequestHeaders.Add("user-agent", new List<string>() { $"{Program.AppName} {string.Join(".", Program.Version)}-{Program.VersionType}" });
-                foreach (KeyValuePair<string, IEnumerable<string>> item in head ?? new())
-                {
-                    Client.DefaultRequestHeaders.Add(item.Key, item.Value);
+                    public DateTime LastUseTime { get; set; }
+                    public string Host { get; set; }
+                    private HttpClient ClientHandle { get; set; }
+                    public Client(Uri uri, IEnumerable<KeyValuePair<string, IEnumerable<string>>>? headers, TimeSpan timeout)
+                    {
+                        Host = uri.Host;
+                        ClientHandle = new(new ClientHandler
+                        {
+                            AutomaticDecompression = DecompressionMethods.GZip,
+                            AllowAutoRedirect = true,
+                            ServerCertificateCustomValidationCallback = (sender, cert, chain, sslPolicyErrors) => { return true; }
+                        });
+                        ClientHandle.DefaultRequestHeaders.Add("user-agent", new List<string> { $"{Program.AppName} {string.Join(".", Program.Version)}-{Program.VersionType}" });
+                        if (headers != null)
+                        {
+                            foreach (var header in headers)
+                            {
+                                ClientHandle.DefaultRequestHeaders.Add(header.Key, header.Value);
+                            }
+                        }
+                        ClientHandle.Timeout = timeout;
+                    }
+                    public HttpResponseMessage Send(HttpRequestMessage httpRequestMessage, CancellationToken cancellationToken)
+                    {
+                        return Send(httpRequestMessage, DefaultCompletionOption, cancellationToken);
+                    }
+                    public HttpResponseMessage Send(HttpRequestMessage httpRequestMessage, HttpCompletionOption completionOption, CancellationToken cancellationToken)
+                    {
+                        LastUseTime = DateTime.Now;
+                        return ClientHandle.Send(httpRequestMessage, completionOption, cancellationToken);
+                    }
+                    public Task<HttpResponseMessage> SendAsync(HttpRequestMessage httpRequestMessage, CancellationToken cancellationToken)
+                    {
+                        return SendAsync(httpRequestMessage, DefaultCompletionOption, cancellationToken);
+                    }
+                    public Task<HttpResponseMessage> SendAsync(HttpRequestMessage httpRequestMessage, HttpCompletionOption completionOption, CancellationToken cancellationToken)
+                    {
+                        LastUseTime = DateTime.Now;
+                        return ClientHandle.SendAsync(httpRequestMessage, completionOption, cancellationToken);
+                    }
+                    public void Dispose()
+                    {
+                        ClientHandle.Dispose();
+                    }
                 }
-                Client.Timeout = timeout ?? DefaultTimeout;
-                return Client;
-            }
-            public static HttpClient Constructor(Dictionary<string, string>? head = null, TimeSpan? timeout = null)
-            {
-                var heads = new Dictionary<string, IEnumerable<string>>();
-                foreach (var item in head ?? new())
+                private volatile bool _disposed;
+                private List<Client> Clients { get; set; }
+                private TimeSpan Timeout { get; set; }
+                private int MaxClient { get; set; }
+                public static HttpCompletionOption DefaultCompletionOption { get; set; } = HttpCompletionOption.ResponseContentRead;
+                public ClientPool(int maxClient, TimeSpan timeout)
                 {
-                    heads.Add(item.Key, new List<string>(item.Value.Split(';')));
+                    Timeout = timeout;
+                    Clients = new();
+                    MaxClient = maxClient;
                 }
-                return Constructor(heads, timeout ?? DefaultTimeout);
+                public ClientPool StartClient(Uri url, IEnumerable<KeyValuePair<string, IEnumerable<string>>>? headers)
+                {
+                    CheckDisposed();
+                    if (!Clients.Any(i => i.Host == url.Host))
+                    {
+                        Clients.Add(new(url, headers, Timeout));
+                    }
+                    while (Clients.Count > MaxClient)
+                    {
+                        Client client = Clients.OrderBy(i => i.LastUseTime).Last();
+                        client.Dispose();
+                        Clients.Remove(client);
+                    }
+                    return this;
+                }
+                private static HttpRequestMessage CreateRequestMessage(HttpMethod method, Uri? uri) => new(method, uri);
+                public Task<HttpResponseMessage> GetAsync(Uri? requestUri) => GetAsync(requestUri, DefaultCompletionOption);
+                public Task<HttpResponseMessage> GetAsync(Uri? requestUri, HttpCompletionOption completionOption) => GetAsync(requestUri, completionOption, CancellationToken.None);
+                public Task<HttpResponseMessage> GetAsync(Uri? requestUri, HttpCompletionOption completionOption, CancellationToken cancellationToken) => SendAsync(CreateRequestMessage(HttpMethod.Get, requestUri), completionOption, cancellationToken);
+                public Task<HttpResponseMessage> PostAsync(Uri? requestUri, HttpContent? content) => PostAsync(requestUri, content, CancellationToken.None);
+                public Task<HttpResponseMessage> PostAsync(Uri? requestUri, HttpContent? content, CancellationToken cancellationToken)
+                {
+                    HttpRequestMessage request = CreateRequestMessage(HttpMethod.Post, requestUri);
+                    request.Content = content;
+                    return SendAsync(request, cancellationToken);
+                }
+                public Task<HttpResponseMessage> PutAsync(Uri? requestUri, HttpContent? content) => PutAsync(requestUri, content, CancellationToken.None);
+                public Task<HttpResponseMessage> PutAsync(Uri? requestUri, HttpContent? content, CancellationToken cancellationToken)
+                {
+                    HttpRequestMessage request = CreateRequestMessage(HttpMethod.Put, requestUri);
+                    request.Content = content;
+                    return SendAsync(request, cancellationToken);
+                }
+                public Task<HttpResponseMessage> PatchAsync(Uri? requestUri, HttpContent? content) => PatchAsync(requestUri, content, CancellationToken.None);
+                public Task<HttpResponseMessage> PatchAsync(Uri? requestUri, HttpContent? content, CancellationToken cancellationToken)
+                {
+                    HttpRequestMessage request = CreateRequestMessage(HttpMethod.Patch, requestUri);
+                    request.Content = content;
+                    return SendAsync(request, cancellationToken);
+                }
+                public Task<HttpResponseMessage> DeleteAsync(Uri? requestUri) => DeleteAsync(requestUri, CancellationToken.None);
+                public Task<HttpResponseMessage> DeleteAsync(Uri? requestUri, CancellationToken cancellationToken) => SendAsync(CreateRequestMessage(HttpMethod.Delete, requestUri), cancellationToken);
+                public HttpResponseMessage Send(HttpRequestMessage request, CancellationToken cancellationToken)
+                {
+                    return Send(request, DefaultCompletionOption, cancellationToken);
+                }
+                public HttpResponseMessage Send(HttpRequestMessage httpRequestMessage, HttpCompletionOption completionOption, CancellationToken cancellationToken)
+                {
+                    CheckDisposed();
+                    Client? client = Clients.Find(i => i.Host == httpRequestMessage.RequestUri?.Host);
+                    return client != null ? client.Send(httpRequestMessage, completionOption, cancellationToken) : throw new("未找到可用的HTTP客户端。");
+                }
+                public Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+                {
+                    return SendAsync(request, DefaultCompletionOption, cancellationToken);
+                }
+                public Task<HttpResponseMessage> SendAsync(HttpRequestMessage httpRequestMessage, HttpCompletionOption completionOption, CancellationToken cancellationToken)
+                {
+                    CheckDisposed();
+                    Client? client = Clients.Find(i => i.Host == httpRequestMessage.RequestUri?.Host);
+                    return client != null ? client.SendAsync(httpRequestMessage, completionOption, cancellationToken) : throw new("未找到可用的HTTP客户端。");
+                }
+                public void Dispose()
+                {
+                    Dispose(true);
+                    GC.SuppressFinalize(this);
+                }
+                protected virtual void Dispose(bool disposing)
+                {
+                    if (disposing && !_disposed)
+                    {
+                        _disposed = true;
+
+                        foreach (var item in Clients)
+                        {
+                            item.Dispose();
+                        }
+                    }
+                }
+                private void CheckDisposed()
+                {
+                    if (_disposed)
+                    {
+                        throw new ObjectDisposedException(GetType().ToString());
+                    }
+                }
             }
-            public static async Task<HttpResponseMessage> GetAsync(Uri url, Dictionary<string, IEnumerable<string>>? head = null, TimeSpan? timeout = null)
+            public static async Task<HttpResponseMessage> GetAsync(Uri url, IEnumerable<KeyValuePair<string, IEnumerable<string>>>? headers = null)
             {
-                return await Constructor(head, timeout).GetAsync(url);
+                return await Handler.StartClient(url, headers).GetAsync(url);
             }
-            public static async Task<HttpResponseMessage> GetStreamAsync(Uri url, Dictionary<string, IEnumerable<string>>? head = null, TimeSpan? timeout = null)
+            public static async Task<HttpResponseMessage> GetStreamAsync(Uri url, IEnumerable<KeyValuePair<string, IEnumerable<string>>>? head = null)
             {
-                return await Constructor(head, timeout).GetAsync(url, HttpCompletionOption.ResponseHeadersRead);
+                return await Handler.StartClient(url, head).GetAsync(url, HttpCompletionOption.ResponseHeadersRead);
             }
-            public static async Task<HttpResponseMessage> PostAsync(Uri url, HttpContent content, Dictionary<string, IEnumerable<string>>? head = null, TimeSpan? timeout = null)
+            public static async Task<HttpResponseMessage> PostAsync(Uri url, HttpContent content, IEnumerable<KeyValuePair<string, IEnumerable<string>>>? head = null)
             {
-                return await Constructor(head, timeout).PostAsync(url, content);
+                return await Handler.StartClient(url, head).PostAsync(url, content);
             }
-            public static async Task<HttpResponseMessage> PatchAsync(Uri url, HttpContent content, Dictionary<string, IEnumerable<string>>? head = null, TimeSpan? timeout = null)
+            public static async Task<HttpResponseMessage> PatchAsync(Uri url, HttpContent content, IEnumerable<KeyValuePair<string, IEnumerable<string>>>? head = null)
             {
-                return await Constructor(head, timeout).PatchAsync(url, content);
+                return await Handler.StartClient(url, head).PatchAsync(url, content);
             }
-            public static async Task<HttpResponseMessage> PutAsync(Uri url, HttpContent content, Dictionary<string, IEnumerable<string>>? head = null, TimeSpan? timeout = null)
+            public static async Task<HttpResponseMessage> PutAsync(Uri url, HttpContent content, IEnumerable<KeyValuePair<string, IEnumerable<string>>>? head = null)
             {
-                return await Constructor(head, timeout).PutAsync(url, content);
+                return await Handler.StartClient(url, head).PutAsync(url, content);
             }
             public static async Task DownloadAsync(HttpResponseMessage response, string path, ProgressTask task, string? name)
             {
@@ -394,7 +500,7 @@ namespace ArchivePasswordTestTool
                     {
                         File.Delete(path);
                     }
-                    byte[] buffer = new byte[8192];
+                    byte[] buffer = new byte[81920];
                     Stream ResponseStream = await response.Content.ReadAsStreamAsync();
                     using var destination = new FileStream(path, FileMode.OpenOrCreate);
                     long contentLength = response.Content.Headers.ContentLength ?? 0;
