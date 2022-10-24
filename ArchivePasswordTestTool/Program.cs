@@ -14,7 +14,7 @@ namespace ArchivePasswordTestTool
     public class Program
     {
         public static readonly string AppName = "ArchivePasswordTestTool";
-        public static readonly int[] Version = new int[] { 1, 5, 8 };
+        public static readonly int[] Version = new int[] { 1, 5, 9 };
         public static readonly string VersionType = "Release";
         public static readonly string AppHomePage = "https://www.bilibili.com/read/cv6101558";
         public static readonly string Developer = "dawn-lc";
@@ -270,7 +270,7 @@ namespace ArchivePasswordTestTool
                             }
                             catch (Exception)
                             {
-                                AnsiConsole.WriteLine($"{ArchiveFile} 并不能读取内部数据，无法使用快速测试。");
+                                AnsiConsole.WriteLine($"无法读取加密压缩包内部结构数据，无法使用快速测试。");
                             }
                         }
                     }
@@ -326,9 +326,7 @@ namespace ArchivePasswordTestTool
                                             }
                                             TestProgressBar.Increment((double)1 / DictionaryCount * 100);
                                         }
-                                        
                                     }
-
                                 }
                                 catch (Exception)
                                 {
