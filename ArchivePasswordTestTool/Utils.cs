@@ -1,6 +1,9 @@
 ﻿using Spectre.Console;
+using System.Collections.Concurrent;
 using System.Net;
+using System.Runtime.Intrinsics.X86;
 using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using static ArchivePasswordTestTool.Utils.Util;
@@ -12,6 +15,35 @@ namespace ArchivePasswordTestTool
         public static class Util
         {
             private static readonly MD5 FileMD5 = MD5.Create();
+
+
+            public static string TimeSpanString(TimeSpan timeSpan)
+            {
+                string TimeSpanString = "";
+                if (timeSpan > new TimeSpan(365, 0, 0, 0, 0))
+                {
+                    TimeSpanString += $"{timeSpan.Days / 365}年";
+                }
+                if (timeSpan > new TimeSpan( 1, 0, 0, 0))
+                {
+                    TimeSpanString += $"{timeSpan.Days}天";
+                }
+                if (timeSpan > new TimeSpan( 1, 0, 0))
+                {
+                    TimeSpanString += $"{timeSpan.Hours}小时";
+                }
+                if (timeSpan > new TimeSpan(0, 1, 0))
+                {
+                    TimeSpanString += $"{timeSpan.Minutes}分钟";
+                }
+                if (timeSpan > new TimeSpan(0, 0, 1))
+                {
+                    TimeSpanString += $"{timeSpan.Seconds}秒";
+                }
+                TimeSpanString += $"{timeSpan:fff}毫秒";
+                return TimeSpanString;
+            }
+
 
             /// <summary>
             /// 比较两个字节数组是否相等
@@ -300,6 +332,70 @@ namespace ArchivePasswordTestTool
                 }
             }
         }
+
+
+
+        public class Dictionary
+        {
+            private int Limit { get; init; }
+            private int CurrentLine { get; set; }
+            public int Count { get; init; }
+            public string DictionaryPath { get; init; }
+            private bool S { get; set; }
+            private ConcurrentQueue<string> AKeys { get; set; }
+            private ConcurrentQueue<string> BKeys { get; set; }
+            public Dictionary(string dictionaryPath, int limit = 2048) 
+            {
+                DictionaryPath = dictionaryPath;
+                Limit = limit;
+                CurrentLine = 0;
+                Count = File.ReadLines(DictionaryPath, Encoding.UTF8).Count();
+                AKeys = new ConcurrentQueue<string>(ReadLines());
+                BKeys = new ConcurrentQueue<string>(ReadLines());
+                S = true;
+            }
+            private IEnumerable<string> ReadLines()
+            {
+                var lines = File.ReadLines(DictionaryPath, Encoding.UTF8).Skip(CurrentLine).Take(Limit);
+                CurrentLine += lines.Count();
+                return lines;
+            }
+            public string Pop()
+            {
+                if (S)
+                {
+                    if(AKeys.IsEmpty)
+                    {
+                        S = false;
+                        AKeys = new ConcurrentQueue<string>(ReadLines());
+                    }
+                    else
+                    {
+                        if (AKeys.TryDequeue(out string? key))
+                        {
+                            return key;
+                        }
+                    }
+                }
+                else
+                {
+                    if (BKeys.IsEmpty)
+                    {
+                        S = true;
+                        BKeys = new ConcurrentQueue<string>(ReadLines());
+                    }
+                    else
+                    {
+                        if (BKeys.TryDequeue(out string? key))
+                        {
+                            return key;
+                        }
+                    }
+                }
+                return Pop();
+            }
+        }
+
         public static class HTTP
         {
             private static ClientPool Handler { get; set; } = new(1, new(0, 1, 0));

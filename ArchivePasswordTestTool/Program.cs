@@ -151,6 +151,7 @@ namespace ArchivePasswordTestTool
                 uint FirstEncryptedFileIndex = 0;
                 string? ArchiveFile = null;
                 string? EncryptArchivePassword = null;
+                Stopwatch sw = new();
                 try
                 {
                     await AnsiConsole.Status().StartAsync("初始化...", async ctx =>
@@ -284,8 +285,8 @@ namespace ArchivePasswordTestTool
                     }
                     if (IsEncryptedArchive)
                     {
-                        string[] Dictionary = File.ReadAllLines(Config.Dictionary);
-                        DictionaryCount = Dictionary.Length;
+                        Dictionary Dictionary = new(Config.Dictionary);
+                        DictionaryCount = Dictionary.Count;
                         AnsiConsole.WriteLine($"字典内包含: {DictionaryCount} 条密码。");
                         SentrySdk.AddBreadcrumb(
                             message: $"DictionaryCount {DictionaryCount}",
@@ -300,32 +301,34 @@ namespace ArchivePasswordTestTool
                         }).Start(ctx =>
                         {
                             var TestProgressBar = ctx.AddTask($"测试进度");
-                            Parallel.ForEach(Dictionary, (i, loopState) =>
+                            sw.Restart();
+                            Parallel.For(0,Dictionary.Count, (i, loopState) =>
                             {
                                 try
                                 {
-                                    using (SevenZipExtractor TestArchive = new(ArchiveFile, i))
+                                    string Password = Dictionary.Pop();
+                                    using SevenZipExtractor TestArchive = new(ArchiveFile, Password);
+                                    if (IsSupportQuickTest)
                                     {
-                                        if (IsSupportQuickTest)
+                                        if (TestArchive.Check(FirstEncryptedFileIndex))
                                         {
-                                            if (TestArchive.Check(FirstEncryptedFileIndex))
-                                            {
-                                                EncryptArchivePassword = i;
-                                                TestProgressBar.Increment((double)1 / DictionaryCount * 100);
-                                                loopState.Break();
-                                            }
+                                            sw.Stop();
+                                            EncryptArchivePassword = Password;
                                             TestProgressBar.Increment((double)1 / DictionaryCount * 100);
+                                            loopState.Break();
                                         }
-                                        else
+                                        TestProgressBar.Increment((double)1 / DictionaryCount * 100);
+                                    }
+                                    else
+                                    {
+                                        if (TestArchive.Check())
                                         {
-                                            if (TestArchive.Check())
-                                            {
-                                                EncryptArchivePassword = i;
-                                                TestProgressBar.Increment((double)1 / DictionaryCount * 100);
-                                                loopState.Break();
-                                            }
+                                            sw.Stop();
+                                            EncryptArchivePassword = Password;
                                             TestProgressBar.Increment((double)1 / DictionaryCount * 100);
+                                            loopState.Break();
                                         }
+                                        TestProgressBar.Increment((double)1 / DictionaryCount * 100);
                                     }
                                 }
                                 catch (Exception)
@@ -335,6 +338,7 @@ namespace ArchivePasswordTestTool
                             TestProgressBar.Increment(100);
                         });
                         AnsiConsole.WriteLine(EncryptArchivePassword != null ? $"已找到解压密码: {EncryptArchivePassword}" : "没有找到正确的解压密码！");
+                        AnsiConsole.WriteLine($"测试耗时：{TimeSpanString(sw.Elapsed)}");
                     }
                     if (AnsiConsole.Confirm("是否保存测试结果?", true))
                     {
@@ -342,6 +346,7 @@ namespace ArchivePasswordTestTool
                         {
                             TestOut.WriteLine("加密压缩包: " + ArchiveFile);
                             TestOut.WriteLine("字典: " + Config.Dictionary);
+                            TestOut.WriteLine($"测试耗时：{TimeSpanString(sw.Elapsed)}");
                             TestOut.WriteLine(EncryptArchivePassword != null ? $"解压密码: {EncryptArchivePassword}" : "没有找到正确的解压密码！");
                         }
                         if (Environment.OSVersion.Platform.ToString().ToLowerInvariant().Contains("win"))
