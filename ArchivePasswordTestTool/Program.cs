@@ -144,7 +144,7 @@ namespace ArchivePasswordTestTool
                         Username = Environment.UserName
                     };
                 });
-
+                
                 bool IsEncryptedArchive = true;
                 bool IsSupportQuickTest = false;
                 long DictionaryCount = 0;
@@ -210,7 +210,7 @@ namespace ArchivePasswordTestTool
                         }
                         else
                         {
-                            Config.Dictionary = AnsiConsole.Prompt(new TextPrompt<string>("请输入密码字典路径[[或将密码字典拖至本窗口后，按回车键确认]]:")
+                            Config.Dictionary = AnsiConsole.Prompt(new TextPrompt<string>("[yellow]将“密码本”拖至本窗口后，按回车键确认！[/]\r\n密码本位置:")
                             .PromptStyle("dodgerblue1")
                             .ValidationErrorMessage("[red]这甚至不是一个字符串! 你是怎么做到的?[/]")
                             .Validate(path =>
@@ -239,7 +239,7 @@ namespace ArchivePasswordTestTool
                         }
                         else
                         {
-                            ArchiveFile = AnsiConsole.Prompt(new TextPrompt<string>("请输入压缩包路径[[或将压缩包拖至本窗口后，按回车键确认]]:")
+                            ArchiveFile = AnsiConsole.Prompt(new TextPrompt<string>("[yellow]将“压缩包”拖至本窗口后，按回车键确认！[/]\r\n压缩包位置:")
                             .PromptStyle("dodgerblue1")
                             .ValidationErrorMessage("[red]这甚至不是一个字符串! 你是怎么做到的?[/]")
                             .Validate(path =>
@@ -285,8 +285,10 @@ namespace ArchivePasswordTestTool
                     }
                     if (IsEncryptedArchive)
                     {
+                        
                         Dictionary Dictionary = new(Config.Dictionary);
                         DictionaryCount = Dictionary.Count;
+
                         AnsiConsole.WriteLine($"字典内包含: {DictionaryCount} 条密码。");
                         SentrySdk.AddBreadcrumb(
                             message: $"DictionaryCount {DictionaryCount}",
@@ -335,6 +337,7 @@ namespace ArchivePasswordTestTool
                                 {
                                 }
                             });
+                            
                             TestProgressBar.Increment(100);
                         });
                         AnsiConsole.WriteLine(EncryptArchivePassword != null ? $"已找到解压密码: {EncryptArchivePassword}" : "没有找到正确的解压密码！");
@@ -368,7 +371,7 @@ namespace ArchivePasswordTestTool
                         level: BreadcrumbLevel.Info
                     );
                     SentrySdk.CaptureException(ex);
-                    Error($"{ex.ToString().EscapeMarkup()}\r\n[red]未被处理的错误。[/]\r\n错误日志已提交，请等待开发者修复。(程序将在10秒后退出)");
+                    Error($"{ex.ToString().EscapeMarkup()}\r\n\r\n[red]遇到无法处理的错误！[/]\r\n\r\n[yellow]请检查运行位置是否为系统保护目录以及是否授予程序所需权限。\r\n如果在检查更新失败或下载运行库中出错，请检查您的网络环境。[/]\r\n\r\n错误日志已提交。(程序将在10秒后退出)");
                     await Task.Delay(10000);
                     throw;
                 }
