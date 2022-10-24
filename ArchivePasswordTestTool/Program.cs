@@ -135,6 +135,7 @@ namespace ArchivePasswordTestTool
                 o.AutoSessionTracking = true;
             }))
             {
+                //用户ID
                 SentrySdk.ConfigureScope(s =>
                 {
                     s.User = new()
@@ -143,9 +144,13 @@ namespace ArchivePasswordTestTool
                         Username = Environment.UserName
                     };
                 });
+
+                bool IsEncryptedArchive = true;
+                bool IsSupportQuickTest = false;
+                long DictionaryCount = 0;
+                uint FirstEncryptedFileIndex = 0;
                 string? ArchiveFile = null;
                 string? EncryptArchivePassword = null;
-                long DictionaryCount = 0;
                 try
                 {
                     await AnsiConsole.Status().StartAsync("初始化...", async ctx =>
@@ -176,7 +181,7 @@ namespace ArchivePasswordTestTool
                             new RemainingTimeColumn()
                         }).StartAsync(async ctx =>
                         {
-                            await Parallel.ForEachAsync(Config.Libs.Where(l => l.Exists), async (item, f) =>
+                            await Parallel.ForEachAsync(Config.Libs.Where(l => !l.Exists), async (item, f) =>
                             {
                                 Log($"{item.Name} 开始下载");
                                 await HTTP.DownloadAsync(await HTTP.GetStreamAsync(new Uri(item.DownloadUrl!)), $"lib/{item.Name}", ctx.AddTask($"下载 {item.Name}"), item.Name);
@@ -190,6 +195,7 @@ namespace ArchivePasswordTestTool
                     }
                     AnsiConsole.Clear();
                     AnsiConsole.Write(Figgle.FiggleFonts.Standard.Render(AppName));
+
                     if (StartupParametersCheck(args, "D") && File.Exists(GetParameter(args, "D", "PasswordDictionary.txt").Replace("\"", "")))
                     {
                         Config.Dictionary = GetParameter(args, "D", "PasswordDictionary.txt").Replace("\"", "");
@@ -212,11 +218,13 @@ namespace ArchivePasswordTestTool
                             })).Replace("\"", "");
                         }
                     }
+
                     SentrySdk.AddBreadcrumb(
                         message: $"Dictionary {Config.Dictionary}",
                         category: "Info",
                         level: BreadcrumbLevel.Info
                     );
+
                     if (StartupParametersCheck(args, "F") && File.Exists(GetParameter(args, "F", "").Replace("\"", "")))
                     {
                         ArchiveFile = GetParameter(args, "F", "").Replace("\"", "");
@@ -239,20 +247,42 @@ namespace ArchivePasswordTestTool
                             })).Replace("\"", "");
                         }
                     }
-                    using var file = File.OpenRead(ArchiveFile);
-                    SentrySdk.AddBreadcrumb(
-                        message: $"ArchiveFile {ArchiveFile}[{Convert.ToBase64String(FileHash(file))}]",
-                        category: "Info",
-                        level: BreadcrumbLevel.Info
-                    );
+
+
                     SevenZipBase.SetLibraryPath("lib/7z.dll");
-                    using var temp = new SevenZipExtractor(file, "");
-                    if (temp.Check())
+                    using (SevenZipExtractor ExtractorFile = new(ArchiveFile))
                     {
-                        AnsiConsole.WriteLine($"{ArchiveFile} 并不是一个加密压缩包。");
-                        EncryptArchivePassword = "";
+                        if (ExtractorFile.Check())
+                        {
+                            AnsiConsole.WriteLine($"{ArchiveFile} 并不是一个加密压缩包。");
+                            IsEncryptedArchive = false;
+                        }
+                        else
+                        {
+                            try
+                            {
+                                if (!ExtractorFile.ArchiveFileData.Any(i => i.Encrypted))
+                                {
+                                    throw new NotSupportedException("不能读取加密压缩包内部结构数据。");
+                                }
+                                FirstEncryptedFileIndex = Convert.ToUInt32(ExtractorFile.ArchiveFileData.First(i => i.Encrypted).Index);
+                                IsSupportQuickTest = true;
+                            }
+                            catch (Exception)
+                            {
+                                AnsiConsole.WriteLine($"{ArchiveFile} 并不能读取内部数据，无法使用快速测试。");
+                            }
+                        }
                     }
-                    else
+                    using (var file = File.OpenRead(ArchiveFile))
+                    {
+                        SentrySdk.AddBreadcrumb(
+                           message: $"ArchiveFile {ArchiveFile}[{Convert.ToBase64String(FileHash(file))}]",
+                           category: "Info",
+                           level: BreadcrumbLevel.Info
+                       );
+                    }
+                    if (IsEncryptedArchive)
                     {
                         string[] Dictionary = File.ReadAllLines(Config.Dictionary);
                         DictionaryCount = Dictionary.Length;
@@ -269,25 +299,42 @@ namespace ArchivePasswordTestTool
                             new RemainingTimeColumn()
                         }).Start(ctx =>
                         {
-                            var Test = ctx.AddTask($"测试进度");
+                            var TestProgressBar = ctx.AddTask($"测试进度");
                             Parallel.ForEach(Dictionary, (i, loopState) =>
                             {
                                 try
                                 {
-                                    using var temp = new SevenZipExtractor(ArchiveFile, i);
-                                    Test.Increment((double)1 / DictionaryCount * 100);
-                                    if (temp.Check())
+                                    using (SevenZipExtractor TestArchive = new(ArchiveFile, i))
                                     {
-                                        EncryptArchivePassword = i;
-                                        loopState.Break();
+                                        if (IsSupportQuickTest)
+                                        {
+                                            if (TestArchive.Check(FirstEncryptedFileIndex))
+                                            {
+                                                EncryptArchivePassword = i;
+                                                TestProgressBar.Increment((double)1 / DictionaryCount * 100);
+                                                loopState.Break();
+                                            }
+                                            TestProgressBar.Increment((double)1 / DictionaryCount * 100);
+                                        }
+                                        else
+                                        {
+                                            if (TestArchive.Check())
+                                            {
+                                                EncryptArchivePassword = i;
+                                                TestProgressBar.Increment((double)1 / DictionaryCount * 100);
+                                                loopState.Break();
+                                            }
+                                            TestProgressBar.Increment((double)1 / DictionaryCount * 100);
+                                        }
+                                        
                                     }
+
                                 }
                                 catch (Exception)
                                 {
                                 }
                             });
-                            Test.Increment(100);
-                            Test.StopTask();
+                            TestProgressBar.Increment(100);
                         });
                         AnsiConsole.WriteLine(EncryptArchivePassword != null ? $"已找到解压密码: {EncryptArchivePassword}" : "没有找到正确的解压密码！");
                     }
@@ -299,16 +346,9 @@ namespace ArchivePasswordTestTool
                             TestOut.WriteLine("字典: " + Config.Dictionary);
                             TestOut.WriteLine(EncryptArchivePassword != null ? $"解压密码: {EncryptArchivePassword}" : "没有找到正确的解压密码！");
                         }
-                        switch (Environment.OSVersion.Platform)
+                        if (Environment.OSVersion.Platform.ToString().ToLowerInvariant().Contains("win"))
                         {
-                            case PlatformID.Win32S:
-                            case PlatformID.Win32Windows:
-                            case PlatformID.Win32NT:
-                            case PlatformID.WinCE:
-                                Process.Start("explorer.exe", $"/select, \"{ArchiveFile}[测试报告].txt\"");
-                                break;
-                            default:
-                                break;
+                            Process.Start("explorer.exe", $"/select, \"{ArchiveFile}[测试报告].txt\"");
                         }
                     }
                 }

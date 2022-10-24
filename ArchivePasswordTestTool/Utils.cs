@@ -11,6 +11,8 @@ namespace ArchivePasswordTestTool
     {
         public static class Util
         {
+            private static readonly MD5 FileMD5 = MD5.Create();
+
             /// <summary>
             /// 比较两个字节数组是否相等
             /// </summary>
@@ -34,7 +36,6 @@ namespace ArchivePasswordTestTool
             /// <returns>Hash</returns>
             public static byte[] FileHash(Stream File)
             {
-                using MD5 FileMD5 = MD5.Create();
                 return FileMD5.ComputeHash(File);
             }
             /// <summary>
@@ -47,7 +48,6 @@ namespace ArchivePasswordTestTool
             {
                 try
                 {
-                    using MD5 FileMD5 = MD5.Create();
                     return Equals(FileMD5.ComputeHash(File), Hash);
                 }
                 catch (Exception ex)
@@ -66,8 +66,6 @@ namespace ArchivePasswordTestTool
             {
                 try
                 {
-                    using MD5 FileMD5 = MD5.Create();
-                    //Log(Convert.ToBase64String(FileMD5.ComputeHash(FileA)));
                     return Equals(FileMD5.ComputeHash(FileA), FileMD5.ComputeHash(FileB));
                 }
                 catch (Exception ex)
