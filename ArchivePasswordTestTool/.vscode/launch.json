@@ -15,7 +15,7 @@
             "cwd": "${workspaceFolder}/bin/Debug/net6.0/",
             // For more information about the 'console' field, see https://aka.ms/VSCode-CS-LaunchJson-Console
             "console": "externalTerminal",
-            "stopAtEntry": true
+            "stopAtEntry": false
         }
     ]
 }
