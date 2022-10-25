@@ -6,6 +6,7 @@ using System.Net;
 using System.Net.NetworkInformation;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Globalization;
 using static ArchivePasswordTestTool.Utils;
 using static ArchivePasswordTestTool.Utils.Util;
 
@@ -18,7 +19,8 @@ namespace ArchivePasswordTestTool
         public static readonly string VersionType = "Release";
         public static readonly string AppHomePage = "https://www.bilibili.com/read/cv6101558";
         public static readonly string Developer = "dawn-lc";
-        public static ConfigType? Config { get; set; }
+        public static ConfigData? Config { get; set; }
+        public static LanguageData Language { get; set; } = new();
         public class Lib
         {
             public string? Name { get; set; }
@@ -27,7 +29,7 @@ namespace ArchivePasswordTestTool
             public bool Exists { get; set; }
         }
 
-        public class ConfigType
+        public class ConfigData
         {
             public DateTime CheckUpgrade { get; set; } = new();
             [JsonIgnore]
@@ -36,15 +38,31 @@ namespace ArchivePasswordTestTool
             public string Dictionary { get; set; } = "PasswordDictionary.txt";
         }
 
+        public class LanguageData
+        {
+            public string LoadingConfig {get; set;} = "加载配置文件";
+            public string lastCheckUpgradeTime {get; set;} = "上次检查更新";
+            public string CheckUpgradeInfo {get; set;} = "检查版本信息";
+            public string GettingLatestVersionInfo {get; set;} = "正在获取最新版本信息";
+        }
+
         private static async Task Initialization(StatusContext ctx)
         {
-            ctx.Status("加载配置文件...");
-            Config = await DeserializeJSONFileAsync<ConfigType>("config.json");
-            Log($"上次检查更新:{Config.CheckUpgrade.ToLocalTime()}");
-            ctx.Status("检查版本信息...");
+            if (!Directory.Exists("lang"))
+            {
+                Directory.CreateDirectory("lang");
+            }
+            if (File.Exists($"lang/{CultureInfo.CurrentCulture.Name}.json"))
+            {
+                Language = await DeserializeJSONFileAsync<LanguageData>("config.json");
+            }
+            ctx.Status($"{Language.LoadingConfig}...");
+            Config = await DeserializeJSONFileAsync<ConfigData>("config.json");
+            Log($"{Language.lastCheckUpgradeTime}:{Config.CheckUpgrade.ToLocalTime()}");
+            ctx.Status($"{Language.CheckUpgradeInfo}...");
             if (Config.CheckUpgrade < (DateTime.Now - new TimeSpan(1, 0, 0, 0)))
             {
-                ctx.Status("正在获取最新版本信息...");
+                ctx.Status($"{Language.GettingLatestVersionInfo}...");
                 try
                 {
                     HttpResponseMessage Info = await HTTP.GetAsync(new Uri($"https://api.github.com/repos/{Developer}/{AppName}/releases/latest"));
