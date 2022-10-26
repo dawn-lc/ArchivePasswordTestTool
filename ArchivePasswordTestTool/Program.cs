@@ -220,10 +220,10 @@ namespace ArchivePasswordTestTool
             private string? askDictionaryPath;
             public string AskDictionaryPath
             {
-                get { return askDictionaryPath ?? "[yellow]将“密码本”拖至本窗口后，按回车键确认！[/] 密码本位置:"; }
+                get { return askDictionaryPath ?? "[yellow]将“密码本”拖至本窗口后，按回车键确认！[/]\r\n密码本位置:"; }
                 set
                 {
-                    askDictionaryPath = string.IsNullOrEmpty(value) ? "[yellow]将“密码本”拖至本窗口后，按回车键确认！[/] 密码本位置:" : value;
+                    askDictionaryPath = string.IsNullOrEmpty(value) ? "[yellow]将“密码本”拖至本窗口后，按回车键确认！[/]\r\n密码本位置:" : value;
                 }
             }
             private string? askDictionaryPathError;
@@ -238,10 +238,10 @@ namespace ArchivePasswordTestTool
             private string? askArchivePath;
             public string AskArchivePath
             {
-                get { return askArchivePath ?? "[yellow]将“压缩包”拖至本窗口后，按回车键确认！[/] 压缩包位置:"; }
+                get { return askArchivePath ?? "[yellow]将“压缩包”拖至本窗口后，按回车键确认！[/]\r\n压缩包位置:"; }
                 set
                 {
-                    askArchivePath = string.IsNullOrEmpty(value) ? "[yellow]将“压缩包”拖至本窗口后，按回车键确认！[/] 压缩包位置:" : value;
+                    askArchivePath = string.IsNullOrEmpty(value) ? "[yellow]将“压缩包”拖至本窗口后，按回车键确认！[/]\r\n压缩包位置:" : value;
                 }
             }
             private string? askArchivePathError;
@@ -269,6 +269,69 @@ namespace ArchivePasswordTestTool
                 set
                 {
                     fullEncryptedArchive = string.IsNullOrEmpty(value) ? "无法读取加密压缩包内部结构数据，无法使用快速测试。" : value;
+                }
+            }
+            private string? testProgress;
+            public string TestProgress
+            {
+                get { return testProgress ?? "测试进度"; }
+                set
+                {
+                    testProgress = string.IsNullOrEmpty(value) ? "测试进度" : value;
+                }
+            }
+            private string? correctPasswordNotFound;
+            public string CorrectPasswordNotFound
+            {
+                get { return correctPasswordNotFound ?? "没有找到正确的解压密码"; }
+                set
+                {
+                    correctPasswordNotFound = string.IsNullOrEmpty(value) ? "没有找到正确的解压密码" : value;
+                }
+            }
+            private string? correctPasswordFound;
+            public string CorrectPasswordFound
+            {
+                get { return correctPasswordFound ?? "已找到解压密码"; }
+                set
+                {
+                    correctPasswordFound = string.IsNullOrEmpty(value) ? "已找到解压密码" : value;
+                }
+            }
+            private string? save;
+            public string Save
+            {
+                get { return save ?? "保存"; }
+                set
+                {
+                    save = string.IsNullOrEmpty(value) ? "保存" : value;
+                }
+            }
+            private string? testResult;
+            public string TestResult
+            {
+                get { return testResult ?? "测试报告"; }
+                set
+                {
+                    testResult = string.IsNullOrEmpty(value) ? "测试报告" : value;
+                }
+            }
+            private string? totalTime;
+            public string TotalTime
+            {
+                get { return totalTime ?? "总时长"; }
+                set
+                {
+                    totalTime = string.IsNullOrEmpty(value) ? "总时长" : value;
+                }
+            }
+            private string? archive;
+            public string Archive
+            {
+                get { return archive ?? "压缩包"; }
+                set
+                {
+                    archive = string.IsNullOrEmpty(value) ? "压缩包" : value;
                 }
             }
 
@@ -584,6 +647,37 @@ namespace ArchivePasswordTestTool
                     ellipsis = string.IsNullOrEmpty(value) ? "..." : value;
                 }
             }
+            private string? colon;
+            /// <summary>
+            /// 冒号
+            /// </summary>
+            public string Colon
+            {
+                get
+                {
+                    return colon ?? "：";
+                }
+                set
+                {
+                    colon = string.IsNullOrEmpty(value) ? "：" : value;
+                }
+            }
+            private string? questionMark;
+            /// <summary>
+            /// 问号
+            /// </summary>
+            public string QuestionMark
+            {
+                get
+                {
+                    return questionMark ?? "？";
+                }
+                set
+                {
+                    questionMark = string.IsNullOrEmpty(value) ? "？" : value;
+                }
+            }
+            
         }
 
         private static async Task Initialization(StatusContext ctx)
@@ -602,7 +696,7 @@ namespace ArchivePasswordTestTool
             }
             ctx.Status($"{Language.LoadingConfig}{Language.Ellipsis}");
             Config = await DeserializeJSONFileAsync<ConfigData>("config.json");
-            Log($"{Language.LastCheckUpgradeTime}:{Config.CheckUpgrade.ToLocalTime()}");
+            Log($"{Language.LastCheckUpgradeTime}{Language.Colon}{Config.CheckUpgrade.ToLocalTime()}");
             ctx.Status($"{Language.CheckingUpgradeInfo}{Language.Ellipsis}");
             if (Config.CheckUpgrade < (DateTime.Now - new TimeSpan(1, 0, 0, 0)))
             {
@@ -756,8 +850,8 @@ namespace ArchivePasswordTestTool
                         }
                         Environment.Exit(0);
                     }
-                    //AnsiConsole.Clear();
-                    //AnsiConsole.Write(Figgle.FiggleFonts.Standard.Render(AppName));
+                    AnsiConsole.Clear();
+                    AnsiConsole.Write(Figgle.FiggleFonts.Standard.Render(AppName));
 
                     if (StartupParametersCheck(args, "D") && File.Exists(GetParameter(args, "D", "PasswordDictionary.txt").Replace("\"", "")))
                     {
@@ -772,11 +866,11 @@ namespace ArchivePasswordTestTool
                         }
                         else
                         {
-                            Config.Dictionary = AnsiConsole.Prompt(new TextPrompt<string>("[yellow]将“密码本”拖至本窗口后，按回车键确认！[/]\r\n密码本位置:")
+                            Config.Dictionary = AnsiConsole.Prompt(new TextPrompt<string>($"{Language.AskDictionaryPath}")
                             .PromptStyle("dodgerblue1")
                             .Validate(path =>
                             {
-                                return File.Exists(path.Replace("\"", "")) ? ValidationResult.Success() : ValidationResult.Error("[red]没有找到文件，请重新输入[/]");
+                                return File.Exists(path.Replace("\"", "")) ? ValidationResult.Success() : ValidationResult.Error($"{Language.AskDictionaryPathError}");
                             })).Replace("\"", "");
                         }
                     }
@@ -800,11 +894,11 @@ namespace ArchivePasswordTestTool
                         }
                         else
                         {
-                            ArchiveFile = AnsiConsole.Prompt(new TextPrompt<string>("[yellow]将“压缩包”拖至本窗口后，按回车键确认！[/]\r\n压缩包位置:")
+                            ArchiveFile = AnsiConsole.Prompt(new TextPrompt<string>($"{Language.AskArchivePath}")
                             .PromptStyle("dodgerblue1")
                             .Validate(path =>
                             {
-                                return File.Exists(path.Replace("\"", "")) ? ValidationResult.Success() : ValidationResult.Error("[red]没有找到文件，请重新输入[/]");
+                                return File.Exists(path.Replace("\"", "")) ? ValidationResult.Success() : ValidationResult.Error($"{Language.AskDictionaryPathError}");
                             })).Replace("\"", "");
                         }
                     }
@@ -815,7 +909,7 @@ namespace ArchivePasswordTestTool
                     {
                         if (ExtractorFile.Check())
                         {
-                            AnsiConsole.WriteLine($"{ArchiveFile} 。");
+                            AnsiConsole.WriteLine($"{ArchiveFile}{Language.NotEncryptedArchive}{Language.Period}");
                             IsEncryptedArchive = false;
                         }
                         else
@@ -831,7 +925,7 @@ namespace ArchivePasswordTestTool
                             }
                             catch (Exception)
                             {
-                                AnsiConsole.WriteLine($"无法读取加密压缩包内部结构数据，无法使用快速测试。");
+                                AnsiConsole.WriteLine($"{Language.FullEncryptedArchive}");
                             }
                         }
                     }
@@ -849,7 +943,7 @@ namespace ArchivePasswordTestTool
                         Dictionary Dictionary = new(Config.Dictionary);
                         DictionaryCount = Dictionary.Count;
 
-                        AnsiConsole.WriteLine($"字典内包含: {DictionaryCount} 条密码。");
+                        AnsiConsole.WriteLine($"{Language.Dictionary}{Language.Colon}{DictionaryCount}{Language.Password}{Language.Period}");
                         SentrySdk.AddBreadcrumb(
                             message: $"DictionaryCount {DictionaryCount}",
                             category: "Info",
@@ -900,21 +994,21 @@ namespace ArchivePasswordTestTool
                             
                             TestProgressBar.Increment(100);
                         });
-                        AnsiConsole.WriteLine(EncryptArchivePassword != null ? $"已找到解压密码: {EncryptArchivePassword}" : "没有找到正确的解压密码！");
-                        AnsiConsole.WriteLine($"测试耗时：{TimeSpanString(sw.Elapsed)}");
+                        AnsiConsole.WriteLine(EncryptArchivePassword != null ? $"{Language.CorrectPasswordFound}{Language.Colon}{EncryptArchivePassword}" : $"{Language.CorrectPasswordNotFound}{Language.Exclamation}");
+                        AnsiConsole.WriteLine($"{Language.TotalTime}{Language.Colon}{TimeSpanString(sw.Elapsed)}");
                     }
-                    if (AnsiConsole.Confirm("是否保存测试结果?", true))
+                    if (AnsiConsole.Confirm($"{Language.Whether}{Language.Save}{Language.TestResult}{Language.QuestionMark}", true))
                     {
-                        using (StreamWriter TestOut = new($"{ArchiveFile}[测试报告].txt", false))
+                        using (StreamWriter TestOut = new($"{ArchiveFile}[{Language.TestResult}].txt", false))
                         {
-                            TestOut.WriteLine("加密压缩包: " + ArchiveFile);
-                            TestOut.WriteLine("字典: " + Config.Dictionary);
-                            TestOut.WriteLine($"测试耗时：{TimeSpanString(sw.Elapsed)}");
-                            TestOut.WriteLine(EncryptArchivePassword != null ? $"解压密码: {EncryptArchivePassword}" : "没有找到正确的解压密码！");
+                            TestOut.WriteLine($"{Language.Archive}{Language.Colon}{ArchiveFile}");
+                            TestOut.WriteLine($"{Language.Dictionary}{Language.Colon}{Config.Dictionary}");
+                            TestOut.WriteLine($"{Language.TotalTime}{Language.Colon}{TimeSpanString(sw.Elapsed)}");
+                            TestOut.WriteLine(EncryptArchivePassword != null ? $"{Language.Password}{Language.Colon}{EncryptArchivePassword}" : $"{Language.CorrectPasswordNotFound}{Language.Exclamation}");
                         }
                         if (Environment.OSVersion.Platform.ToString().ToLowerInvariant().Contains("win"))
                         {
-                            Process.Start("explorer.exe", $"/select, \"{ArchiveFile}[测试报告].txt\"");
+                            Process.Start("explorer.exe", $"/select, \"{ArchiveFile}[{Language.TestResult}].txt\"");
                         }
                     }
                 }
