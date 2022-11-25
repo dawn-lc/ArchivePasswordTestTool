@@ -41,6 +41,648 @@ namespace ArchivePasswordTestTool
 
         }
 
+        public class LanguageData
+        {
+            private string? downloading;
+            public string Downloading {
+                get { return downloading ?? "正在下载"; }
+                set
+                {
+                    downloading = string.IsNullOrEmpty(value) ? "正在下载" : value;
+                }
+            }
+            private string? loadingConfig;
+            public string LoadingConfig
+            {
+                get
+                {
+                    return loadingConfig ?? "正在加载配置";
+                }
+                set
+                {
+                    loadingConfig = string.IsNullOrEmpty(value) ? "正在加载配置" : value;
+                }
+            }
+            private string? checkingUpgradeInfo;
+            public string CheckingUpgradeInfo
+            {
+                get
+                {
+                    return checkingUpgradeInfo ?? "正在检查版本信息";
+                }
+                set
+                {
+                    checkingUpgradeInfo = string.IsNullOrEmpty(value) ? "正在检查版本信息" : value;
+                }
+            }
+            private string? gettingLatestVersionInfo;
+            public string GettingLatestVersionInfo
+            {
+                get
+                {
+                    return gettingLatestVersionInfo ?? "正在获取新版本信息";
+                }
+                set
+                {
+                    gettingLatestVersionInfo = string.IsNullOrEmpty(value) ? "正在获取新版本信息" : value;
+                }
+            }
+            private string? savingConfig;
+            public string SavingConfig
+            {
+                get
+                {
+                    return savingConfig ?? "正在保存配置";
+                }
+                set
+                {
+                    savingConfig = string.IsNullOrEmpty(value) ? "正在保存配置" : value;
+                }
+            }
+            private string? checkingEnvironment;
+            public string CheckingEnvironment
+            {
+                get
+                {
+                    return checkingEnvironment ?? "正在检查运行环境 ";
+                }
+                set
+                {
+                    checkingEnvironment = string.IsNullOrEmpty(value) ? "正在检查运行环境 " : value;
+                }
+            }
+            private string? lastCheckUpgradeTime;
+            public string LastCheckUpgradeTime
+            {
+                get
+                {
+                    return lastCheckUpgradeTime ?? "上次检查更新";
+                }
+                set
+                {
+                    lastCheckUpgradeTime = string.IsNullOrEmpty(value) ? "上次检查更新" : value;
+                }
+            }
+            private string? checkUpdateFailed;
+            public string CheckUpdateFailed
+            {
+                get
+                {
+                    return checkUpdateFailed ?? "检查更新失败";
+                }
+                set
+                {
+                    checkUpdateFailed = string.IsNullOrEmpty(value) ? "检查更新失败" : value;
+                }
+            }
+            private string? checkNetworkStatus;
+            public string CheckNetworkStatus
+            {
+                get
+                {
+                    return checkNetworkStatus ?? "检查您的网络情况";
+                }
+                set
+                {
+                    checkNetworkStatus = string.IsNullOrEmpty(value) ? "检查您的网络情况" : value;
+                }
+            }
+            private string? downloadComplete;
+            public string DownloadComplete
+            {
+                get
+                {
+                    return downloadComplete ?? "下载完成";
+                }
+                set
+                {
+                    downloadComplete = string.IsNullOrEmpty(value) ? "下载完成" : value;
+                }
+            }
+            private string? downloadFailed;
+            public string DownloadFailed
+            {
+                get
+                {
+                    return downloadFailed ?? "下载失败";
+                }
+                set
+                {
+                    downloadFailed = string.IsNullOrEmpty(value) ? "下载失败" : value;
+                }
+            }
+            private string? consistency;
+            public string Consistency
+            {
+                get
+                {
+                    return consistency ?? "校验成功";
+                }
+                set
+                {
+                    consistency = string.IsNullOrEmpty(value) ? "校验成功" : value;
+                }
+            }
+            private string? inconsistency;
+            public string Inconsistency
+            {
+                get
+                {
+                    return inconsistency ?? "未通过校验";
+                }
+                set
+                {
+                    inconsistency = string.IsNullOrEmpty(value) ? "未通过校验" : value;
+                }
+            }
+            private string? mutex;
+            public string Mutex
+            {
+                get
+                {
+                    return mutex ?? "当前目录中存在正在运行的本程序, 如需多开请将本程序复制至其他文件夹后运行";
+                }
+                set
+                {
+                    mutex = string.IsNullOrEmpty(value) ? "当前目录中存在正在运行的本程序, 如需多开请将本程序复制至其他文件夹后运行" : value;
+                }
+            }
+            private string? nonLatestVersion;
+            public string NonLatestVersion
+            {
+                get
+                {
+                    return nonLatestVersion ?? "当前版本不是最新的, 请前往下载最新版本";
+                }
+                set
+                {
+                    nonLatestVersion = string.IsNullOrEmpty(value) ? "当前版本不是最新的, 请前往下载最新版本" : value;
+                }
+            }
+
+            private string? askDictionaryPath;
+            public string AskDictionaryPath
+            {
+                get { return askDictionaryPath ?? "[yellow]将“密码本”拖至本窗口后，按回车键确认！[/]\r\n密码本位置:"; }
+                set
+                {
+                    askDictionaryPath = string.IsNullOrEmpty(value) ? "[yellow]将“密码本”拖至本窗口后，按回车键确认！[/]\r\n密码本位置:" : value;
+                }
+            }
+            private string? askDictionaryPathError;
+            public string AskDictionaryPathError
+            {
+                get { return askDictionaryPathError ?? "[red]没有找到密码本，请重试！[/]"; }
+                set
+                {
+                    askDictionaryPathError = string.IsNullOrEmpty(value) ? "[red]没有找到密码本，请重试！[/]" : value;
+                }
+            }
+            private string? askArchivePath;
+            public string AskArchivePath
+            {
+                get { return askArchivePath ?? "[yellow]将“压缩包”拖至本窗口后，按回车键确认！[/]\r\n压缩包位置:"; }
+                set
+                {
+                    askArchivePath = string.IsNullOrEmpty(value) ? "[yellow]将“压缩包”拖至本窗口后，按回车键确认！[/]\r\n压缩包位置:" : value;
+                }
+            }
+            private string? askArchivePathError;
+            public string AskArchivePathError
+            {
+                get { return askArchivePathError ?? "[red]没有找到压缩包，请重试！[/]"; }
+                set
+                {
+                    askArchivePathError = string.IsNullOrEmpty(value) ? "[red]没有找到压缩包，请重试！[/]" : value;
+                }
+            }
+            private string? notEncryptedArchive;
+            public string NotEncryptedArchive
+            {
+                get { return notEncryptedArchive ?? "并不是一个加密压缩包"; }
+                set
+                {
+                    notEncryptedArchive = string.IsNullOrEmpty(value) ? "并不是一个加密压缩包" : value;
+                }
+            }
+            private string? fullEncryptedArchive;
+            public string FullEncryptedArchive
+            {
+                get { return fullEncryptedArchive ?? "无法读取加密压缩包内部结构数据，无法使用快速测试。"; }
+                set
+                {
+                    fullEncryptedArchive = string.IsNullOrEmpty(value) ? "无法读取加密压缩包内部结构数据，无法使用快速测试。" : value;
+                }
+            }
+            private string? testProgress;
+            public string TestProgress
+            {
+                get { return testProgress ?? "测试进度"; }
+                set
+                {
+                    testProgress = string.IsNullOrEmpty(value) ? "测试进度" : value;
+                }
+            }
+            private string? correctPasswordNotFound;
+            public string CorrectPasswordNotFound
+            {
+                get { return correctPasswordNotFound ?? "没有找到正确的解压密码"; }
+                set
+                {
+                    correctPasswordNotFound = string.IsNullOrEmpty(value) ? "没有找到正确的解压密码" : value;
+                }
+            }
+            private string? correctPasswordFound;
+            public string CorrectPasswordFound
+            {
+                get { return correctPasswordFound ?? "已找到解压密码"; }
+                set
+                {
+                    correctPasswordFound = string.IsNullOrEmpty(value) ? "已找到解压密码" : value;
+                }
+            }
+            private string? save;
+            public string Save
+            {
+                get { return save ?? "保存"; }
+                set
+                {
+                    save = string.IsNullOrEmpty(value) ? "保存" : value;
+                }
+            }
+            private string? testResult;
+            public string TestResult
+            {
+                get { return testResult ?? "测试报告"; }
+                set
+                {
+                    testResult = string.IsNullOrEmpty(value) ? "测试报告" : value;
+                }
+            }
+            private string? totalTime;
+            public string TotalTime
+            {
+                get { return totalTime ?? "总时长"; }
+                set
+                {
+                    totalTime = string.IsNullOrEmpty(value) ? "总时长" : value;
+                }
+            }
+            private string? archive;
+            public string Archive
+            {
+                get { return archive ?? "压缩包"; }
+                set
+                {
+                    archive = string.IsNullOrEmpty(value) ? "压缩包" : value;
+                }
+            }
+
+            private string? initialize;
+            public string Initialize
+            {
+                get
+                {
+                    return initialize ?? "初始化";
+                }
+                set
+                {
+                    initialize = string.IsNullOrEmpty(value) ? "初始化" : value;
+                }
+            }
+            private string? press;
+            public string Press
+            {
+                get
+                {
+                    return press ?? "按";
+                }
+                set
+                {
+                    press = string.IsNullOrEmpty(value) ? "按" : value;
+                }
+            }
+            private string? open;
+            public string Open
+            {
+                get
+                {
+                    return open ?? "打开";
+                }
+                set
+                {
+                    open = string.IsNullOrEmpty(value) ? "打开" : value;
+                }
+            }
+            private string? publishPage;
+            public string PublishPage
+            {
+                get
+                {
+                    return publishPage ?? "软件发布地址";
+                }
+                set
+                {
+                    publishPage = string.IsNullOrEmpty(value) ? "软件发布地址" : value;
+                }
+            }
+            private string? anykey;
+            public string Anykey
+            {
+                get
+                {
+                    return anykey ?? "任意键";
+                }
+                set
+                {
+                    anykey = string.IsNullOrEmpty(value) ? "任意键" : value;
+                }
+            }
+            private string? quit;
+            public string Quit
+            {
+                get
+                {
+                    return quit ?? "退出";
+                }
+                set
+                {
+                    quit = string.IsNullOrEmpty(value) ? "退出" : value;
+                }
+            }
+            private string? whether;
+            public string Whether
+            {
+                get
+                {
+                    return whether ?? "是否";
+                }
+                set
+                {
+                    whether = string.IsNullOrEmpty(value) ? "是否" : value;
+                }
+            }
+            private string? existence;
+            public string Existence
+            {
+                get
+                {
+                    return existence ?? "存在";
+                }
+                set
+                {
+                    existence = string.IsNullOrEmpty(value) ? "存在" : value;
+                }
+            }
+            private string? file;
+            public string File
+            {
+                get
+                {
+                    return file ?? "文件";
+                }
+                set
+                {
+                    file = string.IsNullOrEmpty(value) ? "文件" : value;
+                }
+            }
+            private string? directory;
+            public string Directory
+            {
+                get
+                {
+                    return directory ?? "目录";
+                }
+                set
+                {
+                    directory = string.IsNullOrEmpty(value) ? "目录" : value;
+                }
+            }
+            private string? fix;
+            public string Fix
+            {
+                get
+                {
+                    return fix ?? "修复";
+                }
+                set
+                {
+                    fix = string.IsNullOrEmpty(value) ? "修复" : value;
+                }
+            }
+            private string? please;
+            public string Please
+            {
+                get
+                {
+                    return please ?? "请";
+                }
+                set
+                {
+                    please = string.IsNullOrEmpty(value) ? "请" : value;
+                }
+            }
+            private string? restart;
+            public string Restart
+            {
+                get
+                {
+                    return restart ?? "重启";
+                }
+                set
+                {
+                    restart = string.IsNullOrEmpty(value) ? "重启" : value;
+                }
+            }
+            private string? program;
+            public string Program
+            {
+                get
+                {
+                    return program ?? "程序";
+                }
+                set
+                {
+                    program = string.IsNullOrEmpty(value) ? "程序" : value;
+                }
+            }
+            private string? finish;
+            public string Finish
+            {
+                get
+                {
+                    return finish ?? "完成";
+                }
+                set
+                {
+                    finish = string.IsNullOrEmpty(value) ? "完成" : value;
+                }
+            }
+            private string? update;
+            public string Update
+            {
+                get
+                {
+                    return update ?? "更新";
+                }
+                set
+                {
+                    update = string.IsNullOrEmpty(value) ? "更新" : value;
+                }
+            }
+            private string? status;
+            public string Status
+            {
+                get
+                {
+                    return status ?? "状态";
+                }
+                set
+                {
+                    status = string.IsNullOrEmpty(value) ? "状态" : value;
+                }
+            }
+            private string? dictionary;
+            public string Dictionary
+            {
+                get
+                {
+                    return dictionary ?? "字典";
+                }
+                set
+                {
+                    dictionary = string.IsNullOrEmpty(value) ? "字典" : value;
+                }
+            }
+            private string? password;
+            public string Password
+            {
+                get
+                {
+                    return password ?? "密码";
+                }
+                set
+                {
+                    password = string.IsNullOrEmpty(value) ? "密码" : value;
+                }
+            }
+            private string? to;
+            public string To
+            {
+                get
+                {
+                    return to ?? "以";
+                }
+                set
+                {
+                    to = string.IsNullOrEmpty(value) ? "以" : value;
+                }
+            }
+            private string? or;
+            public string Or
+            {
+                get
+                {
+                    return or ?? "或";
+                }
+                set
+                {
+                    or = string.IsNullOrEmpty(value) ? "或" : value;
+                }
+            }
+            private string? period;
+            /// <summary>
+            /// 句号
+            /// </summary>
+            public string Period
+            {
+                get
+                {
+                    return period ?? "。";
+                }
+                set
+                {
+                    period = string.IsNullOrEmpty(value) ? "。" : value;
+                }
+            }
+            private string? exclamation;
+            /// <summary>
+            /// 感叹号
+            /// </summary>
+            public string Exclamation
+            {
+                get
+                {
+                    return exclamation ?? "！";
+                }
+                set
+                {
+                    exclamation = string.IsNullOrEmpty(value) ? "！" : value;
+                }
+            }
+            private string? comma;
+            /// <summary>
+            /// 逗号
+            /// </summary>
+            public string Comma
+            {
+                get
+                {
+                    return comma ?? "，";
+                }
+                set
+                {
+                    comma = string.IsNullOrEmpty(value) ? "，" : value;
+                }
+            }
+            private string? ellipsis;
+            /// <summary>
+            /// 省略号
+            /// </summary>
+            public string Ellipsis
+            {
+                get
+                {
+                    return ellipsis ?? "...";
+                }
+                set
+                {
+                    ellipsis = string.IsNullOrEmpty(value) ? "..." : value;
+                }
+            }
+            private string? colon;
+            /// <summary>
+            /// 冒号
+            /// </summary>
+            public string Colon
+            {
+                get
+                {
+                    return colon ?? "：";
+                }
+                set
+                {
+                    colon = string.IsNullOrEmpty(value) ? "：" : value;
+                }
+            }
+            private string? questionMark;
+            /// <summary>
+            /// 问号
+            /// </summary>
+            public string QuestionMark
+            {
+                get
+                {
+                    return questionMark ?? "？";
+                }
+                set
+                {
+                    questionMark = string.IsNullOrEmpty(value) ? "？" : value;
+                }
+            }
+            
+        }
+
         private static async Task Initialization(StatusContext ctx)
         {
             ctx.Status("加载配置文件...");
@@ -48,8 +690,25 @@ namespace ArchivePasswordTestTool
             Log($"上次检查更新:{Config.LastCheckUpgrade.ToLocalTime()}");
             ctx.Status("检查版本信息...");
             if (Config.LastCheckUpgrade < (DateTime.Now - new TimeSpan(1, 0, 0, 0)))
+            if (!Directory.Exists("lang"))
             {
-                ctx.Status("正在获取最新版本信息...");
+                Directory.CreateDirectory("lang");
+            }
+            if (File.Exists($"lang/{CultureInfo.CurrentCulture.Name}.json"))
+            {
+                Language = await DeserializeJSONFileAsync<LanguageData>($"lang/{CultureInfo.CurrentCulture.Name}.json");
+            }
+            else
+            {
+                File.WriteAllText($"lang/{CultureInfo.CurrentCulture.Name}.json", JsonSerializer.Serialize(Language));
+            }
+            ctx.Status($"{Language.LoadingConfig}{Language.Ellipsis}");
+            Config = await DeserializeJSONFileAsync<ConfigData>("config.json");
+            Log($"{Language.LastCheckUpgradeTime}{Language.Colon}{Config.CheckUpgrade.ToLocalTime()}");
+            ctx.Status($"{Language.CheckingUpgradeInfo}{Language.Ellipsis}");
+            if (Config.CheckUpgrade < (DateTime.Now - new TimeSpan(1, 0, 0, 0)))
+            {
+                ctx.Status($"{Language.GettingLatestVersionInfo}{Language.Ellipsis}");
                 try
                 {
                     HttpResponseMessage Info = await HTTP.GetAsync(new Uri($"https://api.github.com/repos/{Developer}/{AppName}/releases/latest"));
@@ -90,7 +749,7 @@ namespace ArchivePasswordTestTool
                     }
                 }
             }
-            ctx.Status("正在检查运行环境...");
+            ctx.Status($"{Language.CheckingEnvironment}{Language.Ellipsis}");
             if (!Directory.Exists("lib"))
             {
                 Directory.CreateDirectory("lib");
@@ -102,23 +761,23 @@ namespace ArchivePasswordTestTool
                     using var file = File.OpenRead($"{item.Directory}{item.Name}");
                     if (ComparisonFileHash(file, Convert.FromBase64String(item.Hash!)))
                     {
-                        Log($"{item.Name} 校验成功 ");
+                        Log($"{item.Name} {Language.Consistency}");
                         item.Exists = true;
                         continue;
                     }
                 }
-                Warn($"{item.Name} 运行库缺少或损坏! ");
+                Warn($"{item.Name} {Language.Inconsistency}");
                 item.Exists = false;
                 Config.LastCheckUpgrade = new();
             }
-            ctx.Status("正在保存配置文件...");
+            ctx.Status($"{Language.SavingConfig}{Language.Ellipsis}");
             File.WriteAllText($"config.json", JsonSerializer.Serialize(Config));
         }
         static async Task Main(string[] args)
         {
             if (Process.GetProcessesByName(AppName).Where(p => p.MainModule!.FileName != null && p.MainModule.FileName == Environment.ProcessPath).Count() > 1)
             {
-                Warn("当前目录中存在正在运行的本程序，如需多开请将本程序复制至其他文件夹后运行。(按任意键退出...)");
+                Warn($"{Language.Mutex}({Language.Press}{Language.Anykey}{Language.Quit}{Language.Ellipsis})");
                 Console.ReadKey(true);
                 Environment.Exit(0);
             }
@@ -152,7 +811,7 @@ namespace ArchivePasswordTestTool
                 Stopwatch sw = new();
                 try
                 {
-                    await AnsiConsole.Status().StartAsync("初始化...", async ctx =>
+                    await AnsiConsole.Status().StartAsync($"{Language.Initialize}{Language.Ellipsis}", async ctx =>
                     {
                         await Initialization(ctx);
                     });
@@ -164,8 +823,8 @@ namespace ArchivePasswordTestTool
 
                     if (Config!.NeedUpdate)
                     {
-                        Warn("当前版本不是最新的，请前往下载最新版本。");
-                        if (AnsiConsole.Confirm("是否打开软件发布页?", true))
+                        Warn($"{Language.NonLatestVersion}");
+                        if (AnsiConsole.Confirm($"{Language.Whether}{Language.Open}{Language.PublishPage}?", true))
                         {
                             Process.Start(new ProcessStartInfo(AppHomePage) { UseShellExecute = true });
                         }
@@ -173,7 +832,7 @@ namespace ArchivePasswordTestTool
                     }
                     if (Config!.Upgrade.Any())
                     {
-                        Warn("存在需要更新或修复的必要文件，开始下载...");
+                        Warn($"{Language.Existence}{Language.File}{Language.Inconsistency}, {Language.Downloading}{Language.Fix}{Language.Ellipsis}");
                         await AnsiConsole.Progress().AutoClear(true).HideCompleted(true).Columns(new ProgressColumn[] {
                             new TaskDescriptionColumn(),
                             new ProgressBarColumn(),
@@ -183,11 +842,11 @@ namespace ArchivePasswordTestTool
                         {
                             await Parallel.ForEachAsync(Config.Upgrade.Where(l => !l.Exists), async (item, f) =>
                             {
-                                Log($"{item.Name} 开始下载");
-                                await HTTP.DownloadAsync(await HTTP.GetStreamAsync(new Uri(item.DownloadUrl!)), $"{item.Directory}{item.Name}", ctx.AddTask($"下载 {item.Name}"), item.Name);
+                                Log($"{item.Name} {Language.Downloading}");
+                                await HTTP.DownloadAsync(await HTTP.GetStreamAsync(new Uri(item.DownloadUrl!)), $"lib/{item.Name}", ctx.AddTask($"{Language.Downloading} {item.Name}"), item.Name);
                             });
                         });
-                        if (AnsiConsole.Confirm("下载完成，请重启软件以完成更新或修复。", true))
+                        if (AnsiConsole.Confirm($"{Language.DownloadComplete}, {Language.Please}{Language.Restart}{Language.Program}{Language.To}{Language.Finish}{Language.Update}{Language.Or}{Language.Fix}{Language.Period}", true))
                         {
                             Process.Start(Environment.ProcessPath!);
                         }
@@ -212,12 +871,11 @@ namespace ArchivePasswordTestTool
                         }
                         else
                         {
-                            Config.Dictionary = AnsiConsole.Prompt(new TextPrompt<string>("[yellow]将“密码本”拖至本窗口后，按回车键确认！[/]\r\n密码本位置:")
+                            Config.Dictionary = AnsiConsole.Prompt(new TextPrompt<string>($"{Language.AskDictionaryPath}")
                             .PromptStyle("dodgerblue1")
-                            .ValidationErrorMessage("[red]这甚至不是一个字符串! 你是怎么做到的?[/]")
                             .Validate(path =>
                             {
-                                return File.Exists(path.Replace("\"", "")) ? ValidationResult.Success() : ValidationResult.Error("[red]没有找到文件，请重新输入[/]");
+                                return File.Exists(path.Replace("\"", "")) ? ValidationResult.Success() : ValidationResult.Error($"{Language.AskDictionaryPathError}");
                             })).Replace("\"", "");
                         }
                     }
@@ -241,12 +899,11 @@ namespace ArchivePasswordTestTool
                         }
                         else
                         {
-                            ArchiveFile = AnsiConsole.Prompt(new TextPrompt<string>("[yellow]将“压缩包”拖至本窗口后，按回车键确认！[/]\r\n压缩包位置:")
+                            ArchiveFile = AnsiConsole.Prompt(new TextPrompt<string>($"{Language.AskArchivePath}")
                             .PromptStyle("dodgerblue1")
-                            .ValidationErrorMessage("[red]这甚至不是一个字符串! 你是怎么做到的?[/]")
                             .Validate(path =>
                             {
-                                return File.Exists(path.Replace("\"", "")) ? ValidationResult.Success() : ValidationResult.Error("[red]没有找到文件，请重新输入[/]");
+                                return File.Exists(path.Replace("\"", "")) ? ValidationResult.Success() : ValidationResult.Error($"{Language.AskDictionaryPathError}");
                             })).Replace("\"", "");
                         }
                     }
