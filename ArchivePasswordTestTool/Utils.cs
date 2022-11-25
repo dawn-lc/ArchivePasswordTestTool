@@ -6,6 +6,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using static ArchivePasswordTestTool.Program;
 using static ArchivePasswordTestTool.Utils.Util;
 
 namespace ArchivePasswordTestTool
@@ -149,18 +150,21 @@ namespace ArchivePasswordTestTool
             {
                 return StartupParametersCheck(new List<string>(Parameters), Flag);
             }
+
             public static T GetParameter<T>(List<string> Parameters, string Flag, T DefaultParameter)
             {
                 return (T)Convert.ChangeType(Parameters[Parameters.IndexOf($"-{Flag}") + 1], typeof(T)) ?? DefaultParameter;
             }
             public static T GetParameter<T>(string[] Parameters, string Flag, T DefaultParameter)
             {
-                return GetParameter<T>(new List<string>(Parameters), Flag, DefaultParameter);
+                return GetParameter(new List<string>(Parameters), Flag, DefaultParameter);
             }
+
             public static T? GetParameter<T>(List<string> Parameters, string Flag)
             {
                 return (T)Convert.ChangeType(Parameters[Parameters.IndexOf($"-{Flag}") + 1], typeof(T));
             }
+
             public static T? GetParameter<T>(string[] Parameters, string Flag)
             {
                 return GetParameter<T>(new List<string>(Parameters), Flag);
@@ -185,6 +189,10 @@ namespace ArchivePasswordTestTool
                     public string? UpdatedAt { get; set; }
                     [JsonPropertyName("browser_download_url")]
                     public string? DownloadUrl { get; set; }
+                    public Asset()
+                    {
+
+                    }
                 }
 
                 [JsonPropertyName("tag_name")]
@@ -203,13 +211,17 @@ namespace ArchivePasswordTestTool
                 public List<Asset>? Assets { get; set; }
                 [JsonPropertyName("body")]
                 public string? Body { get; set; }
+                public ReleasesInfo()
+                {
+
+                }
             }
             /// <summary>
             /// 对比版本号
             /// </summary>
-            /// <param name="sourceVersion">源版本</param>
+            /// <param name="sourceVersion">目前版本</param>
             /// <param name="targetVersion">目标版本</param>
-            /// <returns><see langword="1"/> 目标版本类型较高<br /><see langword="0"/> 两者版本类型一致<br /><see langword="-1"/> 源版本类型较高</returns> 
+            /// <returns><see langword="1"/> 目标版本号较高<br /><see langword="0"/> 两者版本号一致<br /><see langword="-1"/> 目前版本号较高</returns> 
             /// <exception cref="ArgumentException"></exception>
             private static int ComparisonVersion(int[] sourceVersion, int[] targetVersion)
             {
@@ -240,9 +252,9 @@ namespace ArchivePasswordTestTool
             /// <summary>
             /// 对比版本类型
             /// </summary>
-            /// <param name="sourceVersion">源版本类型</param>
+            /// <param name="sourceVersion">目前版本类型</param>
             /// <param name="targetVersion">目标版本类型</param>
-            /// <returns><see langword="1"/> 目标版本类型较高<br /><see langword="0"/> 两者版本类型一致<br /><see langword="-1"/> 源版本类型较高</returns> 
+            /// <returns><see langword="1"/> 目标版本类型较高<br /><see langword="0"/> 两者版本类型一致<br /><see langword="-1"/> 目前版本类型较高</returns> 
             /// <exception cref="ArgumentException"></exception>
             private static int ComparisonVersionType(string sourceVersionType, string targetVersionType)
             {
@@ -294,6 +306,14 @@ namespace ArchivePasswordTestTool
                     throw new ArgumentException("版本类型无法识别");
                 }
             }
+            /// <summary>
+            /// 对比目前版本号与目标版本号
+            /// </summary>
+            /// <param name="LatestInfo">目标版本信息</param>
+            /// <param name="version">目前版本号</param>
+            /// <param name="versionType">目前版本类型</param>
+            /// <returns><see langword="true"/> 目前版本较新<br /><see langword="false"/> 目标版本较新</returns>
+            /// <exception cref="Exception"></exception>
             public static bool CheckUpgrade(ReleasesInfo LatestInfo, int[] version, string versionType)
             {
                 try
@@ -315,15 +335,15 @@ namespace ArchivePasswordTestTool
                                 case 1:
                                     break;
                                 case 0:
-                                    return true;
+                                    return false;
                                 case -1:
-                                    return true;
+                                    return false;
                             }
                             break;
                         case -1:
-                            return true;
+                            return false;
                     }
-                    return false;
+                    return true;
                 }
                 catch (Exception)
                 {
