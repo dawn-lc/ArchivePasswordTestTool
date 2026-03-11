@@ -1,0 +1,7 @@
+﻿[*.cs]
+
+# CA1416: 验证平台兼容性
+dotnet_diagnostic.CA1416.severity = silent
+
+# Default severity for analyzer diagnostics with category 'Interoperability'
+dotnet_analyzer_diagnostic.category-Interoperability.severity = silent
