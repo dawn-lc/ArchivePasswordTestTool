@@ -17,8 +17,36 @@ namespace ArchivePasswordTestTool
     /// </summary>
     internal static class InteractivePrompts
     {
-        /// <summary>拖放粘贴完成后的空闲等待毫秒数：超时无新按键即认为粘贴结束并验收</summary>
+        /// <summary>拖放粘贴的空闲阈值：超过该时长无新按键即认为粘贴结束并尝试自动验收</summary>
         private const int PasteIdleMilliseconds = 250;
+
+        /// <summary>判定"快速连续到达"（拖放/粘贴）的最大按键间隔；手动打字通常远大于此值</summary>
+        private const int BurstGapMilliseconds = 60;
+
+        /// <summary>
+        /// 突发输入判定（纯函数，便于测试）：
+        /// 相邻字符间隔 ≤ <see cref="BurstGapMilliseconds"/> → 认为属于拖放/粘贴字符流（粘性，
+        /// 避免粘贴末尾偶发调度抖动导致整段识别失败）；
+        /// 间隔超过 <see cref="PasteIdleMilliseconds"/> → 视为用户已停顿后重新输入，复位为手动打字；
+        /// 介于两者之间 → 保持原判定。
+        /// </summary>
+        internal static bool UpdateBurstState(bool burstDetected, long gapMilliseconds)
+        {
+            if (gapMilliseconds <= BurstGapMilliseconds)
+            {
+                return true;
+            }
+
+            if (gapMilliseconds > PasteIdleMilliseconds)
+            {
+                return false;
+            }
+
+            return burstDetected;
+        }
+
+        /// <summary>等待输入时的轮询间隔，避免忙等</summary>
+        private const int IdlePollMilliseconds = 10;
 
         /// <summary>
         /// 报错后的退出确认是否必要：输入/输出被重定向（管道/自动化）→ 否；
@@ -140,10 +168,11 @@ namespace ArchivePasswordTestTool
 
         /// <summary>
         /// 真实终端的路径输入：逐键读取（无需回车）。
-        /// 拖放粘贴是一串快速到达的字符——短时空闲后若已有缓冲则尝试验收：
-        /// 文件存在 → 立即接受（拖入即开始）；不存在 → 静默继续等待（不丢已输入内容，
-        /// 避免手打前缀恰好匹配到已有文件导致提前提交后反而无需继续输入）；
-        /// 回车 → 强制验收（不存在时原位报错重问）；退格 → 删除末字符。
+        /// 拖放/粘贴是一串**快速连续**到达的字符（间隔远小于手动打字）：
+        /// 检测到突发输入后，等按键流停止（空闲超阈值）再尝试自动验收；
+        /// 文件存在 → 立即接受（拖入即开始）；不存在 → 回到输入状态并提示一次。
+        /// 手动打字不触发自动验收（避免打到一半误报错），回车才验收。
+        /// 回车 → 强制验收（不存在时换行报错并重印提示）；退格 → 删除末字符。
         /// </summary>
         private static string AskByKeys(string title)
         {
@@ -151,6 +180,8 @@ namespace ArchivePasswordTestTool
             var buffer = new StringBuilder();
             var lastAlerted = string.Empty;
             var focusRestored = false;
+            long lastKeyTick = 0;          // 上一个字符到达时刻（Environment.TickCount64）
+            bool burstDetected = false;    // 当前输入是否来自拖放/粘贴的快速字符流
 
             while (true)
             {
@@ -170,50 +201,76 @@ namespace ArchivePasswordTestTool
                         focusRestored = true;
                     }
 
-                    switch (key.Key)
+                    if (key.Key == ConsoleKey.Enter)
                     {
-                        case ConsoleKey.Enter:
-                            {
-                                var candidate = Normalize(buffer.ToString());
-                                if (File.Exists(candidate))
-                                {
-                                    Console.WriteLine();
-                                    return candidate;
-                                }
+                        var candidate = Normalize(buffer.ToString());
+                        if (File.Exists(candidate))
+                        {
+                            Console.WriteLine();
+                            return candidate;
+                        }
 
-                                AlertInvalid(candidate, ref lastAlerted);
-                                Console.WriteLine();
-                                AnsiConsole.Markup(title);
-                                buffer.Clear();
-                                continue;
-                            }
-                        case ConsoleKey.Backspace:
-                            if (buffer.Length > 0)
-                            {
-                                buffer.Length -= 1;
-                                Console.Write("\b \b");
-                            }
-                            continue;
-                        default:
-                            if (!char.IsControl(key.KeyChar))
-                            {
-                                buffer.Append(key.KeyChar);
-                                Console.Write(key.KeyChar);
-                            }
-                            continue;
+                        Console.WriteLine();
+
+                        // 空输入直接重印提示，不报错
+                        if (candidate.Length > 0)
+                        {
+                            AlertInvalid(candidate, inputKept: false, ref lastAlerted);
+                        }
+
+                        AnsiConsole.Markup(title);
+                        buffer.Clear();
+                        burstDetected = false;
+                        lastKeyTick = 0;
+                        continue;
                     }
+
+                    if (key.Key == ConsoleKey.Backspace)
+                    {
+                        if (buffer.Length > 0)
+                        {
+                            buffer.Length -= 1;
+                            Console.Write("\b \b");
+                        }
+                        lastKeyTick = 0;
+                        burstDetected = false;
+                        continue;
+                    }
+
+                    if (!char.IsControl(key.KeyChar))
+                    {
+                        long now = Environment.TickCount64;
+                        long gap = lastKeyTick == 0 ? long.MaxValue : now - lastKeyTick;
+
+                        burstDetected = UpdateBurstState(burstDetected, gap);
+
+                        lastKeyTick = now;
+                        buffer.Append(key.KeyChar);
+                        Console.Write(key.KeyChar);
+                    }
+
+                    // 逐个处理完当前可读按键后再回轮询，保证打字时字符零延迟回显
+                    continue;
                 }
 
                 if (buffer.Length == 0)
                 {
-                    Thread.Sleep(50);
+                    Thread.Sleep(IdlePollMilliseconds);
                     continue;
                 }
 
-                // 粘贴完成启发：无新按键到达且缓冲非空 → 短暂等待后尝试自动验收
+                // 仅对拖放/粘贴产生的输入做"空闲即验收"；
+                // 手动打字必须回车确认，避免打字中途停顿被误判为完整路径
+                if (!burstDetected)
+                {
+                    Thread.Sleep(IdlePollMilliseconds);
+                    continue;
+                }
+
                 Thread.Sleep(PasteIdleMilliseconds);
                 if (Console.KeyAvailable)
                 {
+                    // 仍有后续字符，说明突发流未结束
                     continue;
                 }
 
@@ -224,14 +281,26 @@ namespace ArchivePasswordTestTool
                     return idleCandidate;
                 }
 
-                // 无效路径不自动清空（手打过程中可能还没输完）；换内容后提示一次
-                AlertInvalid(idleCandidate, ref lastAlerted);
+                // 拖放内容不是有效文件：换行提示并原位重印，输入内容保留供继续编辑
+                Console.WriteLine();
+                AlertInvalid(idleCandidate, inputKept: true, ref lastAlerted);
+                AnsiConsole.Markup(title);
+
+                // 保留的缓冲内容必须重新回显，否则屏幕显示与实际输入不一致
+                Console.Write(buffer.ToString());
+                burstDetected = false;
+                lastKeyTick = 0;
             }
         }
 
         private static string Normalize(string raw) => raw.Replace("\"", "").Trim();
 
-        private static void AlertInvalid(string candidate, ref string lastAlerted)
+        /// <summary>
+        /// 输出一次无效路径提示（同一路径只提示一次）。
+        /// <paramref name="inputKept"/> 为 true 时追加"输入已保留"说明
+        /// （仅用于保留缓冲区的拖放场景，回车重试已清空缓冲则不追加）
+        /// </summary>
+        private static void AlertInvalid(string candidate, bool inputKept, ref string lastAlerted)
         {
             if (candidate == lastAlerted)
             {
@@ -239,7 +308,13 @@ namespace ArchivePasswordTestTool
             }
 
             lastAlerted = candidate;
-            AnsiConsole.MarkupLine($"[red]{Resources.InteractiveFileNotFound}[/] [grey]{Resources.InteractiveInputKept}[/]");
+            string message = $"[red]{Resources.InteractiveFileNotFound}[/]";
+            if (inputKept)
+            {
+                message += $" [grey]{Resources.InteractiveInputKept}[/]";
+            }
+
+            AnsiConsole.MarkupLine(message);
         }
 
         /// <summary>

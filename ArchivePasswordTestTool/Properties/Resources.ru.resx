@@ -275,11 +275,11 @@
     <value>Онлайн-сервис ещё не настроен (измените OnlineService.DefaultServiceUrl или укажите -Api).</value>
   </data>
   <data name="InteractiveDictionaryPrompt" xml:space="preserve">
-    <value>[bold cyan]Перетащите словарь паролей в это окно.[/][grey] (или введите путь и нажмите Enter)[/]
+    <value>[bold cyan]Перетащите словарь паролей в это окно.[/]
 [dodgerblue1]Путь к словарю: [/]</value>
   </data>
   <data name="InteractiveArchivePrompt" xml:space="preserve">
-    <value>[bold cyan]Перетащите архив в это окно.[/][grey] (или введите путь и нажмите Enter)[/]
+    <value>[bold cyan]Перетащите архив в это окно.[/]
 [dodgerblue1]Путь к архиву: [/]</value>
   </data>
   <data name="InteractiveFileNotFound" xml:space="preserve">
@@ -289,6 +289,12 @@
     <value>Нажмите любую клавишу для выхода.</value>
   </data>
   <data name="InteractiveInputKept" xml:space="preserve">
-    <value>Введённый текст сохранён; продолжайте ввод или нажмите Enter для повторной попытки.</value>
+    <value>Содержимое сохранено.</value>
+  </data>
+  <data name="UpgradeAvailable" xml:space="preserve">
+    <value>Доступна новая версия: {0}</value>
+  </data>
+  <data name="UpgradeOpenReleasesPrompt" xml:space="preserve">
+    <value>Открыть страницу релизов?</value>
   </data>
 </root>

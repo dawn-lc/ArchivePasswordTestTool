@@ -131,6 +131,14 @@ namespace ArchivePasswordTestTool
             AnsiConsole.MarkupLine($"[red]{Escape(message)}[/]");
         }
 
+        /// <summary>
+        /// 黄色警告信息（转义后输出）
+        /// </summary>
+        public static void WriteWarning(string message)
+        {
+            AnsiConsole.MarkupLine($"[yellow]{Escape(message)}[/]");
+        }
+
         private static void AddRow(Grid grid, string label, string value)
         {
             grid.AddRow($"[grey]{Escape(label)}[/]", $"[white]{Escape(value)}[/]");

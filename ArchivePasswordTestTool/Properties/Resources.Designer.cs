@@ -687,13 +687,35 @@ namespace ArchivePasswordTestTool.Properties
         }
 
         /// <summary>
-        ///   查找类似 Your input is kept; keep typing or press Enter to retry. 的本地化字符串。
+        ///   查找类似 Content kept. 的本地化字符串。
         /// </summary>
         public static string InteractiveInputKept
         {
             get
             {
                 return ResourceManager.GetString("InteractiveInputKept", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   查找类似 New version available: {0} 的本地化字符串。
+        /// </summary>
+        public static string UpgradeAvailable
+        {
+            get
+            {
+                return ResourceManager.GetString("UpgradeAvailable", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   查找类似 Open the releases page? 的本地化字符串。
+        /// </summary>
+        public static string UpgradeOpenReleasesPrompt
+        {
+            get
+            {
+                return ResourceManager.GetString("UpgradeOpenReleasesPrompt", resourceCulture);
             }
         }
     }

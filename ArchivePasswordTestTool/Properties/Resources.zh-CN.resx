@@ -275,11 +275,11 @@
     <value>在线服务地址尚未配置（修改 OnlineService.DefaultServiceUrl 或使用 -Api 指定）。</value>
   </data>
   <data name="InteractiveDictionaryPrompt" xml:space="preserve">
-    <value>[bold cyan]请将“密码本”拖入本窗口！[/][grey]（或手动输入路径，回车确认）[/]
+    <value>[bold cyan]请将“密码本”拖入本窗口！[/]
 [dodgerblue1]密码本位置: [/]</value>
   </data>
   <data name="InteractiveArchivePrompt" xml:space="preserve">
-    <value>[bold cyan]请将“压缩包”拖入本窗口！[/][grey]（或手动输入路径，回车确认）[/]
+    <value>[bold cyan]请将“压缩包”拖入本窗口！[/]
 [dodgerblue1]压缩包位置: [/]</value>
   </data>
   <data name="InteractiveFileNotFound" xml:space="preserve">
@@ -289,6 +289,12 @@
     <value>按任意键退出。</value>
   </data>
   <data name="InteractiveInputKept" xml:space="preserve">
-    <value>已保留输入内容，可继续输入或按回车重试。</value>
+    <value>内容已保留。</value>
+  </data>
+  <data name="UpgradeAvailable" xml:space="preserve">
+    <value>发现新版本：{0}</value>
+  </data>
+  <data name="UpgradeOpenReleasesPrompt" xml:space="preserve">
+    <value>是否打开发布页？</value>
   </data>
 </root>

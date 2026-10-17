@@ -42,6 +42,8 @@ namespace ArchivePasswordTestTool
                 }
                 Ui.WriteHeader(Program.Version);
 
+                Upgrade.CheckForUpdate();
+
                 var options = Options.Parse(args);
                 archivePath = options.ArchivePath;
                 dictionaryPath = options.DictionaryPath;

@@ -9,6 +9,9 @@
     {
         public static readonly int[] Version = [2, 0, 0];
 
+        /// <summary>版本类型，与 GitHub Release tag 的 "x.y.z-Type" 后缀对应（更新检查语义见 Upgrade）</summary>
+        public const string VersionType = "Release";
+
         static int Main(string[] args)
         {
             return Instance.Execute(args, () =>
