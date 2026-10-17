@@ -121,7 +121,16 @@
     <value>ArchivePasswordTestTool</value>
   </data>
   <data name="SevenZipDllPathRequired" xml:space="preserve">
-    <value>请提供7z.dll的路径！</value>
+    <value>未找到 7z.dll（7-Zip 未安装或文件缺失）。</value>
+  </data>
+  <data name="SevenZipDownloadHint" xml:space="preserve">
+    <value>请从以下地址下载并安装 7-Zip：{0}</value>
+  </data>
+  <data name="SevenZipOpenBrowserPrompt" xml:space="preserve">
+    <value>是否在浏览器中打开下载页面？</value>
+  </data>
+  <data name="OpenBrowserFailed" xml:space="preserve">
+    <value>打开浏览器失败：{0}</value>
   </data>
   <data name="SevenZipDllNotFound" xml:space="preserve">
     <value>未找到7z.dll: {0}
@@ -142,17 +151,8 @@
   <data name="UsingSpecifiedSevenZipDll" xml:space="preserve">
     <value>使用指定的7z.dll: {0}</value>
   </data>
-  <data name="SevenZipDllLoadedSuccessfully" xml:space="preserve">
-    <value>成功加载7zip</value>
-  </data>
   <data name="AnalyzingArchiveInformation" xml:space="preserve">
     <value>正在分析压缩包信息...</value>
-  </data>
-  <data name="ArchiveInformation" xml:space="preserve">
-    <value>压缩包信息: 格式={0}, 文件数={1}, 完全加密={2}, 支持快速测试={3}</value>
-  </data>
-  <data name="DictionaryPasswordCount" xml:space="preserve">
-    <value>当前使用的密码字典包含 {0} 个密码。</value>
   </data>
   <data name="FullyEncryptedArchiveWarning" xml:space="preserve">
     <value>注意：压缩包完全加密，无法使用快速测试！</value>
@@ -165,9 +165,6 @@
   </data>
   <data name="PasswordNotFound" xml:space="preserve">
     <value>未找到正确的解压密码！</value>
-  </data>
-  <data name="TestCompletedWithTime" xml:space="preserve">
-    <value>测试完成，耗时 {0}</value>
   </data>
   <data name="ArchiveNotEncrypted" xml:space="preserve">
     <value>{0} 不是加密的压缩包。</value>
@@ -201,5 +198,97 @@
   </data>
   <data name="Developer" xml:space="preserve">
     <value>dawn-lc</value>
+  </data>
+  <data name="InfoTitle" xml:space="preserve">
+    <value>压缩包信息</value>
+  </data>
+  <data name="InfoArchive" xml:space="preserve">
+    <value>压缩文件</value>
+  </data>
+  <data name="InfoFormat" xml:space="preserve">
+    <value>格式</value>
+  </data>
+  <data name="InfoFiles" xml:space="preserve">
+    <value>文件数量</value>
+  </data>
+  <data name="InfoEncryption" xml:space="preserve">
+    <value>加密状态</value>
+  </data>
+  <data name="InfoQuickTest" xml:space="preserve">
+    <value>快速测试</value>
+  </data>
+  <data name="InfoHash" xml:space="preserve">
+    <value>哈希值</value>
+  </data>
+  <data name="InfoDictionary" xml:space="preserve">
+    <value>密码字典</value>
+  </data>
+  <data name="InfoPasswords" xml:space="preserve">
+    <value>密码数量</value>
+  </data>
+  <data name="InfoParallelism" xml:space="preserve">
+    <value>并行度</value>
+  </data>
+  <data name="ValueYes" xml:space="preserve">
+    <value>是</value>
+  </data>
+  <data name="ValueNo" xml:space="preserve">
+    <value>否</value>
+  </data>
+  <data name="ValueHeaderEncryption" xml:space="preserve">
+    <value>Header 加密（完全加密）</value>
+  </data>
+  <data name="ResultElapsed" xml:space="preserve">
+    <value>耗时</value>
+  </data>
+  <data name="ResultTested" xml:space="preserve">
+    <value>已测试</value>
+  </data>
+  <data name="ResultSpeed" xml:space="preserve">
+    <value>速度</value>
+  </data>
+  <data name="ResultPwPerSec" xml:space="preserve">
+    <value>{0} 个/秒</value>
+  </data>
+  <data name="OnlineQueryRequesting" xml:space="preserve">
+    <value>正在向在线服务请求该压缩包哈希对应的共享密码（{0}）...</value>
+  </data>
+  <data name="OnlineQueryReceived" xml:space="preserve">
+    <value>已获取在线共享密码，将优先测试。</value>
+  </data>
+  <data name="OnlineQueryEmpty" xml:space="preserve">
+    <value>在线服务暂无该压缩包的密码记录。</value>
+  </data>
+  <data name="OnlineQueryFailed" xml:space="preserve">
+    <value>在线密码查询失败：{0}</value>
+  </data>
+  <data name="OnlineReportSending" xml:space="preserve">
+    <value>正在回传密码到在线服务...</value>
+  </data>
+  <data name="OnlineReportDone" xml:space="preserve">
+    <value>密码已回传，感谢共享。</value>
+  </data>
+  <data name="OnlineReportFailed" xml:space="preserve">
+    <value>密码回传失败：{0}</value>
+  </data>
+  <data name="OnlineNotConfigured" xml:space="preserve">
+    <value>在线服务地址尚未配置（修改 OnlineService.DefaultServiceUrl 或使用 -Api 指定）。</value>
+  </data>
+  <data name="InteractiveDictionaryPrompt" xml:space="preserve">
+    <value>[bold cyan]请将“密码本”拖入本窗口！[/][grey]（或手动输入路径，回车确认）[/]
+[dodgerblue1]密码本位置: [/]</value>
+  </data>
+  <data name="InteractiveArchivePrompt" xml:space="preserve">
+    <value>[bold cyan]请将“压缩包”拖入本窗口！[/][grey]（或手动输入路径，回车确认）[/]
+[dodgerblue1]压缩包位置: [/]</value>
+  </data>
+  <data name="InteractiveFileNotFound" xml:space="preserve">
+    <value>没有找到文件，请重新输入。</value>
+  </data>
+  <data name="InteractivePressAnyKeyToExit" xml:space="preserve">
+    <value>按任意键退出。</value>
+  </data>
+  <data name="InteractiveInputKept" xml:space="preserve">
+    <value>已保留输入内容，可继续输入或按回车重试。</value>
   </data>
 </root>
