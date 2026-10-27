@@ -32,13 +32,15 @@ namespace ArchivePasswordTestTool
         /// 代价是服务器返回默认站点证书导致主机名必然不匹配——仅豁免该错误，
         /// 证书链有效性与有效期仍严格校验。
         /// </summary>
-        public static HttpClient CreateClient(TimeSpan timeout)
+        /// <param name="timeout">整体超时（含传输）</param>
+        /// <param name="connectTimeout">建连/握手超时；不指定则与 <paramref name="timeout"/> 相同</param>
+        public static HttpClient CreateClient(TimeSpan timeout, TimeSpan? connectTimeout = null)
         {
             var handler = new SocketsHttpHandler
             {
                 AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate,
                 AllowAutoRedirect = true,
-                ConnectTimeout = timeout,
+                ConnectTimeout = connectTimeout ?? timeout,
                 SslOptions = new SslClientAuthenticationOptions
                 {
                     // 空 TargetHost：SslStream 客户端不再发送 SNI 扩展（防按域名嗅探阻断）
@@ -52,13 +54,13 @@ namespace ArchivePasswordTestTool
         }
 
         /// <summary>创建标准 TLS 客户端（带 SNI，完整证书校验），作为空 SNI 失败时的回退</summary>
-        public static HttpClient CreateStandardClient(TimeSpan timeout)
+        public static HttpClient CreateStandardClient(TimeSpan timeout, TimeSpan? connectTimeout = null)
         {
             var handler = new SocketsHttpHandler
             {
                 AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate,
                 AllowAutoRedirect = true,
-                ConnectTimeout = timeout,
+                ConnectTimeout = connectTimeout ?? timeout,
             };
 
             return CreateClient(handler, timeout);

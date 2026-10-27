@@ -182,4 +182,82 @@ public class UpgradeTests
         Assert.True(workerGuardIndex < applyIndex, "自我替换前必须先排除工作进程");
         Assert.True(applyIndex < routeIndex, "自我替换必须排在启动路由之前");
     }
+
+    /// <summary>
+    /// 候选下载地址必须把 API 形式（<c>assets[].url</c>）排在
+    /// <c>browser_download_url</c> 之前，且两者都要参与尝试。
+    /// <para>
+    /// 实测教训：部分网络只阻断 <c>github.com</c> 的 TLS 握手而 <c>api.github.com</c> 通畅，
+    /// 此时更新检查正常但下载必失败——表现为「发现得了却下不下来」。
+    /// </para>
+    /// </summary>
+    [Fact]
+    public void DownloadCandidatesPreferApiUrlOverBrowserUrl()
+    {
+        string upgradePath = Path.Combine(
+            TestPaths.RepoRoot, "ArchivePasswordTestTool", "Services", "Upgrade.cs");
+        string source = File.ReadAllText(upgradePath);
+
+        int candidates = source.IndexOf(
+            "private static IEnumerable<(string? Url, bool AcceptOctetStream)> DownloadCandidates",
+            StringComparison.Ordinal);
+        Assert.True(candidates >= 0, "Upgrade.cs 中未找到 DownloadCandidates");
+
+        int methodEnd = source.IndexOf("\n        private static void DownloadFile(", candidates, StringComparison.Ordinal);
+        Assert.True(methodEnd > candidates, "未找到 DownloadCandidates 的结束边界");
+
+        string body = source[candidates..methodEnd];
+        int apiIndex = body.IndexOf("asset.Url", StringComparison.Ordinal);
+        int browserIndex = body.IndexOf("asset.BrowserDownloadUrl", StringComparison.Ordinal);
+
+        Assert.True(apiIndex >= 0, "候选地址缺少 asset.Url（API 形式）");
+        Assert.True(browserIndex >= 0, "候选地址缺少 asset.BrowserDownloadUrl");
+        Assert.True(apiIndex < browserIndex, "API 资产地址必须排在 browser_download_url 之前");
+    }
+
+    /// <summary>
+    /// 下载必须同时具备空 SNI 与标准 TLS 两种尝试，否则在按域名嗅探阻断的网络下
+    /// 会出现「更新检查能过、下载过不去」的不对称。
+    /// </summary>
+    [Fact]
+    public void DownloadTriesBothTlsModes()
+    {
+        string upgradePath = Path.Combine(
+            TestPaths.RepoRoot, "ArchivePasswordTestTool", "Services", "Upgrade.cs");
+        string source = File.ReadAllText(upgradePath);
+
+        int method = source.IndexOf(
+            "private static void DownloadFile(string url, string destination, bool useEmptySni, bool acceptOctetStream)",
+            StringComparison.Ordinal);
+        Assert.True(method >= 0, "未找到下载实现");
+
+        string body = source[method..];
+        Assert.Contains("HttpTransport.CreateClient(", body, StringComparison.Ordinal);
+        Assert.Contains("HttpTransport.CreateStandardClient(", body, StringComparison.Ordinal);
+        Assert.Contains("application/octet-stream", body, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// <c>Accept: application/octet-stream</c> 只能加在 API 资产地址上：
+    /// 给 <c>browser_download_url</c> 加也无害，但缺少它时 API 会返回 JSON 元数据
+    /// （200 却内容不对），必须由代码显式声明。
+    /// </summary>
+    [Fact]
+    public void ApiAssetUrlRequestsOctetStream()
+    {
+        string upgradePath = Path.Combine(
+            TestPaths.RepoRoot, "ArchivePasswordTestTool", "Services", "Upgrade.cs");
+        string source = File.ReadAllText(upgradePath);
+
+        int candidates = source.IndexOf(
+            "private static IEnumerable<(string? Url, bool AcceptOctetStream)> DownloadCandidates",
+            StringComparison.Ordinal);
+        Assert.True(candidates >= 0);
+
+        int methodEnd = source.IndexOf("\n        private static void DownloadFile(", candidates, StringComparison.Ordinal);
+        string body = source[candidates..methodEnd];
+
+        Assert.Contains("yield return (asset.Url, true)", body, StringComparison.Ordinal);
+        Assert.Contains("yield return (asset.BrowserDownloadUrl, false)", body, StringComparison.Ordinal);
+    }
 }

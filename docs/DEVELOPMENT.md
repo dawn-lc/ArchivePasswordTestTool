@@ -122,6 +122,28 @@ batchSize = clamp(ceil(count / (workers × 4)), 8, 64)
 
 `Console.IsInputRedirected` 为 true（管道/无人值守）时既不提示也不下载：12MB 无人消费纯属浪费。
 
+### 下载的候选地址矩阵
+
+下载走「候选地址 × TLS 模式」的兜底矩阵，任一成功即返回：
+
+| 顺序 | 地址 | 说明 |
+|------|------|------|
+| 1 | `assets[].url`（**API 形式**） | `api.github.com/.../releases/assets/{id}` + `Accept: application/octet-stream`，302 到下载 CDN |
+| 2 | `assets[].browser_download_url` | `github.com/.../releases/download/...` |
+
+每个地址都先试**空 SNI**、失败再试**标准 TLS**（与 `FetchLatestRelease` 对称）。
+
+**为什么 API 形式必须排第一**（实测教训）：部分网络环境只阻断 `github.com` 的 TLS 握手，
+`api.github.com` 却通畅。此时更新检查正常（能查到新版本），但 `browser_download_url` 指向
+`github.com` → 握手失败 → 「发现得了却下不下来」。API 形式复用已经打通的那条通路。
+
+两个配套细节：
+
+- `Accept: application/octet-stream` **必须显式声明**：否则 API 把资产当元数据返回 JSON，
+  200 却下错内容（会被 digest 校验拦住，但白跑一次）
+- 下载用 `ConnectTimeout = 30s` + 整体 `Timeout = 10min` 分离设置：候选最多试 4 次，
+  沿用整体超时会让一个静默丢包的地址把退出卡住半小时
+
 ## HTTP 传输
 
 `HttpTransport` 是**唯一**的 `HttpClient` 构造点，统一装配 User-Agent
@@ -129,8 +151,11 @@ batchSize = clamp(ceil(count / (workers × 4)), 8, 64)
 
 | 工厂 | TLS 行为 | 用途 |
 |------|----------|------|
-| `CreateClient` | 空 SNI，仅豁免证书域名不匹配（链与有效期仍校验） | 更新检查——部分网络环境按 SNI 域名嗅探并阻断 `github.com` |
-| `CreateStandardClient` | 标准 SNI + 完整校验 | 在线服务、更新检查的回退路径 |
+| `CreateClient` | 空 SNI，仅豁免证书域名不匹配（链与有效期仍校验） | 更新检查与下载的首选——部分网络环境按 SNI 域名嗅探并阻断 `github.com` |
+| `CreateStandardClient` | 标准 SNI + 完整校验 | 在线服务、更新检查与下载的回退路径 |
+
+两者都接受可选的 `connectTimeout`：大文件下载需要「短建连（30s）+ 长传输（10min）」，
+避免静默丢包的候选地址把退出卡住。
 
 在线服务必须用标准客户端：其地址可由 `-Api` 指向任意端点，空 SNI 会豁免域名不匹配，
 等于对任意地址放宽校验。

@@ -24,7 +24,7 @@ namespace ArchivePasswordTestTool
             Assets?.FirstOrDefault(asset =>
                 asset.Name is not null
                 && asset.Name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase)
-                && !string.IsNullOrWhiteSpace(asset.BrowserDownloadUrl));
+                && (!string.IsNullOrWhiteSpace(asset.BrowserDownloadUrl) || !string.IsNullOrWhiteSpace(asset.Url)));
     }
 
     /// <summary>Release 附件（GitHub 会自动提供 digest，用于校验下载完整性）</summary>
@@ -38,6 +38,14 @@ namespace ArchivePasswordTestTool
 
         [JsonPropertyName("browser_download_url")]
         public string? BrowserDownloadUrl { get; set; }
+
+        /// <summary>
+        /// API 形式的资产地址（<c>api.github.com/.../releases/assets/{id}</c>）。
+        /// 带上 <c>Accept: application/octet-stream</c> 时它直接 302 到下载 CDN，
+        /// 是 <see cref="BrowserDownloadUrl"/> 走不通时的可行替代（见 <c>Upgrade.DownloadFile</c>）。
+        /// </summary>
+        [JsonPropertyName("url")]
+        public string? Url { get; set; }
 
         /// <summary>形如 <c>sha256:abcdef...</c>；旧版 Release 可能为空</summary>
         [JsonPropertyName("digest")]
@@ -227,6 +235,18 @@ namespace ArchivePasswordTestTool
         /// </summary>
         private static readonly TimeSpan CompletionGrace = TimeSpan.FromSeconds(3);
 
+        /// <summary>
+        /// 下载单文件版本的超时。12MB 在慢速网络上可能要几分钟，
+        /// 与检查请求的 10 秒不可共用同一个值。
+        /// </summary>
+        private static readonly TimeSpan DownloadTimeout = TimeSpan.FromMinutes(10);
+
+        /// <summary>
+        /// 下载的建连/握手超时。候选择地址最多试 4 次，若沿用 10 分钟，
+        /// 一个静默丢包的地址能把退出卡住半小时——建连必须快速失败。
+        /// </summary>
+        private static readonly TimeSpan DownloadConnectTimeout = TimeSpan.FromSeconds(30);
+
         /// <summary>后台进行中的检查（null 表示本次启动无需检查）</summary>
         private static Task<UpgradeReleasesInfo?>? pendingCheck;
 
@@ -396,7 +416,7 @@ namespace ArchivePasswordTestTool
         private static bool DownloadPendingUpdate(UpgradeReleasesInfo info)
         {
             UpgradeAsset? asset = info.MainAsset;
-            if (asset?.BrowserDownloadUrl is null)
+            if (asset is null)
             {
                 // 该 Release 没有可下载 exe（例如手工创建的 Release）：退回发布页引导
                 if (InteractivePrompts.ConfirmSingleKey(Resources.UpgradeOpenReleasesPrompt, defaultYes: true))
@@ -416,16 +436,7 @@ namespace ArchivePasswordTestTool
 
                 AnsiConsole.MarkupLine($"[grey]{Markup.Escape(Resources.UpgradeDownloading)}[/]");
 
-                using (var http = HttpTransport.CreateStandardClient(TimeSpan.FromMinutes(10)))
-                using (var response = http.GetAsync(asset.BrowserDownloadUrl, HttpCompletionOption.ResponseHeadersRead)
-                           .GetAwaiter().GetResult())
-                {
-                    response.EnsureSuccessStatusCode();
-
-                    using var source = response.Content.ReadAsStream();
-                    using var target = File.Create(downloading);
-                    source.CopyTo(target);
-                }
+                DownloadFile(asset, downloading);
 
                 VerifyDownload(downloading, asset);
 
@@ -528,6 +539,82 @@ namespace ArchivePasswordTestTool
 
             var body = response.Content.ReadAsStringAsync().GetAwaiter().GetResult();
             return JsonSerializer.Deserialize(body, UpgradeJsonContext.Default.UpgradeReleasesInfo);
+        }
+
+        /// <summary>
+        /// 下载资产到指定路径：多个候选地址 × 两种 TLS 模式的兜底矩阵，任一成功即返回。
+        /// <para>
+        /// 候选一：API 资产地址（<c>api.github.com/.../releases/assets/{id}</c> + 
+        /// <c>Accept: application/octet-stream</c>，会 302 到下载 CDN）。它比
+        /// <c>browser_download_url</c> 更可靠：部分网络环境只阻断 <c>github.com</c>
+        /// 而 <c>api.github.com</c> 可用（实测：能查到新版本、却卡在下载握手）。
+        /// </para>
+        /// <para>
+        /// 两种 TLS 模式：空 SNI 优先（防按域名嗅探），失败回退标准握手——
+        /// 与 <see cref="FetchLatestRelease"/> 对称，不对称就会出现「发现得了却下不下来」。
+        /// 空 SNI 下主机名不匹配无从察觉，但内容由 <see cref="VerifyDownload"/> 的
+        /// sha256 digest 兜底，比 API 响应本身更安全。
+        /// </para>
+        /// </summary>
+        private static void DownloadFile(UpgradeAsset asset, string destination)
+        {
+            Exception? lastError = null;
+
+            foreach ((string? Url, bool AcceptOctetStream) candidate in DownloadCandidates(asset))
+            {
+                foreach (bool useEmptySni in new[] { true, false })
+                {
+                    try
+                    {
+                        DownloadFile(candidate.Url!, destination, useEmptySni, candidate.AcceptOctetStream);
+                        return;
+                    }
+                    catch (Exception ex)
+                    {
+                        // 半截文件必须清掉：下一次尝试会重新 File.Create 覆盖，
+                        // 但残留文件可能在全部失败后被误认为下载成功
+                        lastError = ex;
+                        PendingUpdate.TryDelete(destination);
+                    }
+                }
+            }
+
+            throw lastError ?? new InvalidOperationException("no download url in release asset");
+        }
+
+        /// <summary>候选下载地址，按可靠性降序（API 地址在前）</summary>
+        private static IEnumerable<(string? Url, bool AcceptOctetStream)> DownloadCandidates(UpgradeAsset asset)
+        {
+            if (!string.IsNullOrWhiteSpace(asset.Url))
+            {
+                yield return (asset.Url, true);
+            }
+
+            if (!string.IsNullOrWhiteSpace(asset.BrowserDownloadUrl))
+            {
+                yield return (asset.BrowserDownloadUrl, false);
+            }
+        }
+
+        private static void DownloadFile(string url, string destination, bool useEmptySni, bool acceptOctetStream)
+        {
+            using var http = useEmptySni
+                ? HttpTransport.CreateClient(DownloadTimeout, DownloadConnectTimeout)
+                : HttpTransport.CreateStandardClient(DownloadTimeout, DownloadConnectTimeout);
+
+            using var request = new HttpRequestMessage(HttpMethod.Get, url);
+            if (acceptOctetStream)
+            {
+                // 必须显式声明：否则 api.github.com 会把资产当元数据返回 JSON（200 却下错东西）
+                request.Headers.Accept.ParseAdd("application/octet-stream");
+            }
+
+            using var response = http.Send(request, HttpCompletionOption.ResponseHeadersRead);
+            response.EnsureSuccessStatusCode();
+
+            using var source = response.Content.ReadAsStream();
+            using var target = File.Create(destination);
+            source.CopyTo(target);
         }
 
         /// <summary>用系统默认浏览器打开发布页；失败仅提示</summary>
