@@ -1,8 +1,8 @@
 namespace ArchivePasswordTestTool.Tests;
 
 /// <summary>
-/// 版本比较逻辑单测（无网络）：覆盖旧版 Utils.Upgrade 移植的
-/// 数值段比较与版本类型等级比较，tag 格式 "x.y.z-Type"
+/// 更新检查纯函数单测（无网络）：版本比较（tag 格式 "x.y.z-Type"）、
+/// 请求节流判定、每版本只提示一次的判定，以及待应用更新的落盘约定契约。
 /// </summary>
 public class UpgradeTests
 {
@@ -15,13 +15,13 @@ public class UpgradeTests
     [InlineData("2.0.0-Release", false)]                      // 完全相同
     [InlineData("1.9.9-Release", false)]                      // 更低
     [InlineData("2.0.0-Fixpush", true)]                       // 同版本号，热修类型更高 → 提示
-    public void IsNewerVersion_NumericAndTypeComparison(string tag, bool expected)
+    public void IsNewerVersionComparesNumbersAndType(string tag, bool expected)
     {
         Assert.Equal(expected, Upgrade.IsNewerVersion(tag, [2, 0, 0], "Release"));
     }
 
     [Fact]
-    public void IsNewerVersion_SameVersionTypeHierarchy()
+    public void IsNewerVersionUsesTypeHierarchyForSameVersion()
     {
         // 同版本号：类型等级 fixpush > final > release > preview > beta > alpha > test
         Assert.True(Upgrade.IsNewerVersion("2.0.0-Fixpush", [2, 0, 0], "Preview"));
@@ -33,20 +33,20 @@ public class UpgradeTests
     [InlineData("2.0.0.1-Release", false)]                    // 段数不一致，保守不提示
     [InlineData("not-a-version", false)]                      // 无法解析
     [InlineData("", false)]                                   // 空串
-    public void IsNewerVersion_InvalidTagsAreConservative(string tag, bool expected)
+    public void IsNewerVersionIsConservativeOnInvalidTags(string tag, bool expected)
     {
         Assert.Equal(expected, Upgrade.IsNewerVersion(tag, [2, 0, 0], "Release"));
     }
 
     [Fact]
-    public void IsNewerVersion_UnrecognizedTypeMeansUpgrade()
+    public void IsNewerVersionTreatsUnknownTypeAsLowest()
     {
         // 未识别的类型按最低档：任何识别类型都更新（宁可信其有）
         Assert.True(Upgrade.IsNewerVersion("2.0.0-Whatever", [2, 0, 0], "Release"));
     }
 
     [Fact]
-    public void IsNewerVersion_RealGitHubTag()
+    public void IsNewerVersionMatchesRealGitHubTag()
     {
         // 仓库实际最新 Release tag 形如 "1.5.8-Release"
         Assert.True(Upgrade.IsNewerVersion("1.5.8-Release", [1, 0, 0], "Release"));
@@ -76,24 +76,106 @@ public class UpgradeTests
     }
 
     /// <summary>
-    /// 「检查时间戳」必须由消费端（CompleteBackgroundCheck）写入，不能在后台请求内部写入。
-    /// 否则请求虽成功、但本次来不及展示（快速测试几百毫秒就结束），时间戳却已落下，
-    /// 用户要再等满 24 小时才可能看到提示。
+    /// 请求节流 1 小时：既避免每次启动都打 GitHub（未认证配额 60 次/小时），
+    /// 又保证新版本发布后最多 1 小时就能被发现——早期 24 小时节流会让
+    /// 「发布紧跟上次检查」的用户整整一天看不到提示。
     /// </summary>
     [Fact]
-    public void CheckTimestampIsWrittenByConsumerNotInsideBackgroundTask()
+    public void CheckIsDueAfterOneHour()
     {
-        string upgradePath = Path.Combine(
-            TestPaths.RepoRoot, "ArchivePasswordTestTool", "Services", "Upgrade.cs");
-        string source = File.ReadAllText(upgradePath);
+        var now = new DateTime(2025, 1, 1, 12, 0, 0);
 
-        int startMethod = source.IndexOf("public static void StartBackgroundCheck()", StringComparison.Ordinal);
-        int completeMethod = source.IndexOf("public static void CompleteBackgroundCheck()", StringComparison.Ordinal);
+        Assert.True(Upgrade.IsCheckDue(now.AddHours(-1), now));
+        Assert.True(Upgrade.IsCheckDue(now.AddDays(-3), now));
+        Assert.False(Upgrade.IsCheckDue(now.AddMinutes(-59), now));
+        Assert.False(Upgrade.IsCheckDue(now, now));
+    }
 
-        Assert.True(startMethod >= 0 && completeMethod >= 0, "未找到 StartBackgroundCheck / CompleteBackgroundCheck");
-        Assert.True(startMethod < completeMethod, "两个方法顺序异常");
+    [Fact]
+    public void FirstRunIsAlwaysDue()
+    {
+        // DateTime.MinValue 是「从未检查过」的初始值
+        Assert.True(Upgrade.IsCheckDue(DateTime.MinValue, DateTime.Now));
+    }
 
-        string startBody = source[startMethod..completeMethod];
-        Assert.DoesNotContain("SaveConfig", startBody);
+    [Fact]
+    public void ShouldPromptSkipsVersionAlreadyNotified()
+    {
+        // 同一版本只提示一次：这是把请求节流缩短到 1 小时而不重复骚扰的前提
+        Assert.False(Upgrade.ShouldPrompt("2.1.0-Release", [2, 0, 0], "Release", "2.1.0-Release"));
+        Assert.True(Upgrade.ShouldPrompt("2.1.0-Release", [2, 0, 0], "Release", "2.0.0-Release"));
+        Assert.True(Upgrade.ShouldPrompt("2.1.0-Release", [2, 0, 0], "Release", null));
+    }
+
+    [Fact]
+    public void ShouldPromptIgnoresTagCaseWhenDeduping()
+    {
+        Assert.False(Upgrade.ShouldPrompt("2.1.0-release", [2, 0, 0], "Release", "2.1.0-Release"));
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void ShouldPromptSkipsMissingTag(string? tag)
+    {
+        Assert.False(Upgrade.ShouldPrompt(tag, [2, 0, 0], "Release", null));
+    }
+
+    [Fact]
+    public void ShouldPromptSkipsOlderVersion()
+    {
+        Assert.False(Upgrade.ShouldPrompt("1.9.9-Release", [2, 0, 0], "Release", null));
+    }
+
+    /// <summary>
+    /// 待应用更新必须与主程序同目录：Windows 只允许「同卷」重命名，
+    /// 放到临时目录（可能在别的盘）会让替换退化成复制+删除，不再是原子的。
+    /// </summary>
+    [Fact]
+    public void PendingUpdateFilesSitNextToExecutable()
+    {
+        string executable = PendingUpdate.ExecutablePath;
+        string folder = Path.GetDirectoryName(executable)!;
+
+        Assert.Equal(executable + PendingUpdate.DownloadingSuffix, PendingUpdate.DownloadingPath);
+        Assert.Equal(executable + PendingUpdate.ReadySuffix, PendingUpdate.ReadyPath);
+        Assert.Equal(executable + PendingUpdate.BackupSuffix, PendingUpdate.BackupPath);
+
+        Assert.Equal(folder, Path.GetDirectoryName(PendingUpdate.ReadyPath));
+        Assert.Equal(folder, Path.GetDirectoryName(PendingUpdate.BackupPath));
+    }
+
+    [Fact]
+    public void PendingUpdateSuffixesAreDistinct()
+    {
+        string[] suffixes =
+        [
+            PendingUpdate.DownloadingSuffix,
+            PendingUpdate.ReadySuffix,
+            PendingUpdate.BackupSuffix,
+        ];
+
+        Assert.Equal(suffixes.Length, suffixes.Distinct(StringComparer.OrdinalIgnoreCase).Count());
+        Assert.All(suffixes, suffix => Assert.StartsWith(".", suffix, StringComparison.Ordinal));
+    }
+
+    /// <summary>
+    /// 自我替换必须发生在启动路由之前：<see cref="PendingUpdate.TryApply"/> 返回 true 时
+    /// 说明已换成新版本并拉起了新进程，当前进程要立刻退出——若排在路由之后，
+    /// 旧版本会先把活干完，替换结果被无谓地推迟到再下一次启动。
+    /// </summary>
+    [Fact]
+    public void PendingUpdateIsAppliedBeforeStartupRouting()
+    {
+        string programPath = Path.Combine(TestPaths.RepoRoot, "ArchivePasswordTestTool", "Program.cs");
+        string source = File.ReadAllText(programPath);
+
+        int applyIndex = source.IndexOf("PendingUpdate.TryApply(", StringComparison.Ordinal);
+        int routeIndex = source.IndexOf("Instance.Execute(", StringComparison.Ordinal);
+
+        Assert.True(applyIndex >= 0, "Program.cs 中未找到 PendingUpdate.TryApply 调用");
+        Assert.True(routeIndex >= 0, "Program.cs 中未找到 Instance.Execute 调用");
+        Assert.True(applyIndex < routeIndex, "自我替换必须排在启动路由之前");
     }
 }

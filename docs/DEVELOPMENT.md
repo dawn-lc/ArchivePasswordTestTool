@@ -85,8 +85,42 @@ batchSize = clamp(ceil(count / (workers × 4)), 8, 64)
    CI 的发布产物实测会断言版本号等于注入值——这是唯一能覆盖裁剪路径的检查
    （单元测试跑的是未裁剪的 apphost）。
 
-更新检查在后台异步进行（24 小时内最多一次），只有成功拿到数据才写时间戳；
-配置（检查时间戳、自定义服务地址）保存在 `%LOCALAPPDATA%\ArchivePasswordTestTool\config.json`。
+更新检查在后台异步进行，配置（`lastCheckUpgrade`、`lastNotifiedVersion`）保存在
+`%LOCALAPPDATA%\ArchivePasswordTestTool\config.json`。
+
+### 两个独立状态，各管一件事
+
+| 字段 | 职责 |
+|------|------|
+| `lastCheckUpgrade` | **请求节流**，1 小时一次。GitHub 未认证配额 60 次/小时，1 小时远在限额内 |
+| `lastNotifiedVersion` | **每个版本只提示（并下载）一次**，是缩短节流的必要配套 |
+
+早期实现只有「24 小时节流」一个状态，于是「发布紧跟在上次检查之后」的用户要整整一天
+才可能看到提示（实测撞到过）。缩短节流会带来重复骚扰，因此必须配合 per-version 去重。
+`lastCheckUpgrade` 在**发起请求时**就写入（无论成败），用来约束失败重试频率；
+`lastNotifiedVersion` 只在**确实把事办完**（下载成功，或无 exe 资产已引导到发布页）后才写，
+否则下载失败会把这个版本永久跳过。
+
+### 自更新：关闭前下载 + 下次启动应用
+
+单文件发布的 exe 运行期间无法覆盖自身，因此拆成两次启动：
+
+1. **本次运行结束前**（`Runner` 的 `finally` 里、保存结果确认之前）下载新版本到
+   `自身.exe.new.downloading`，按 GitHub 提供的 `sha256:` digest + 体积校验通过后
+   改名为 `自身.exe.new`。
+2. **下次启动最早时机**（`Program.Main` 第一行，早于任何路由）：`自身 → 自身.exe.old`、
+   `自身.exe.new → 自身`，再以原样参数启动新进程；当前进程立刻返回 0 退出。
+   新进程启动时发现 `.old` 存在即顺手删除，并提示「已更新到 x.y.z」。
+
+关键取舍：
+
+- **「重命名自身」不需要额外 updater 进程**：Windows 允许重命名正在运行的 exe
+- **落盘必须在同目录**：Windows 只允许同卷重命名，跨盘会退化成复制+删除，不再原子
+- **先下到 `.downloading` 再改名**：避免半截文件在下个启动被当成有效更新
+- **任何一步失败都回滚**到旧二进制，绝不把用户留在「两个文件都不完整」的状态
+- 无 exe 资产或下载失败时退回发布页引导，不阻塞退出
+
+`Console.IsInputRedirected` 为 true（管道/无人值守）时既不提示也不下载：12MB 无人消费纯属浪费。
 
 ## HTTP 传输
 

@@ -285,4 +285,17 @@
   <data name="UpgradeOpenReleasesPrompt" xml:space="preserve">
     <value>是否打开发布页？</value>
   </data>
+  <data name="UpgradeDownloading" xml:space="preserve">
+    <value>正在下载新版本...</value>
+  </data>
+  <data name="UpgradeDownloadFailed" xml:space="preserve">
+    <value>下载失败：{0}
+也可前往发布页手动下载。</value>
+  </data>
+  <data name="UpgradeReadyForNextLaunch" xml:space="preserve">
+    <value>新版本已下载完成，下次启动时自动更新。</value>
+  </data>
+  <data name="UpgradeApplied" xml:space="preserve">
+    <value>已更新到 {0}。</value>
+  </data>
 </root>

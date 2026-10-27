@@ -285,4 +285,17 @@ Please download and install 7-Zip first.</value>
   <data name="UpgradeOpenReleasesPrompt" xml:space="preserve">
     <value>Open the releases page?</value>
   </data>
+  <data name="UpgradeDownloading" xml:space="preserve">
+    <value>Downloading the new version...</value>
+  </data>
+  <data name="UpgradeDownloadFailed" xml:space="preserve">
+    <value>Download failed: {0}
+You can also download it manually from the releases page.</value>
+  </data>
+  <data name="UpgradeReadyForNextLaunch" xml:space="preserve">
+    <value>The new version has been downloaded and will be applied automatically the next time you start the tool.</value>
+  </data>
+  <data name="UpgradeApplied" xml:space="preserve">
+    <value>Updated to {0}.</value>
+  </data>
 </root>

@@ -707,5 +707,49 @@ namespace ArchivePasswordTestTool.Properties
                 return ResourceManager.GetString("UpgradeOpenReleasesPrompt", resourceCulture);
             }
         }
+
+        /// <summary>
+        ///   查找类似 Downloading the new version... 的本地化字符串。
+        /// </summary>
+        public static string UpgradeDownloading
+        {
+            get
+            {
+                return ResourceManager.GetString("UpgradeDownloading", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   查找类似 Download failed: {0} 的本地化字符串。
+        /// </summary>
+        public static string UpgradeDownloadFailed
+        {
+            get
+            {
+                return ResourceManager.GetString("UpgradeDownloadFailed", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   查找类似 The new version has been downloaded 的本地化字符串。
+        /// </summary>
+        public static string UpgradeReadyForNextLaunch
+        {
+            get
+            {
+                return ResourceManager.GetString("UpgradeReadyForNextLaunch", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   查找类似 Updated to {0}. 的本地化字符串。
+        /// </summary>
+        public static string UpgradeApplied
+        {
+            get
+            {
+                return ResourceManager.GetString("UpgradeApplied", resourceCulture);
+            }
+        }
     }
 }

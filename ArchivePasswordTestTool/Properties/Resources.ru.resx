@@ -285,4 +285,17 @@
   <data name="UpgradeOpenReleasesPrompt" xml:space="preserve">
     <value>Открыть страницу релизов?</value>
   </data>
+  <data name="UpgradeDownloading" xml:space="preserve">
+    <value>Загрузка новой версии...</value>
+  </data>
+  <data name="UpgradeDownloadFailed" xml:space="preserve">
+    <value>Сбой загрузки: {0}
+Вы также можете загрузить вручную со страницы релизов.</value>
+  </data>
+  <data name="UpgradeReadyForNextLaunch" xml:space="preserve">
+    <value>Новая версия загружена и будет применена автоматически при следующем запуске.</value>
+  </data>
+  <data name="UpgradeApplied" xml:space="preserve">
+    <value>Обновлено до {0}.</value>
+  </data>
 </root>

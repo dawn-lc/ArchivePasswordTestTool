@@ -285,4 +285,17 @@
   <data name="UpgradeOpenReleasesPrompt" xml:space="preserve">
     <value>リリースページを開きますか？</value>
   </data>
+  <data name="UpgradeDownloading" xml:space="preserve">
+    <value>新しいバージョンをダウンロードしています...</value>
+  </data>
+  <data name="UpgradeDownloadFailed" xml:space="preserve">
+    <value>ダウンロードに失敗しました: {0}
+リリースページから手動でダウンロードすることもできます。</value>
+  </data>
+  <data name="UpgradeReadyForNextLaunch" xml:space="preserve">
+    <value>新しいバージョンをダウンロードしました。次回起動時に自動で更新されます。</value>
+  </data>
+  <data name="UpgradeApplied" xml:space="preserve">
+    <value>{0} に更新しました。</value>
+  </data>
 </root>

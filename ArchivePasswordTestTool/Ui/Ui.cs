@@ -40,11 +40,11 @@ namespace ArchivePasswordTestTool
         /// <summary>
         /// 程序头部：ASCII 标题 + 版本/作者/主页分隔线
         /// </summary>
-        public static void WriteHeader(int[] version)
+        public static void WriteHeader()
         {
             AnsiConsole.WriteLine(Banner.Text);
 
-            var footer = new Rule($"[grey]v{string.Join('.', version)} · {Escape(Resources.Developer)} · {Escape(Resources.AppHomePage)}[/]")
+            var footer = new Rule($"[grey]v{Escape(Program.VersionText)} · {Escape(Resources.Developer)} · {Escape(Resources.AppHomePage)}[/]")
             {
                 Style = Style.Parse("grey dim"),
                 Justification = Justify.Left,

@@ -18,6 +18,9 @@ namespace ArchivePasswordTestTool
         /// </summary>
         public static readonly int[] Version = ResolveVersion();
 
+        /// <summary>展示用的版本号文本（如 <c>2.1.0</c>）。版本号是点分三段，格式只在此处定义</summary>
+        public static string VersionText => string.Join('.', Version);
+
         /// <summary>
         /// 本地开发构建的版本类型标记。与 csproj 中 <c>AppVersionType</c> 的默认值一致：
         /// 未注入版本号时 VersionType 即为该值，用于识别开发构建（见 Upgrade）。
@@ -32,6 +35,14 @@ namespace ArchivePasswordTestTool
 
         static int Main(string[] args)
         {
+            // 自我替换必须发生得最早：一旦有校验通过的待应用更新，
+            // 就把自己换成新版本并重启新进程，当前进程立即退出。
+            // 放在这里（而非 Instance 内）是为了让 worker 进程也能完成替换。
+            if (PendingUpdate.TryApply(args))
+            {
+                return 0;
+            }
+
             return Instance.Execute(args, () =>
             {
                 new Runner(args).Run();

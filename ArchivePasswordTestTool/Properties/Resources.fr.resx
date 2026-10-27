@@ -285,4 +285,17 @@ Veuillez d'abord télécharger et installer 7-Zip.</value>
   <data name="UpgradeOpenReleasesPrompt" xml:space="preserve">
     <value>Ouvrir la page des versions ?</value>
   </data>
+  <data name="UpgradeDownloading" xml:space="preserve">
+    <value>Téléchargement de la nouvelle version...</value>
+  </data>
+  <data name="UpgradeDownloadFailed" xml:space="preserve">
+    <value>Échec du téléchargement : {0}
+Vous pouvez aussi le télécharger manuellement depuis la page des versions.</value>
+  </data>
+  <data name="UpgradeReadyForNextLaunch" xml:space="preserve">
+    <value>La nouvelle version a été téléchargée et sera appliquée automatiquement au prochain démarrage.</value>
+  </data>
+  <data name="UpgradeApplied" xml:space="preserve">
+    <value>Mise à jour vers {0}.</value>
+  </data>
 </root>

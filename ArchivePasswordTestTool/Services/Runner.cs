@@ -48,7 +48,13 @@ namespace ArchivePasswordTestTool
                 {
                     AnsiConsole.Clear();
                 }
-                Ui.WriteHeader(Program.Version);
+                Ui.WriteHeader();
+
+                // 上一次启动完成了自我替换：明确告知，避免用户误以为「版本号变了但没更新」
+                if (PendingUpdate.JustUpdated)
+                {
+                    Ui.WriteWarning(string.Format(Resources.UpgradeApplied, Program.VersionText));
+                }
 
                 // 更新检查在后台发起：网络耗时与后续引导、测密重叠，不阻塞首屏
                 Upgrade.StartBackgroundCheck();

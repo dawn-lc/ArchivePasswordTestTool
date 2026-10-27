@@ -55,7 +55,7 @@ ArchivePasswordTestTool.exe -D dict.txt -F installer.exe -lib "C:\Program Files\
 | `APTT_TRACE` | 设为 `1` 时将 COM 回调跟踪日志输出到 stderr，用于问题诊断 |
 | `APTT_NO_UPGRADE_CHECK` | 设为 `1` 时跳过启动时的后台更新检查（离线/内网环境用） |
 
-更新检查在后台异步进行（24 小时内最多一次），仅当有新版本时才提示，不阻塞测密；配置（含检查时间戳与自定义服务地址）保存在 `%LOCALAPPDATA%\ArchivePasswordTestTool\config.json`，不会写入程序目录。
+更新检查在后台异步进行（每小时最多请求一次，同一版本只提示一次），仅当有新版本时才提示，不阻塞测密。发现新版本时会自动下载到程序目录，**下次启动自动完成替换并重启**，无需手动覆盖；下载失败（目录只读、断网等）只提示不重试阻塞，下个周期自动重试。配置（含检查时间戳与已提示版本）保存在 `%LOCALAPPDATA%\ArchivePasswordTestTool\config.json`，不会写入程序目录。
 
 ## 性能
 
