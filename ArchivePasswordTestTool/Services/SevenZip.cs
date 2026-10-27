@@ -1,4 +1,4 @@
-﻿using ArchivePasswordTestTool.Properties;
+using ArchivePasswordTestTool.Properties;
 using Microsoft.Win32;
 using Spectre.Console;
 using System.Diagnostics;
@@ -62,14 +62,14 @@ namespace ArchivePasswordTestTool
         }
 
         /// <summary>
-        /// 初始化 7z.dll 并记录当前使用的路径（供工作进程继承）。
+        /// 加载 7z.dll（进程级共享，同一路径只加载一次）。
         /// 失败时抛 InvalidOperationException（异常含完整 ToString 便于诊断发布产物部署问题）。
         /// </summary>
         public static void Initialize(string dllPath)
         {
             try
             {
-                NativeMethods.Initialize(dllPath);
+                SevenZipLibrary.GetShared(dllPath);
             }
             catch (Exception ex)
             {

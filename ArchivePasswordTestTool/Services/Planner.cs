@@ -1,4 +1,4 @@
-﻿using System.Collections.Concurrent;
+using System.Collections.Concurrent;
 using ArchivePasswordTestTool.Properties;
 using Spectre.Console;
 
@@ -60,7 +60,7 @@ namespace ArchivePasswordTestTool
         {
             return _contextPool.TryTake(out var context)
                 ? context
-                : new ArchiveContext(dllPath, archivePath, archiveInfo, null);
+                : new ArchiveContext(dllPath, archivePath, password: null, archiveInfo);
         }
 
         /// <summary>归还上下文到池中</summary>
@@ -85,7 +85,7 @@ namespace ArchivePasswordTestTool
             {
                 try
                 {
-                    _contextPool.Add(new ArchiveContext(dllPath, archivePath, archiveInfo, null));
+                    _contextPool.Add(new ArchiveContext(dllPath, archivePath, password: null, archiveInfo));
                 }
                 catch
                 {

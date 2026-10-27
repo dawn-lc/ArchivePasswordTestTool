@@ -1,4 +1,4 @@
-﻿using ArchivePasswordTestTool.Properties;
+using ArchivePasswordTestTool.Properties;
 using Spectre.Console;
 
 namespace ArchivePasswordTestTool
@@ -11,12 +11,21 @@ namespace ArchivePasswordTestTool
     internal static class Sync
     {
         /// <summary>
+        /// 在线服务是否已配置真实地址：默认值是占位地址（本机保留端口），
+        /// 视为"未部署服务"。调用方用它决定是否值得为哈希去读整个压缩包。
+        /// </summary>
+        public static bool IsConfigured(string url)
+        {
+            return url != OnlineService.DefaultServiceUrl;
+        }
+
+        /// <summary>
         /// 向服务器查询哈希对应的共享密码（一个哈希对应一个密码）：
         /// 无记录返回 null；网络/服务端错误打印黄色提示后返回 null，绝不阻断本地测试流程
         /// </summary>
         public static string? RequestOnlinePassword(string url, string hashHex)
         {
-            if (url == OnlineService.DefaultServiceUrl)
+            if (!IsConfigured(url))
             {
                 // 默认地址是占位：明确提示未配置并跳过，避免对占位地址做无谓的网络等待
                 AnsiConsole.MarkupLine($"[grey]{Resources.OnlineNotConfigured}[/]");
@@ -48,7 +57,7 @@ namespace ArchivePasswordTestTool
         /// <summary>回传找到的 哈希+密码（尽力而为）：网络/服务端错误只打印黄色提示</summary>
         public static void ReportFoundPassword(string url, string hashHex, string password)
         {
-            if (url == OnlineService.DefaultServiceUrl)
+            if (!IsConfigured(url))
             {
                 return;
             }

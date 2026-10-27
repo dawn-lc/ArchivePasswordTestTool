@@ -1,4 +1,4 @@
-﻿using ArchivePasswordTestTool.Properties;
+using ArchivePasswordTestTool.Properties;
 using System.Text;
 using Spectre.Console;
 

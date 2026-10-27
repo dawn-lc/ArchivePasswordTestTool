@@ -1,4 +1,4 @@
-﻿using ArchivePasswordTestTool.Properties;
+using ArchivePasswordTestTool.Properties;
 using System.Diagnostics;
 using System.Security.Cryptography;
 using Spectre.Console;
@@ -19,8 +19,16 @@ namespace ArchivePasswordTestTool
 
         private string archivePath = string.Empty;
         private string dictionaryPath = string.Empty;
+
+        // 归档哈希：Base64 版用于结果文件，Hex 版作为在线服务的归档标识。
+        // 均为惰性计算（见 ComputeArchiveHash）——离线且不保存结果时一次都不读全文件
         private string archiveHash = string.Empty;
         private string archiveHashHex = string.Empty;
+        private bool hashComputed;
+
+        /// <summary>未加密压缩包没有密码可记录，结果文件无意义（跳过保存询问）</summary>
+        private bool archiveEncrypted = true;
+
         private long dictionaryCount;
         private long testedCount;
         private string? foundPassword;
@@ -42,7 +50,8 @@ namespace ArchivePasswordTestTool
                 }
                 Ui.WriteHeader(Program.Version);
 
-                Upgrade.CheckForUpdate();
+                // 更新检查在后台发起：网络耗时与后续引导、测密重叠，不阻塞首屏
+                Upgrade.StartBackgroundCheck();
 
                 var options = Options.Parse(args);
                 archivePath = options.ArchivePath;
@@ -50,64 +59,32 @@ namespace ArchivePasswordTestTool
 
                 SevenZip.Initialize(options.SevenZipDllPath);
 
-                using (var file = File.OpenRead(archivePath))
-                {
-                    // 统一计算文件哈希（动态赋值不会触发 CS0219）：
-                    // Base64 版用于测试结果文件；Hex 版作为在线服务的归档标识。
-                    // 分块 TransformBlock 计算并驱动进度条按字节推进（大文件不再黑屏干等）。
-                    // 两处"分析中"提示已合并：进度条任务描述即提示，不再单独 MarkupLine
-                    HashAlgorithm.Initialize();
-                    long fileLength = Math.Max(1, file.Length);
+                // 在线服务只在真正配置了地址时才可能用到哈希；
+                // 占位地址（未部署服务）下绝不为此读一遍整个压缩包
+                bool onlineEnabled = Sync.IsConfigured(options.OnlineServiceUrl);
 
-                    AnsiConsole.Progress()
-                        .AutoClear(true)
-                        .HideCompleted(true)
-                        .Columns([
-                            new TaskDescriptionColumn(),
-                            new ProgressBarColumn(),
-                            new PercentageColumn(),
-                            new ElapsedTimeColumn(),
-                            new RemainingTimeColumn(),
-                            new SpinnerColumn()
-                        ])
-                        .Start(ctx =>
-                        {
-                            var hashTask = ctx.AddTask(Resources.AnalyzingArchiveInformation, maxValue: fileLength);
-
-                            byte[] buffer = new byte[1024 * 1024];
-                            int read;
-                            while ((read = file.Read(buffer, 0, buffer.Length)) > 0)
-                            {
-                                HashAlgorithm.TransformBlock(buffer, 0, read, null, 0);
-                                hashTask.Increment(read);
-                            }
-
-                            HashAlgorithm.TransformFinalBlock([], 0, 0);
-                            var hashBytes = HashAlgorithm.Hash!;
-                            archiveHash = Convert.ToBase64String(hashBytes);
-                            archiveHashHex = Convert.ToHexString(hashBytes).ToLowerInvariant();
-
-                            // 空文件无字节可读，强制补满避免进度条停在起点
-                            hashTask.Value = hashTask.MaxValue;
-                        });
-                }
-
-                // 在线共享（默认开启）：哈希计算完成后立即按哈希向服务器查询共享密码
-                // （一个哈希对应一个密码），存在则置于队列最前优先测试；
-                // 失败只提示不阻断。工作进程不做网络操作，只有主进程在此请求
-                string? onlinePassword = null;
-                if (options.QueryOnline)
-                {
-                    onlinePassword = Sync.RequestOnlinePassword(options.OnlineServiceUrl, archiveHashHex);
-                }
-                using var archiveContext = new ArchiveContext(options.SevenZipDllPath, archivePath, null);
+                using var archiveContext = new ArchiveContext(options.SevenZipDllPath, archivePath, password: null);
                 var archiveInfo = archiveContext.Info;
 
                 if (!archiveInfo.IsEncrypted)
                 {
+                    archiveEncrypted = false;
                     AnsiConsole.WriteLine(string.Format(Resources.ArchiveNotEncrypted, archivePath));
-                    foundPassword = string.Empty;
                     return;
+                }
+
+                // 在线共享（默认开启）：按哈希向服务器查询共享密码（一个哈希对应一个密码），
+                // 存在则置于队列最前优先测试；失败只提示不阻断。
+                // 工作进程不做网络操作，只有主进程在此请求
+                string? onlinePassword = null;
+                if (options.QueryOnline)
+                {
+                    if (onlineEnabled)
+                    {
+                        ComputeArchiveHash();
+                    }
+
+                    onlinePassword = Sync.RequestOnlinePassword(options.OnlineServiceUrl, archiveHashHex);
                 }
 
                 using var dictionary = new PasswordDictionary(dictionaryPath, onlinePassword: onlinePassword);
@@ -116,7 +93,7 @@ namespace ArchivePasswordTestTool
                 var (Mode, WorkerCount, ThreadParallelism, DisplayParallelism) = planner.Plan(options.SevenZipDllPath, archiveInfo, archivePath, dictionaryCount);
                 Ui.WriteArchiveInfo(
                     archivePath,
-                    archiveHash,
+                    hashComputed ? archiveHash : null,
                     archiveInfo.Format,
                     archiveInfo.FileCount,
                     archiveInfo.IsHeaderEncryption,
@@ -143,8 +120,9 @@ namespace ArchivePasswordTestTool
                     Interlocked.Read(ref testedCount));
 
                 // 密码回传（默认开启）：找到即把 哈希+密码 POST 给服务端供他人共享；失败只提示
-                if (!string.IsNullOrEmpty(foundPassword) && options.ReportOnline)
+                if (!string.IsNullOrEmpty(foundPassword) && options.ReportOnline && onlineEnabled)
                 {
+                    ComputeArchiveHash();
                     Sync.ReportFoundPassword(options.OnlineServiceUrl, archiveHashHex, foundPassword);
                 }
             }
@@ -160,16 +138,74 @@ namespace ArchivePasswordTestTool
             }
             finally
             {
-                if (!string.IsNullOrEmpty(archivePath) && !string.IsNullOrEmpty(dictionaryPath))
+                if (archiveEncrypted && !string.IsNullOrEmpty(archivePath) && !string.IsNullOrEmpty(dictionaryPath))
                 {
+                    // 哈希按需计算：用户确认保存后才读文件（见 WriteIfRequested 内部调用顺序）
                     ResultsWriter.WriteIfRequested(
                         archivePath,
                         dictionaryPath,
-                        archiveHash,
-                        foundPassword is null ? null : foundPassword,
-                        stopwatch.Elapsed);
+                        foundPassword,
+                        stopwatch.Elapsed,
+                        () =>
+                        {
+                            ComputeArchiveHash();
+                            return archiveHash;
+                        });
                 }
+
+                // 更新检查结果放到最后消费：不与测试进度条、结果确认抢屏幕
+                Upgrade.CompleteBackgroundCheck();
             }
+        }
+
+        /// <summary>
+        /// 计算压缩包哈希（惰性、幂等）：Base64 版给结果文件，Hex 版给在线服务。
+        /// 分块 TransformBlock 计算并驱动进度条按字节推进（大文件不再黑屏干等）
+        /// </summary>
+        private void ComputeArchiveHash()
+        {
+            if (hashComputed)
+            {
+                return;
+            }
+
+            using var file = File.OpenRead(archivePath);
+            HashAlgorithm.Initialize();
+            long fileLength = Math.Max(1, file.Length);
+
+            AnsiConsole.Progress()
+                .AutoClear(true)
+                .HideCompleted(true)
+                .Columns([
+                    new TaskDescriptionColumn(),
+                    new ProgressBarColumn(),
+                    new PercentageColumn(),
+                    new ElapsedTimeColumn(),
+                    new RemainingTimeColumn(),
+                    new SpinnerColumn()
+                ])
+                .Start(ctx =>
+                {
+                    var hashTask = ctx.AddTask(Resources.AnalyzingArchiveInformation, maxValue: fileLength);
+
+                    byte[] buffer = new byte[1024 * 1024];
+                    int read;
+                    while ((read = file.Read(buffer, 0, buffer.Length)) > 0)
+                    {
+                        HashAlgorithm.TransformBlock(buffer, 0, read, null, 0);
+                        hashTask.Increment(read);
+                    }
+
+                    HashAlgorithm.TransformFinalBlock([], 0, 0);
+                    var hashBytes = HashAlgorithm.Hash!;
+                    archiveHash = Convert.ToBase64String(hashBytes);
+                    archiveHashHex = Convert.ToHexString(hashBytes).ToLowerInvariant();
+
+                    // 空文件无字节可读，强制补满避免进度条停在起点
+                    hashTask.Value = hashTask.MaxValue;
+                });
+
+            hashComputed = true;
         }
 
         /// <summary>
@@ -261,37 +297,23 @@ namespace ArchivePasswordTestTool
                             }
                             else
                             {
-                                context = new ArchiveContext(dllPath, archivePath, archiveInfo, password);
+                                context = new ArchiveContext(dllPath, archivePath, password, archiveInfo);
                             }
 
-                            bool passwordCorrect;
-
-                            if (archiveInfo.SupportsQuickTest && archiveInfo.MinEncryptedFile is not null)
-                            {
-                                uint[] fileIndices = [archiveInfo.MinEncryptedFile.Value.Key];
-                                passwordCorrect = context.TestPassword(password, fileIndices);
-                            }
-                            else
-                            {
-                                passwordCorrect = context.TestPassword(password);
-                            }
-
-                            if (passwordCorrect)
+                            // 快速测试目标（最小加密文件索引）由 ArchiveContext 打开归档时算好并缓存，
+                            // 这里不再逐密码新建索引数组
+                            if (context.TestPassword(password))
                             {
                                 foundPassword = password;
                                 stopwatch.Stop();
                                 state.Stop();
-                                return;
                             }
                         }
-                        catch (OperationCanceledException)
+                        catch (ArchivePasswordException)
                         {
-
-                        }
-                        catch (Exception)
-                        {
-                            // 打开压缩包失败（完全加密压缩包密码错误时 Open 会返回错误）
-                            // 视为"密码不匹配"，继续测试下一个密码
+                            // 只吞"预期内的密码不匹配"（header 加密 / 全加密包在 Open 阶段校验密码）。
+                            // 其余异常（7z.dll 加载失败、OOM、未知格式等）不再静默——
+                            // 否则真实故障会被伪装成"未找到密码"
                         }
                         finally
                         {

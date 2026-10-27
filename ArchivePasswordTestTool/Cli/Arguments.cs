@@ -1,4 +1,4 @@
-﻿namespace ArchivePasswordTestTool
+namespace ArchivePasswordTestTool
 {
     /// <summary>
     /// 命令行参数读取辅助。-Flag 形式的参数与其后的值成对出现。

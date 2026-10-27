@@ -1,4 +1,4 @@
-﻿using System.Collections.Concurrent;
+using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -21,12 +21,43 @@ namespace ArchivePasswordTestTool
         /// <summary>多进程收益阈值：更小的字典用进程内线程更划算（进程启动开销占主导）</summary>
         public const int MinPasswordsForMultiProcess = 256;
 
-        private const int BatchSize = 64;
+        /// <summary>
+        /// 单批密码上限。批越大管道往返与 JSON 开销占比越低（实测往返 &lt;1ms，
+        /// 而一批 64 个密码的计算约 1.2s，开销占比 &lt;0.1%），但也决定了调度粒度：
+        /// 固定 64 会让小字典只够少数工作进程瓜分，其余进程启动完立刻空转退出。
+        /// </summary>
+        private const int MaxBatchSize = 64;
+
+        /// <summary>单批密码下限：再小则往返次数上升，且进度回调过于琐碎</summary>
+        private const int MinBatchSize = 8;
+
+        /// <summary>每个工作进程期望摊到的批数，决定批大小的均衡粒度</summary>
+        private const int TargetBatchesPerWorker = 4;
+
         private const string ReadyMarker = "READY";
         private const string StopMarker = "STOP";
         private const string QuitMarker = "QUIT";
         private const string WorkersEnvVar = "APTT_WORKERS";
         private const string ParallelismEnvVar = "APTT_PARALLELISM";
+
+        /// <summary>
+        /// 按字典规模推算单批大小，使每个工作进程都能分到活且负载大致均匀。
+        /// 目标为每个进程约 <see cref="TargetBatchesPerWorker"/> 批：
+        /// 字典远大于「进程数 × 上限」时结果就是 <see cref="MaxBatchSize"/>（与固定批等价），
+        /// 只有「小字典 + 多进程」时批才收缩，避免出现「300 个密码仅 5 个进程干活、
+        /// 其余 15 个空转」这类批粒度不匹配的浪费。
+        /// </summary>
+        internal static int ResolveBatchSize(int passwordCount, int workerCount)
+        {
+            if (passwordCount <= 0 || workerCount <= 0)
+            {
+                return MinBatchSize;
+            }
+
+            long divisor = (long)workerCount * TargetBatchesPerWorker;
+            int share = (int)((passwordCount + divisor - 1) / divisor);
+            return Math.Clamp(share, MinBatchSize, MaxBatchSize);
+        }
 
         /// <summary>
         /// 决定工作进程数：APTT_WORKERS 显式指定优先；否则默认逻辑核心数，
@@ -68,8 +99,9 @@ namespace ArchivePasswordTestTool
             var errors = new ConcurrentQueue<string>();
             using var cancellation = new CancellationTokenSource();
 
+            int batchSize = ResolveBatchSize(dictionary.Count, workerCount);
             var tasks = Enumerable.Range(0, workerCount)
-                .Select(_ => Task.Run(() => WorkerLoop(exePath, dllPath, archivePath, dictionary, retry, errors, cancellation, onTested, onFound)))
+                .Select(_ => Task.Run(() => WorkerLoop(exePath, dllPath, archivePath, dictionary, batchSize, retry, errors, cancellation, onTested, onFound)))
                 .ToArray();
 
             try
@@ -119,7 +151,7 @@ namespace ArchivePasswordTestTool
 
                 try
                 {
-                    NativeMethods.Initialize(dllPath);
+                    SevenZipLibrary.GetShared(dllPath);
                 }
                 catch (Exception ex)
                 {
@@ -195,13 +227,13 @@ namespace ArchivePasswordTestTool
                             }
                             else
                             {
-                                using var context = new ArchiveContext(dllPath, archivePath, info, password);
+                                using var context = new ArchiveContext(dllPath, archivePath, password, info);
                                 ok = context.TestPassword(password);
                             }
                         }
-                        catch
+                        catch (ArchivePasswordException)
                         {
-                            // 与进程内路径一致：打开失败视为密码不匹配
+                            // 与进程内路径一致：密码错误（header/全加密包在 Open 阶段校验）
                             ok = false;
                         }
 
@@ -233,6 +265,7 @@ namespace ArchivePasswordTestTool
             string? dllPath,
             string archivePath,
             PasswordDictionary dictionary,
+            int batchSize,
             ConcurrentQueue<string> retry,
             ConcurrentQueue<string> errors,
             CancellationTokenSource cancellation,
@@ -284,8 +317,8 @@ namespace ArchivePasswordTestTool
 
                 while (!token.IsCancellationRequested)
                 {
-                    var batch = new List<string>(BatchSize);
-                    while (batch.Count < BatchSize)
+                    var batch = new List<string>(batchSize);
+                    while (batch.Count < batchSize)
                     {
                         // 重投队列优先（工作进程崩溃时整批未知结果，须补测）
                         string? password = retry.TryDequeue(out var requeued) ? requeued : dictionary.Pop();

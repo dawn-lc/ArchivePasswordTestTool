@@ -1,5 +1,4 @@
 using ArchivePasswordTestTool.Properties;
-using Figgle.Fonts;
 using Spectre.Console;
 
 namespace ArchivePasswordTestTool
@@ -43,7 +42,7 @@ namespace ArchivePasswordTestTool
         /// </summary>
         public static void WriteHeader(int[] version)
         {
-            AnsiConsole.Write(FiggleFonts.Standard.Render(Resources.AppName));
+            AnsiConsole.WriteLine(Banner.Text);
 
             var footer = new Rule($"[grey]v{string.Join('.', version)} · {Escape(Resources.Developer)} · {Escape(Resources.AppHomePage)}[/]")
             {
@@ -54,11 +53,12 @@ namespace ArchivePasswordTestTool
         }
 
         /// <summary>
-        /// 压缩包与测试参数信息面板（开始测试前展示）
+        /// 压缩包与测试参数信息面板（开始测试前展示）。
+        /// archiveHash 为 null 表示哈希尚未按需计算（离线且不需要写结果文件时），此时整行省略
         /// </summary>
         public static void WriteArchiveInfo(
             string archivePath,
-            string archiveHash,
+            string? archiveHash,
             string format,
             uint fileCount,
             bool headerEncryption,
@@ -76,7 +76,10 @@ namespace ArchivePasswordTestTool
             AddRow(grid, Resources.InfoFiles, fileCount.ToString());
             AddRow(grid, Resources.InfoEncryption, headerEncryption ? Resources.ValueHeaderEncryption : Resources.ValueYes);
             AddRow(grid, Resources.InfoQuickTest, supportsQuickTest ? Resources.ValueYes : Resources.ValueNo);
-            AddRow(grid, Resources.InfoHash, archiveHash);
+            if (archiveHash is not null)
+            {
+                AddRow(grid, Resources.InfoHash, archiveHash);
+            }
             AddRow(grid, Resources.InfoDictionary, dictionaryPath);
             AddRow(grid, Resources.InfoParallelism, parallelism.ToString());
             AddRow(grid, Resources.InfoPasswords, passwordCount.ToString());

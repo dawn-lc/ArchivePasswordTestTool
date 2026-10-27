@@ -36,33 +36,96 @@ namespace ArchivePasswordTestTool
     /// 版本更新检查（能力移植自旧版 Utils.Upgrade，重构为按场景收敛）：
     /// 通过 GitHub Releases API 获取最新版本（tag 格式 "x.y.z-Type"），
     /// 与当前版本比较后提示更新并可选打开发布页。
-    /// 检查间隔 24h（config.json 记录上次检查时间），失败静默跳过不阻断主流程。
+    /// 检查间隔 24h（配置文件记录上次**成功**检查的时间），失败静默跳过不阻断主流程。
+    /// 网络请求在后台发起（不阻塞首屏与引导），测试结束后再消费结果——
+    /// 除首次运行外用户不会感到丝毫等待。
     /// </summary>
     internal static class Upgrade
     {
         private const string RepoUrl = "https://api.github.com/repos/dawn-lc/ArchivePasswordTestTool/releases/latest";
         private const string ReleasesPageUrl = "https://github.com/dawn-lc/ArchivePasswordTestTool/releases/latest";
+        private const string ConfigFolderName = "ArchivePasswordTestTool";
         private const string ConfigFileName = "config.json";
+
+        /// <summary>禁用启动检查的环境变量（设为 1 即完全跳过）</summary>
+        private const string DisableEnvVar = "APTT_NO_UPGRADE_CHECK";
+
         private static readonly TimeSpan CheckInterval = TimeSpan.FromDays(1);
 
+        /// <summary>后台进行中的检查（null 表示本次启动无需检查）</summary>
+        private static Task<UpgradeReleasesInfo?>? pendingCheck;
+
         /// <summary>
-        /// 启动时检查更新（尽力而为）：距上次检查不足 24h 直接跳过；
-        /// 网络/API 失败只提示不抛出。发现新版本时前往发布页询问
+        /// 配置文件放在用户本地应用数据目录：原先用相对路径写在当前工作目录，
+        /// 从不同目录启动就会到处生成 config.json。
         /// </summary>
-        public static void CheckForUpdate()
+        private static string ConfigFilePath => Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            ConfigFolderName,
+            ConfigFileName);
+
+        /// <summary>
+        /// 启动时调用：满足 24h 间隔才在后台发起检查（不阻塞、不打印）。
+        /// 检查成功后才写入时间戳，失败可在下次启动重试。
+        /// </summary>
+        public static void StartBackgroundCheck()
         {
             try
             {
+                if (Environment.GetEnvironmentVariable(DisableEnvVar) == "1")
+                {
+                    return;
+                }
+
+                // 0.0.0 是未注入版本号的本地开发构建（见 Program.Version）：
+                // 它必然「旧于」任何线上发布版，检查只会产生无意义的更新提示
+                if (IsDevelopmentBuild())
+                {
+                    return;
+                }
+
                 var config = LoadConfig();
                 if (DateTime.Now - config.LastCheckUpgrade < CheckInterval)
                 {
                     return;
                 }
 
-                config.LastCheckUpgrade = DateTime.Now;
-                SaveConfig(config);
+                pendingCheck = Task.Run(() =>
+                {
+                    var info = FetchLatestRelease();
+                    if (info is not null)
+                    {
+                        // 只有成功拿到数据才算"已检查"，网络故障下次启动重试
+                        SaveConfig(new UpgradeConfig { LastCheckUpgrade = DateTime.Now });
+                    }
 
-                var info = FetchLatestRelease();
+                    return info;
+                });
+            }
+            catch
+            {
+                // 尽力而为：读配置失败等一律跳过
+                pendingCheck = null;
+            }
+        }
+
+        /// <summary>
+        /// 测试结束后调用：消费后台结果。后台请求尚未完成时直接放弃本次提示（绝不阻塞退出），
+        /// 下次启动会重试。发现新版本时询问是否前往发布页。
+        /// </summary>
+        public static void CompleteBackgroundCheck()
+        {
+            var task = pendingCheck;
+            pendingCheck = null;
+
+            if (task is null || !task.IsCompletedSuccessfully)
+            {
+                return;
+            }
+
+            try
+            {
+                var info = task.Result;
                 if (info?.TagName is null)
                 {
                     return;
@@ -82,9 +145,19 @@ namespace ArchivePasswordTestTool
             }
             catch
             {
-                // 尽力而为：任何失败（网络/解析/IO）静默跳过
+                // 尽力而为：任何失败静默跳过
             }
         }
+
+        /// <summary>
+        /// 是否为本地开发构建（未注入版本号，见 Program.VersionType）。
+        /// 这类构建必然「旧于」任何线上发布版，检查只会产生无意义的更新提示。
+        /// 判定依据是显式的版本类型标记而非「版本号是否为 0」：后者在版本元数据
+        /// 意外缺失时会把发布版误判成开发版，从而静默关闭更新检查
+        /// （CI 的发布产物实测会断言版本号，元数据丢失在流水线即暴露）。
+        /// </summary>
+        private static bool IsDevelopmentBuild() =>
+            string.Equals(Program.VersionType, Program.DevelopmentVersionType, StringComparison.OrdinalIgnoreCase);
 
         /// <summary>
         /// 获取最新 Release：优先空 SNI（规避按域名嗅探阻断的中间设备），
@@ -144,9 +217,10 @@ namespace ArchivePasswordTestTool
         {
             try
             {
-                if (File.Exists(ConfigFileName))
+                string path = ConfigFilePath;
+                if (File.Exists(path))
                 {
-                    var config = JsonSerializer.Deserialize(File.ReadAllText(ConfigFileName), UpgradeJsonContext.Default.UpgradeConfig);
+                    var config = JsonSerializer.Deserialize(File.ReadAllText(path), UpgradeJsonContext.Default.UpgradeConfig);
                     if (config is not null)
                     {
                         return config;
@@ -165,11 +239,13 @@ namespace ArchivePasswordTestTool
         {
             try
             {
-                File.WriteAllText(ConfigFileName, JsonSerializer.Serialize(config, UpgradeJsonContext.Default.UpgradeConfig));
+                string path = ConfigFilePath;
+                Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+                File.WriteAllText(path, JsonSerializer.Serialize(config, UpgradeJsonContext.Default.UpgradeConfig));
             }
             catch
             {
-                // 只读目录等场景静默（每次启动都会重查一次，可接受）
+                // 只读/无权限等场景静默（下次启动会重查一次，可接受）
             }
         }
 

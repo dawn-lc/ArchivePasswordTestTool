@@ -1,0 +1,61 @@
+name: CI
+
+# 日常验证：提交与 PR 都跑完整的「构建 → 测试 → 发布 → 产物校验」链路。
+# 之所以在 CI 里也做 publish：裁剪（PublishTrimmed）与内置 COM 互操作的问题
+# 只在 publish 路径暴露，普通 build 与 E2E 测不到，而它恰恰是用户实际拿到的产物。
+on:
+  push:
+    branches: [master]
+    paths-ignore:
+      - '**/*.md'
+      - 'LICENSE'
+      - '.gitignore'
+  pull_request:
+    branches: [master]
+  workflow_dispatch:
+
+# 同一分支的新提交取消旧运行，避免排队浪费额度
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Build, test and verify published binary
+    runs-on: windows-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # 项目未启用 packages.lock.json，以 csproj 作为缓存 key（依赖版本变更即失效）
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+          cache: true
+          cache-dependency-path: '**/*.csproj'
+
+      - name: Build and verify
+        uses: ./.github/actions/build-verify
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: '**/TestResults/*.trx'
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Upload published binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: ArchivePasswordTestTool-win-x64
+          path: ArchivePasswordTestTool/bin/Release/net10.0/win-x64/publish/ArchivePasswordTestTool.exe
+          if-no-files-found: error
+          retention-days: 7

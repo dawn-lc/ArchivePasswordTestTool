@@ -10,6 +10,10 @@
 *.userosscache
 *.sln.docstates
 
+# 更新检查时间戳（默认写入 %LOCALAPPDATA%\ArchivePasswordTestTool；
+# 旧版本曾写在当前工作目录，这里一并忽略，避免误提交）
+config.json
+
 # User-specific files (MonoDevelop/Xamarin Studio)
 *.userprefs
 

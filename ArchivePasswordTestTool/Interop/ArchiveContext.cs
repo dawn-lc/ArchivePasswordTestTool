@@ -1,7 +1,19 @@
-﻿using System.Runtime.InteropServices;
+using System.Runtime.InteropServices;
 
 namespace ArchivePasswordTestTool
 {
+    /// <summary>
+    /// 打开归档失败：绝大多数是密码不匹配——header 加密 / 全加密包在 Open 阶段
+    /// 就校验密码，密码错误必然失败。单独异常类型让测试循环只吞掉这一类
+    /// "预期内的密码失败"，不把 OOM、dll 加载失败等真实故障伪装成"未找到密码"。
+    /// </summary>
+    internal sealed class ArchivePasswordException(int hresult, Exception? innerException = null)
+        : Exception($"Cannot open archive: wrong password or corrupted data (HRESULT 0x{hresult:X8}).", innerException)
+    {
+        /// <summary>7z.dll 返回的原始 HRESULT</summary>
+        public int HResultCode { get; } = hresult;
+    }
+
     /// <summary>
     /// 压缩包上下文，管理压缩包的生命周期
     /// </summary>
@@ -13,7 +25,6 @@ namespace ArchivePasswordTestTool
         private bool _disposed;
         private readonly IInArchive archive;
         private readonly IArchiveSourceStream? fileStream;
-        private readonly SevenZipLibrary? library; // 每个实例独立的 7z.dll 库
         private readonly Lock actionLock = new();
 
         /// <summary>
@@ -115,105 +126,60 @@ namespace ArchivePasswordTestTool
             {
                 Marshal.ReleaseComObject(archive);
                 stream.Dispose();
-                Marshal.ThrowExceptionForHR(hr);
+                throw new ArchivePasswordException(hr);
             }
 
             openResult = hr;
             return archive;
         }
+
         /// <summary>
-        /// 打开压缩包
+        /// 打开压缩包。info 为共享的只读归档信息（多密码重开同一包时复用，
+        /// 避免重复枚举条目）；为空时本实例负责检测格式并填充 Info。
         /// </summary>
-        /// <param name="archivePath">压缩包路径</param>
         /// <param name="dllPath">7z.dll路径</param>
+        /// <param name="archivePath">压缩包路径</param>
         /// <param name="password">打开压缩包时使用的密码（可选）</param>
-        public ArchiveContext(string dllPath, string archivePath, string? password)
+        /// <param name="info">可选的共享归档信息（调用方已探测过时传入）</param>
+        public ArchiveContext(string dllPath, string archivePath, string? password, ArchiveInfo? info = null)
         {
-            try
+            if (!File.Exists(archivePath))
             {
-                // 创建独立的 7z.dll 库实例
-                var lib = new SevenZipLibrary(dllPath);
-                library = lib;
+                throw new FileNotFoundException($"Archive file not found: {archivePath}");
+            }
 
-                if (!File.Exists(archivePath))
-                {
-                    throw new FileNotFoundException($"Archive file not found: {archivePath}");
-                }
+            // 共享 Info 只带格式；签名偏移仍需按文件解析（命中检测缓存，开销极小）
+            var (format, signatureOffset) = ArchiveFormatDetector.DetectArchiveFormat(archivePath);
+            _streamOffset = signatureOffset;
 
-                Guid iidInArchive = SevenZipGuids.IID_IInArchive;
-
-                var (format, signatureOffset) = ArchiveFormatDetector.DetectArchiveFormat(archivePath);
+            if (info is null)
+            {
                 Type = format;
-                _streamOffset = signatureOffset;
-
                 if (Type == Guid.Empty)
                 {
                     throw new InvalidOperationException("无法识别该文件的格式，请检查该文件是否是支持的压缩包！");
                 }
 
-                archive = OpenArchive(lib, Type, iidInArchive, archivePath, password, _streamOffset, out var fs, out int openResult);
-                fileStream = fs;
-                _openResult = openResult;
+                Info = new ArchiveInfo { Type = Type };
+            }
+            else
+            {
+                Info = info;
+                Type = info.Type;
+            }
 
-                Info = new ArchiveInfo() { Type = Type };
+            // 进程级共享库：同一路径只加载一次（详见 SevenZipLibrary）
+            var library = SevenZipLibrary.GetShared(dllPath);
 
+            archive = OpenArchive(library, Type, SevenZipGuids.IID_IInArchive, archivePath, password, _streamOffset, out var fs, out int openResult);
+            fileStream = fs;
+            _openResult = openResult;
+
+            // 注意：info 非空时绝不重新 Populate —— 共享 Info 是多线程只读对象，
+            // 写共享对象会覆写 IsHeaderEncryption 导致后续迭代错误地走 Extract 分支并崩溃
+            if (info is null)
+            {
                 PopulateArchiveInfo(archive, Info);
-            }
-            catch
-            {
-                // 半构造失败时释放已加载的 7z.dll，避免每次失败叠加一个 FreeLibrary 泄漏
-                library?.Dispose();
-                throw;
-            }
-        }
-
-        public ArchiveContext(string dllPath, string archivePath, ArchiveInfo? info, string? password)
-        {
-            try
-            {
-                // 创建独立的 7z.dll 库实例
-                var lib = new SevenZipLibrary(dllPath);
-                library = lib;
-
-                if (!File.Exists(archivePath))
-                {
-                    throw new FileNotFoundException($"Archive file not found: {archivePath}");
-                }
-
-                Guid iidInArchive = SevenZipGuids.IID_IInArchive;
-
-                if (info != null)
-                {
-                    Info = info;
-                    Type = info.Type;
-
-                    // 共享 Info 只带格式，签名偏移仍需按文件解析（命中检测缓存，开销极小）
-                    _streamOffset = ArchiveFormatDetector.DetectArchiveFormat(archivePath).Offset;
-                }
-                else
-                {
-                    var (format, signatureOffset) = ArchiveFormatDetector.DetectArchiveFormat(archivePath);
-                    Type = format;
-                    _streamOffset = signatureOffset;
-                    if (Type == Guid.Empty)
-                    {
-                        throw new InvalidOperationException("无法识别该文件的格式，请检查该文件是否是支持的压缩包！");
-                    }
-                    Info = new ArchiveInfo { Type = Type };
-                }
-
-                // Open archive
-                archive = OpenArchive(lib, Type, iidInArchive, archivePath, password, _streamOffset, out var fs, out int openResult2);
-                fileStream = fs;
-                _openResult = openResult2;
-
-                // 注意：info 非空时绝不重新 Populate —— 共享 Info 是多线程只读对象，
-                // 写共享对象会覆写 IsHeaderEncryption 导致后续迭代错误地走 Extract 分支并崩溃
-            }
-            catch
-            {
-                library?.Dispose();
-                throw;
             }
         }
 
@@ -297,10 +263,11 @@ namespace ArchivePasswordTestTool
             // 仅当存在合格（压缩后 >32 字节）的加密文件时才建立快速测试目标：
             // 条件不成立时若还无条件赋值，minIndex 会停留在初值 0，
             // 一旦 0 号文件恰好未加密，密码测试将打到未加密文件上，
-            // 任何错误密码都会被误判为正确（假阳性）——已实测复现并修复
+            // 任何错误密码都会被误判为正确（假阳性）——已实测复现并修复。
+            // 索引数组一次算好挂在 Info 上，供每个密码测试复用（原先每个密码都新建数组）
             if (foundEncrypted && foundQuickTarget)
             {
-                info.MinEncryptedFile = new KeyValuePair<uint, ulong>(minIndex, minSize);
+                info.QuickTestFileIndices = [minIndex];
             }
             info.SupportsQuickTest = !allEncrypted && foundQuickTarget;
         }
@@ -309,7 +276,7 @@ namespace ArchivePasswordTestTool
         /// 测试密码是否正确
         /// </summary>
         /// <param name="password">要测试的密码</param>
-        /// <param name="fileIndices">要测试的文件索引数组，如果为null则自动选择一个加密文件</param>
+        /// <param name="fileIndices">要测试的文件索引数组；为空则用 Info 上缓存的快速测试目标</param>
         /// <returns>true 表示密码正确，false 表示密码错误或发生错误</returns>
         public bool TestPassword(string password, uint[]? fileIndices = null)
         {
@@ -323,20 +290,8 @@ namespace ArchivePasswordTestTool
                     return _openResult == 0;
                 }
 
-                uint[]? indices = null;
-
-                // 如果没有指定文件，自动选择最小的加密文件
-                if (fileIndices == null || fileIndices.Length == 0)
-                {
-                    if (Info.MinEncryptedFile.HasValue)
-                    {
-                        indices = [Info.MinEncryptedFile.Value.Key];
-                    }
-                }
-                else
-                {
-                    indices = fileIndices;
-                }
+                // 未显式指定时复用 Info 上预计算的索引（每次密码测试都新建数组纯属浪费）
+                uint[]? indices = fileIndices is { Length: > 0 } ? fileIndices : Info.QuickTestFileIndices;
 
                 uint numItems = indices is null ? 0xFFFFFFFF : (uint)indices.Length;
 
@@ -384,7 +339,6 @@ namespace ArchivePasswordTestTool
                 }
 
                 fileStream?.Dispose();
-                library?.Dispose();
             }
             catch
             {
@@ -446,9 +400,11 @@ namespace ArchivePasswordTestTool
         public bool IsHeaderEncryption { get; set; }
 
         /// <summary>
-        /// 最小的加密文件索引和大小（用于快速测试）
+        /// 快速测试目标文件索引（最小的、压缩后大于 32 字节的加密文件）。
+        /// 打开归档时算好一次，每个密码测试直接复用同一个数组，避免逐密码重复分配。
+        /// 为空表示没有合格的快速测试目标（此时走全量测试）。
         /// </summary>
-        public KeyValuePair<uint, ulong>? MinEncryptedFile { get; set; }
+        public uint[]? QuickTestFileIndices { get; set; }
 
         /// <summary>
         /// 压缩包是否加密

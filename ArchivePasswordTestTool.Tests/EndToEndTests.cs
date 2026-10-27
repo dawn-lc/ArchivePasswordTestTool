@@ -106,6 +106,68 @@ public sealed class EndToEndTests(TestDataFixture fx, ITestOutputHelper output)
     }
 
     /// <summary>
+    /// 密码含格式占位符或 Spectre 标记字符时必须原样输出。
+    /// 密码始终作为 <c>string.Format</c> 的**参数**（而非格式串）传入，且输出前经
+    /// <c>Markup.Escape</c>：若将来有人把密码当格式串用，<c>{0}</c> 会被替换甚至抛
+    /// FormatException；漏掉转义则 <c>[red]</c> 会被当成样式吞掉。
+    /// </summary>
+    [Theory]
+    [InlineData("{0}")]
+    [InlineData("{0}Pw{1}")]
+    [InlineData("{{pw}}")]
+    [InlineData("a{b}c")]
+    [InlineData("[red]X[/]")]
+    public void PasswordWithFormatOrMarkupCharactersIsReportedVerbatim(string password)
+    {
+        string archivePath = Path.Combine(Path.GetTempPath(), $"ApttFormat{Guid.NewGuid():N}.7z");
+        string dictPath = Path.ChangeExtension(archivePath, ".txt");
+
+        try
+        {
+            CreateArchiveWithPassword(archivePath, password);
+            File.WriteAllLines(dictPath, ["DefinitelyWrong", password]);
+
+            var result = RunTool($"-D \"{dictPath}\" -F \"{archivePath}\"");
+
+            Assert.Equal(0, result.ExitCode);
+            // 原样出现既是「找到了密码」的证明，也证明它没被格式化或标记解析吞掉
+            Assert.Contains(password, result.Output);
+        }
+        finally
+        {
+            File.Delete(archivePath);
+            File.Delete(dictPath);
+        }
+    }
+
+    /// <summary>用 7-Zip CLI 现场创建一个指定密码的压缩包（密码通过 ArgumentList 传递，不经 shell）</summary>
+    private void CreateArchiveWithPassword(string archivePath, string password)
+    {
+        var startInfo = new ProcessStartInfo(fx.SevenZipExe)
+        {
+            UseShellExecute = false,
+            CreateNoWindow = true,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+        };
+        startInfo.ArgumentList.Add("a");
+        startInfo.ArgumentList.Add("-t7z");
+        startInfo.ArgumentList.Add("-p" + password);
+        startInfo.ArgumentList.Add(archivePath);
+        startInfo.ArgumentList.Add(fx.Archive("Payload.bin"));
+        startInfo.ArgumentList.Add("-y");
+
+        using var process = Process.Start(startInfo);
+        Assert.NotNull(process);
+
+        string stdout = process!.StandardOutput.ReadToEnd();
+        string stderr = process.StandardError.ReadToEnd();
+        process.WaitForExit();
+
+        Assert.True(process.ExitCode == 0, $"7z 创建压缩包失败（exit {process.ExitCode}）：\n{stdout}\n{stderr}");
+    }
+
+    /// <summary>
     /// 多进程模式端到端：2100 行字典超过多进程阈值，4 个工作进程按批分发，
     /// 正确密码在末尾，验证分发/ACK/结果回传全链路
     /// </summary>

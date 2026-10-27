@@ -3,65 +3,40 @@ using System.Runtime.InteropServices;
 namespace ArchivePasswordTestTool
 {
     /// <summary>
-    /// 7z.dll 原生方法（静态版本，向后兼容）
-    /// </summary>
-    internal static class NativeMethods
-    {
-        private static SevenZipLibrary? _library;
-
-        /// <summary>
-        /// 初始化7z.dll，从指定路径加载
-        /// </summary>
-        /// <param name="dllPath">7z.dll的完整路径</param>
-        /// <returns>是否成功加载</returns>
-        public static bool Initialize(string dllPath)
-        {
-            if (_library != null)
-            {
-                return true; // 已经初始化
-            }
-
-            _library = new SevenZipLibrary(dllPath);
-            return true;
-        }
-
-        /// <summary>
-        /// 清理资源
-        /// </summary>
-        public static void Cleanup()
-        {
-            _library?.Dispose();
-            _library = null;
-        }
-
-        public static int CreateObject(
-            ref Guid clsID,
-            ref Guid interfaceID,
-            out object outObject)
-        {
-            if (_library == null)
-            {
-                throw new InvalidOperationException("7z.dll not initialized. Call Initialize() first.");
-            }
-
-            return _library.CreateObject(ref clsID, ref interfaceID, out outObject);
-        }
-    }
-
-    /// <summary>
-    /// 7-Zip 库实例，每个实例独立加载 7z.dll
-    /// </summary>
-    /// <remarks>
+    /// 7-Zip 库（进程级共享）。同一路径在一个进程内只加载一次。
+    /// Windows 加载器对同一模块本就返回同一句柄并只做引用计数，因此每次密码测试
+    /// 都新建实例、LoadLibrary/FreeLibrary 一轮不会有任何隔离收益，纯属额外开销；
+    /// 真正绕开 7z.dll 内 KDF 全局锁的是多进程模式（见 MultiProcess），
+    /// 那里每个进程各自加载一份，天然隔离。
     /// CreateObject 用 LibraryImport 源生成 stub（编译期生成，裁剪安全），
     /// 不使用 Marshal.GetDelegateForFunctionPointer——后者依赖运行时封送元数据，
     /// 在 IL 裁剪后会 TypeLoadException（已实测）。
-    /// Windows 加载器按 base name 匹配已加载模块，Initialize 中 LoadLibrary 后
-    /// 此处 DllImport("7z.dll") 命中同一模块（含 -lib 指定路径的场景）。
-    /// </remarks>
-    internal partial class SevenZipLibrary : IDisposable
+    /// </summary>
+    internal sealed partial class SevenZipLibrary
     {
-        private IntPtr _7zModule = IntPtr.Zero;
-        private bool _disposed;
+        private static readonly Lock Gate = new();
+        private static readonly Dictionary<string, SevenZipLibrary> Shared = new(StringComparer.OrdinalIgnoreCase);
+
+        /// <summary>
+        /// 取得指定路径的进程级共享实例：首次调用时加载 7z.dll（并按需设置一次
+        /// DLL 搜索目录），之后直接命中缓存。加载失败抛异常（含路径与错误码）
+        /// </summary>
+        public static SevenZipLibrary GetShared(string dllPath)
+        {
+            string fullPath = Path.GetFullPath(dllPath);
+
+            lock (Gate)
+            {
+                if (Shared.TryGetValue(fullPath, out var existing))
+                {
+                    return existing;
+                }
+
+                var library = new SevenZipLibrary(fullPath);
+                Shared.Add(fullPath, library);
+                return library;
+            }
+        }
 
         /// <summary>
         /// 7z.dll 导出的 CreateObject(const GUID*, const GUID*, void**)
@@ -69,39 +44,20 @@ namespace ArchivePasswordTestTool
         [LibraryImport("7z.dll", EntryPoint = "CreateObject")]
         private static partial int CreateObjectNative(ref Guid classID, ref Guid interfaceID, out IntPtr outObject);
 
-        /// <summary>
-        /// 初始化7z.dll，从指定路径加载
-        /// </summary>
-        /// <param name="dllPath">7z.dll的完整路径</param>
-        public SevenZipLibrary(string dllPath)
+        private SevenZipLibrary(string dllPath)
         {
-            Initialize(dllPath);
-        }
-
-        /// <summary>
-        /// 初始化7z.dll，从指定路径加载
-        /// </summary>
-        /// <param name="dllPath">7z.dll的完整路径</param>
-        /// <returns>是否成功加载</returns>
-        private void Initialize(string dllPath)
-        {
-            if (_7zModule != IntPtr.Zero)
-            {
-                return; // 已经初始化
-            }
-
             if (!File.Exists(dllPath))
             {
                 throw new FileNotFoundException($"7z.dll not found at: {dllPath}");
             }
 
-            // 设置DLL搜索目录为7z.dll所在目录
-            string dllDirectory = Path.GetDirectoryName(dllPath)!;
-            WindowsNativeMethods.SetDllDirectory(dllDirectory);
+            // 仅在此处（每路径一次）调整 DLL 搜索目录：原实现每次密码测试创建上下文时
+            // 都会写一次进程级全局搜索路径，既多余又让并发创建上下文时行为不干净。
+            // 7z.dll 常驻进程直到退出（不再 FreeLibrary），因此这一次设置足够
+            WindowsNativeMethods.SetDllDirectory(Path.GetDirectoryName(dllPath)!);
 
-            // 加载7z.dll
-            _7zModule = WindowsNativeMethods.LoadLibrary(dllPath);
-            if (_7zModule == IntPtr.Zero)
+            IntPtr module = WindowsNativeMethods.LoadLibrary(dllPath);
+            if (module == IntPtr.Zero)
             {
                 int errorCode = Marshal.GetLastWin32Error();
                 throw new DllNotFoundException($"Failed to load 7z.dll from {dllPath}. Error code: {errorCode}");
@@ -116,8 +72,6 @@ namespace ArchivePasswordTestTool
             ref Guid interfaceID,
             out object outObject)
         {
-            ObjectDisposedException.ThrowIf(_disposed, nameof(SevenZipLibrary));
-
             int hr = CreateObjectNative(ref clsID, ref interfaceID, out IntPtr unknownPtr);
             if (hr < 0 || unknownPtr == IntPtr.Zero)
             {
@@ -130,28 +84,6 @@ namespace ArchivePasswordTestTool
             outObject = Marshal.GetObjectForIUnknown(unknownPtr);
             Marshal.Release(unknownPtr);
             return hr;
-        }
-
-        /// <summary>
-        /// 清理资源
-        /// </summary>
-        public void Dispose()
-        {
-            if (_disposed)
-                return;
-
-            if (_7zModule != IntPtr.Zero)
-            {
-                WindowsNativeMethods.FreeLibrary(_7zModule);
-                _7zModule = IntPtr.Zero;
-            }
-
-            _disposed = true;
-        }
-
-        ~SevenZipLibrary()
-        {
-            Dispose();
         }
     }
 }

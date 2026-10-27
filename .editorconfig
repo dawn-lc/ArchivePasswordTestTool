@@ -1,4 +1,16 @@
-﻿[*.cs]
+# 统一编码与行尾约定（本文件同时是查找根，避免继承上级目录的规则）
+root = true
+
+[*]
+# charset = utf-8 表示 UTF-8 无 BOM；UTF-8 带 BOM 要写 utf-8-bom（勿混用）
+# 带 BOM 的文件会让部分工具在首行看到 \ufeff（PowerShell/某些解析器），
+# 也会在按字节比对的场景（如源码内容哈希、diff 工具）产生假差异
+charset = utf-8
+
+# 仓库既有文件全部为 CRLF，用规则固定下来防止混入 LF
+end_of_line = crlf
+
+[*.cs]
 
 # CA1416: 验证平台兼容性
 dotnet_diagnostic.CA1416.severity = silent

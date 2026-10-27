@@ -2,8 +2,8 @@ namespace ArchivePasswordTestTool.Tests;
 
 /// <summary>
 /// Dictionary 多批次并发出队正确性测试：
-/// 复现并守护旧双缓冲实现的并发缺陷（无同步 refill 导致跳行/重复）�?
-/// 新契约：任意线程数下并发 Pop 收到的密码恰好覆盖字典全集且无重复�?
+/// 复现并守护旧双缓冲实现的并发缺陷（无同步 refill 导致跳行/重复）。
+/// 新契约：任意线程数下并发 Pop 收到的密码恰好覆盖字典全集且无重复。
 /// </summary>
 public sealed class DictionaryTests : IDisposable
 {
@@ -12,7 +12,7 @@ public sealed class DictionaryTests : IDisposable
 
     public DictionaryTests()
     {
-        // 5210 行，跨过默认 Limit=2048 的三批边界，正确构�?refill 竞态条�?
+        // 5210 行，跨过默认 Limit=2048 的三批边界，正确构造 refill 竞态条件
         _expected = [.. Enumerable.Range(1, 5210).Select(i => $"Password{i}")];
         _path = Path.Combine(Path.GetTempPath(), $"ApttDict{Guid.NewGuid():N}.txt");
         File.WriteAllLines(_path, _expected);
@@ -48,7 +48,7 @@ public sealed class DictionaryTests : IDisposable
     [Fact]
     public void SequentialPopReturnsEveryPasswordExactlyOnce()
     {
-        var dictionary = new PasswordDictionary(_path, limit: 1000);
+        var dictionary = new PasswordDictionary(_path);
 
         var consumed = new List<string>();
         while (true)
@@ -70,7 +70,7 @@ public sealed class DictionaryTests : IDisposable
     {
         var dictionary = new PasswordDictionary(_path);
 
-        // 正常消费完后继续 Pop 必须稳定返回 null（不得抛异常或死循环�?
+        // 正常消费完后继续 Pop 必须稳定返回 null（不得抛异常或死循环）
         while (dictionary.Pop() is not null)
         {
         }
@@ -105,7 +105,7 @@ public sealed class DictionaryTests : IDisposable
         string dupPath = Path.Combine(Path.GetTempPath(), $"ApttDictDup{Guid.NewGuid():N}.txt");
         try
         {
-            // 重复行跨越默�?Limit=2048 批次边界
+            // 重复行跨越默认 Limit=2048 批次边界
             var lines = new List<string> { "alpha" };
             for (int i = 1; i <= 2100; i++)
             {
@@ -113,13 +113,13 @@ public sealed class DictionaryTests : IDisposable
             }
 
             lines.Add("alpha");     // 与首行重复，远跨批次
-            lines.Add("Password1"); // 早期出现行重�?
+            lines.Add("Password1"); // 早期出现行重复
             lines.Add("beta");
             File.WriteAllLines(dupPath, lines);
 
             using var dictionary = new PasswordDictionary(dupPath);
 
-            // Distinct 保留首次出现顺序，与实现的文件序服务语义一�?
+            // Distinct 保留首次出现顺序，与实现的文件序服务语义一致
             var expected = lines.Distinct().ToList();
             Assert.Equal(expected.Count, dictionary.Count);
 
@@ -143,7 +143,6 @@ public sealed class DictionaryTests : IDisposable
         string dupPath = Path.Combine(Path.GetTempPath(), $"ApttDictDupCon{Guid.NewGuid():N}.txt");
         try
         {
-            // 大量重复行跨越批次边界：3 个唯一密码重复 2200 �?
             string[] unique = ["alpha", "beta", "gamma"];
             var lines = new List<string>(2200);
             for (int i = 0; i < 2200; i++)
@@ -158,13 +157,13 @@ public sealed class DictionaryTests : IDisposable
 
             var consumed = new ConcurrentBag<string>();
             Parallel.For(0, dictionary.Count, new ParallelOptions { MaxDegreeOfParallelism = Environment.ProcessorCount }, _ =>
+        {
+            var password = dictionary.Pop();
+            if (password is not null)
             {
-                var password = dictionary.Pop();
-                if (password is not null)
-                {
-                    consumed.Add(password);
-                }
-            });
+                consumed.Add(password);
+            }
+        });
 
             Assert.Equal(unique.Length, consumed.Count);
             Assert.Empty(consumed.Except(unique));

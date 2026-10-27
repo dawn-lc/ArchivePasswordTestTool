@@ -1,0 +1,106 @@
+name: Release
+
+# 发布：推送 tag 即自动构建、回归测试、打包单文件并上传到 GitHub Release。
+# tag 约定 "v2.0.0" 或 "2.0.0-Release"（Upgrade 会剥掉 v 前缀，并按 -Type 后缀比较版本等级）。
+# 校验值由 GitHub Release 自身提供，不额外生成 sha256 文件。
+on:
+  push:
+    tags:
+      - 'v*'
+      - '[0-9]*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: '要发布的 tag（必须已存在，如 v2.0.0）'
+        required: true
+
+# 同一 tag 不并发发布；不使用 cancel-in-progress，避免中断正在上传的 Release
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Publish GitHub Release
+    runs-on: windows-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+          fetch-depth: 0
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+          cache: true
+          cache-dependency-path: '**/*.csproj'
+
+      # tag 就是版本号的唯一真相源：解析出 x.y.z 与类型后注入构建，源码里不需要改任何东西。
+      # 必须校验为三段纯数字——Upgrade.IsNewerVersion 在段数与线上 tag 不一致时
+      # 会直接判定为「无更新」，属于静默失效，宁可在这里硬失败
+      - name: Resolve release tag
+        shell: pwsh
+        run: |
+          $tag = if ('${{ github.event_name }}' -eq 'workflow_dispatch') { '${{ inputs.tag }}' } else { '${{ github.ref_name }}' }
+          if ([string]::IsNullOrWhiteSpace($tag)) { throw '无法确定发布 tag。' }
+
+          $core = ($tag -replace '^[vV]', '')
+          $parts = $core -split '-', 2
+          $version = $parts[0]
+          $versionType = if ($parts.Count -gt 1) { $parts[1] } else { 'Release' }
+
+          if ($version -notmatch '^\d+\.\d+\.\d+$') {
+            throw "tag '$tag' 的版本号 '$version' 不是三段 x.y.z，更新检查将无法正确比较新旧版本。"
+          }
+
+          "RELEASE_TAG=$tag" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "APP_VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "APP_VERSION_TYPE=$versionType" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
+          Write-Host "发布 tag：$tag"
+          Write-Host "注入版本：$version-$versionType"
+
+      - name: Build and verify
+        uses: ./.github/actions/build-verify
+        with:
+          appVersion: ${{ env.APP_VERSION }}
+          appVersionType: ${{ env.APP_VERSION_TYPE }}
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: '**/TestResults/*.trx'
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Create or update GitHub Release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $tag = $env:RELEASE_TAG
+          $exe = 'ArchivePasswordTestTool\bin\Release\net10.0\win-x64\publish\ArchivePasswordTestTool.exe'
+          if (-not (Test-Path $exe)) { throw "发布产物不存在：$exe" }
+
+          $repo = '${{ github.repository }}'
+
+          # 幂等：Release 已存在（重跑工作流）时覆盖上传，不新建
+          gh release view $tag --repo $repo 2>$null | Out-Null
+          if ($LASTEXITCODE -eq 0) {
+            Write-Host "Release $tag 已存在，覆盖上传产物。"
+            gh release upload $tag $exe --repo $repo --clobber
+          } else {
+            gh release create $tag $exe --repo $repo --title $tag --generate-notes --verify-tag
+          }
+          if ($LASTEXITCODE -ne 0) { throw "发布失败（exit $LASTEXITCODE）。" }
+
+          Write-Host "已发布：https://github.com/$repo/releases/tag/$tag"

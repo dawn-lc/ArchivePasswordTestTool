@@ -1,0 +1,86 @@
+name: Build and verify
+description: >
+  以 Release 配置构建、测试、单文件发布并实测发布产物。
+  CI 与 Release 共用同一套步骤，避免两条流水线对「什么是合格的发布产物」产生分歧。
+  项目已无任何条件编译，Release 单配置即可完整覆盖。
+
+inputs:
+  appVersion:
+    description: 版本号，必须三段 x.y.z（发布时由 tag 解析得出；不传则为开发版 0.0.0）
+    required: false
+    default: '0.0.0'
+  appVersionType:
+    description: 版本类型 Release/Preview/Beta 等（不传则为 Dev，更新检查按「未识别类型」保守处理）
+    required: false
+    default: 'Dev'
+
+runs:
+  using: composite
+  steps:
+    - name: Restore
+      shell: pwsh
+      run: dotnet restore ArchivePasswordTestTool.sln
+
+    # 版本号由 AppVersion/AppVersionType 注入（见主项目 csproj），源码里没有版本常量
+    - name: Build
+      shell: pwsh
+      run: >
+        dotnet build ArchivePasswordTestTool.sln -c Release --no-restore
+        -p:AppVersion=${{ inputs.appVersion }}
+        -p:AppVersionType=${{ inputs.appVersionType }}
+
+    - name: Test
+      shell: pwsh
+      run: |
+        # 测试样本由 TestDataFixture 现场生成（TestData 不入库），依赖本机 7-Zip CLI；
+        # WinRAR 缺失时 RAR 系用例自动跳过而非失败
+        if (-not (Test-Path 'C:\Program Files\7-Zip\7z.exe')) {
+          throw '未找到 7-Zip CLI，测试样本无法生成。'
+        }
+        if (Test-Path 'C:\Program Files\WinRAR\Rar.exe') {
+          # 打印版本：RAR 样本生成失败时靠它区分「WinRAR 版本行为差异」与代码问题
+          Write-Host ('检测到 WinRAR：' + (Get-Item 'C:\Program Files\WinRAR\Rar.exe').VersionInfo.FileVersion)
+          Write-Host 'RAR 系用例将执行。'
+        } else {
+          Write-Host '未检测到 WinRAR：RAR 系用例将跳过。'
+        }
+
+        dotnet test ArchivePasswordTestTool.Tests\ArchivePasswordTestTool.Tests.csproj `
+          -c Release --no-build `
+          --logger "trx;LogFileName=test-results.trx"
+
+    # 必须重复传版本参数：publish 会重新构建，漏传就会产出 0.0.0 的包
+    - name: Publish single file
+      shell: pwsh
+      run: >
+        dotnet publish ArchivePasswordTestTool\ArchivePasswordTestTool.csproj
+        -c Release
+        -p:PublishProfile=Properties\PublishProfiles\win-x64.pubxml
+        -p:AppVersion=${{ inputs.appVersion }}
+        -p:AppVersionType=${{ inputs.appVersionType }}
+
+    # 裁剪 + 内置 COM 互操作的问题只在 publish 路径暴露，普通 build 与 E2E 都覆盖不到，
+    # 故必须对发布产物本身做一次真实解密（历史上 PublishTrimmed 曾两次打断 COM 初始化）
+    - name: Smoke test published binary
+      shell: pwsh
+      env:
+        APTT_NO_UPGRADE_CHECK: '1'
+      run: |
+        $exe = 'ArchivePasswordTestTool\bin\Release\net10.0\win-x64\publish\ArchivePasswordTestTool.exe'
+        if (-not (Test-Path $exe)) { throw "发布产物不存在：$exe" }
+
+        # -NoQuery 避免触碰在线服务；判据只用 ASCII 密码，规避控制台编码差异
+        $output = & $exe -F 'TestData\Secret.7z' -D 'TestData\PasswordDictionary.txt' -NoQuery 2>&1 | Out-String
+        if ($LASTEXITCODE -ne 0) { throw "发布产物执行失败（exit $LASTEXITCODE）：`n$output" }
+        if ($output -notmatch 'Correct123!') { throw "发布产物未输出预期密码：`n$output" }
+
+        # 版本号来自程序集元数据的反射读取（Program.ResolveMetadata）。裁剪若把
+        # AssemblyMetadataAttribute 移除，版本会静默回退为 0.0.0 并连带关闭更新检查，
+        # 普通单元测试跑的是未裁剪的 apphost，覆盖不到这一点 —— 只能在这里断言。
+        $expected = '${{ inputs.appVersion }}'
+        $expectedType = '${{ inputs.appVersionType }}'
+        if ($output -notmatch [regex]::Escape("v$expected")) {
+          throw "发布产物显示的版本号不是注入值 v$expected（元数据可能在裁剪中丢失）：`n$output"
+        }
+
+        Write-Host "发布产物实测通过：成功解出正确密码，版本 v$expected-$expectedType。"

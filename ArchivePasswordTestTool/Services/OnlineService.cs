@@ -25,7 +25,17 @@ namespace ArchivePasswordTestTool
         /// </summary>
         public const string DefaultServiceUrl = "http://127.0.0.1:1";
 
-        private static readonly HttpClient Http = new() { Timeout = TimeSpan.FromSeconds(5) };
+        /// <summary>请求超时：两个功能都是尽力而为，宁可快速放弃也不要拖慢测密</summary>
+        private const int RequestTimeoutSeconds = 5;
+
+        /// <summary>
+        /// 统一由 <see cref="HttpTransport"/> 构造（出站请求都带版本标识的 User-Agent）。
+        /// 这里必须用标准 TLS 客户端而不能复用更新检查那条「空 SNI」路径：
+        /// 本服务地址可由 -Api 指向任意端点，空 SNI 会豁免证书域名不匹配，
+        /// 等于对任意地址放宽校验。
+        /// </summary>
+        private static readonly HttpClient Http =
+            HttpTransport.CreateStandardClient(TimeSpan.FromSeconds(RequestTimeoutSeconds));
 
         /// <summary>
         /// 查询哈希对应的共享密码（一个哈希对应一个密码）；无记录（404/空）返回 null，
