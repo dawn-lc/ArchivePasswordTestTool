@@ -179,6 +179,11 @@ publish/
 *.pubxml
 *.publishproj
 
+# 上一条通配规则针对的是 Web/Azure 发布配置（含连接字符串等凭证）。
+# 本项目的 win-x64.pubxml 只有构建属性、不含任何凭证，且 CI 发布必须读它——
+# 被忽略会导致 checkout 后找不到 profile 而发布失败。故显式纳入版本控制。
+!ArchivePasswordTestTool/Properties/PublishProfiles/*.pubxml
+
 # Microsoft Azure Web App publish settings. Comment the next line if you want to
 # checkin your Azure Web App publish settings, but sensitive information contained
 # in these scripts will be unencrypted
