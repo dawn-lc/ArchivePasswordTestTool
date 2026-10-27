@@ -25,7 +25,7 @@ namespace ArchivePasswordTestTool
         /// 所有 HTTP 客户端都必须带上，服务端可据此区分客户端版本。
         /// </summary>
         internal static string UserAgent =>
-            $"ArchivePasswordTestTool {string.Join('.', Program.Version)}-{Program.VersionType}";
+            $"ArchivePasswordTestTool {Program.VersionText}-{Program.VersionType}";
 
         /// <summary>
         /// 创建空 SNI 客户端：握手不携带域名，绕过按 SNI 嗅探的中间设备。

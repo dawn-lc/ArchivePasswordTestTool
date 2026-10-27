@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Text;
 using System.Text.Json;
 using ArchivePasswordTestTool.Tests.Infrastructure;
 
@@ -6,8 +7,8 @@ namespace ArchivePasswordTestTool.Tests;
 
 /// <summary>
 /// 端到端集成测试：启动真实进程运行主程序，覆盖本次重构手工验证过的全部场景矩阵。
-/// 判定规则与编码无关：成功 = exit 0 且输出包含 ASCII 密码 Correct123!；
-/// 失败负例 = exit 0 且不包含密码；格式不识别 = exit 1。
+/// 成功 = exit 0 且输出包含密码；失败负例 = exit 0 且不包含密码；格式不识别 = exit 1。
+/// 输出按 UTF-8 读取——主程序在重定向时已统一为 UTF-8（见 Program.Main）。
 /// </summary>
 [Collection(TestDataCollection.Name)]
 public sealed class EndToEndTests(TestDataFixture fx, ITestOutputHelper output)
@@ -168,6 +169,42 @@ public sealed class EndToEndTests(TestDataFixture fx, ITestOutputHelper output)
     }
 
     /// <summary>
+    /// GBK 编码的中文密码字典必须能正常破解。
+    /// <para>
+    /// 缺陷背景：字典编码曾硬定为 UTF-8，GBK 密码本（简中 Windows 记事本另存为 ANSI
+    /// 的默认结果）整份读成乱码，密码就在字典里也必然报"未找到"。
+    /// 本用例同时覆盖两件事：编码探测生效，以及重定向输出为 UTF-8（能断言回中文密码）。
+    /// </para>
+    /// </summary>
+    [Fact]
+    public void GbkDictionaryFindsChinesePassword()
+    {
+        const string Password = "中文密碼测试";
+
+        string archivePath = Path.Combine(Path.GetTempPath(), $"ApttGbk{Guid.NewGuid():N}.7z");
+        string dictPath = Path.ChangeExtension(archivePath, ".txt");
+
+        try
+        {
+            CreateArchiveWithPassword(archivePath, Password);
+
+            DictionaryEncoding.EnsureCodePagesRegistered();
+            byte[] gbkContent = Encoding.GetEncoding(936).GetBytes($"WrongPassword\r\n{Password}\r\n");
+            File.WriteAllBytes(dictPath, gbkContent);
+
+            var result = RunTool($"-D \"{dictPath}\" -F \"{archivePath}\"");
+
+            Assert.Equal(0, result.ExitCode);
+            Assert.Contains(Password, result.Output);
+        }
+        finally
+        {
+            File.Delete(archivePath);
+            File.Delete(dictPath);
+        }
+    }
+
+    /// <summary>
     /// 多进程模式端到端：2100 行字典超过多进程阈值，4 个工作进程按批分发，
     /// 正确密码在末尾，验证分发/ACK/结果回传全链路
     /// </summary>
@@ -228,6 +265,9 @@ public sealed class EndToEndTests(TestDataFixture fx, ITestOutputHelper output)
             RedirectStandardInput = true,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
+            // 与 RunTool 一致：程序重定向输出为 UTF-8
+            StandardOutputEncoding = Encoding.UTF8,
+            StandardErrorEncoding = Encoding.UTF8,
         };
         startInfo.ArgumentList.Add("-Worker");
         startInfo.ArgumentList.Add("-F");
@@ -430,6 +470,10 @@ public sealed class EndToEndTests(TestDataFixture fx, ITestOutputHelper output)
             CreateNoWindow = true,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
+            // 主程序在输出重定向时把 stdout/stderr 改为 UTF-8（见 Program.Main）：
+            // 默认编码是系统 OEM 代码页，非中文界面（法语重音/俄语西里尔）会变 '?'
+            StandardOutputEncoding = Encoding.UTF8,
+            StandardErrorEncoding = Encoding.UTF8,
         };
 
         foreach (var (key, value) in env)

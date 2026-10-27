@@ -46,6 +46,8 @@ ArchivePasswordTestTool.exe -D dict.txt -F installer.exe -lib "C:\Program Files\
 
 测试完成时间与结果会直接输出；正式版还会询问是否保存测试结果文件（`<压缩包名>[results].txt`）。
 
+字典编码自动识别：UTF-8、UTF-16（有 BOM）以及 GBK/ANSI（简中 Windows 记事本另存的默认编码）都能正确读取，无需手动转码。
+
 ## 环境变量
 
 | 变量 | 说明 |

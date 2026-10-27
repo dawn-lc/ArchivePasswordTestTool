@@ -114,6 +114,17 @@ namespace ArchivePasswordTestTool.Properties
         }
 
         /// <summary>
+        ///   查找类似 Failed to create the archive interface. 的本地化字符串。
+        /// </summary>
+        public static string CreateArchiveInterfaceFailed
+        {
+            get
+            {
+                return ResourceManager.GetString("CreateArchiveInterfaceFailed", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   查找类似 dawn-lc 的本地化字符串。
         /// </summary>
         public static string Developer
@@ -121,6 +132,17 @@ namespace ArchivePasswordTestTool.Properties
             get
             {
                 return ResourceManager.GetString("Developer", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   查找类似 Non-UTF-8 dictionary detected, reading as {0}. 的本地化字符串。
+        /// </summary>
+        public static string DictionaryEncodingDetected
+        {
+            get
+            {
+                return ResourceManager.GetString("DictionaryEncodingDetected", resourceCulture);
             }
         }
 
@@ -760,6 +782,28 @@ namespace ArchivePasswordTestTool.Properties
             get
             {
                 return ResourceManager.GetString("UpgradeApplied", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   查找类似 Cannot determine the path of the running program. 的本地化字符串。
+        /// </summary>
+        public static string ProcessPathUnavailable
+        {
+            get
+            {
+                return ResourceManager.GetString("ProcessPathUnavailable", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   查找类似 Cannot recognize the file format. 的本地化字符串。
+        /// </summary>
+        public static string UnsupportedArchiveFormat
+        {
+            get
+            {
+                return ResourceManager.GetString("UnsupportedArchiveFormat", resourceCulture);
             }
         }
     }

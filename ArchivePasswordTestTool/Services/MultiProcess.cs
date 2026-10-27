@@ -282,6 +282,10 @@ namespace ArchivePasswordTestTool
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
                 WorkingDirectory = Environment.CurrentDirectory,
+                // worker 的输出被重定向，Program.Main 会把它的 stdout/stderr 设为 UTF-8；
+                // 读取端必须用同一编码，否则中文密码/中文诊断消息都会读成乱码
+                StandardOutputEncoding = System.Text.Encoding.UTF8,
+                StandardErrorEncoding = System.Text.Encoding.UTF8,
             };
             // 剥离诊断开关：工作进程 stderr 无人读取，ComTrace 输出可能填满管道缓冲导致死锁
             startInfo.EnvironmentVariables.Remove("APTT_TRACE");
@@ -305,12 +309,20 @@ namespace ArchivePasswordTestTool
             var stdin = process.StandardInput;
             var stdout = process.StandardOutput;
 
+            // stderr 必须持续消费：重定向后若无人读取，worker 一旦写满管道缓冲
+            // （未处理异常、OOM、failfast 都会写）就会阻塞在 Write，
+            // 而主进程在 stdout.ReadLine 等回复 —— 双方互等即死锁。
+            // 同时保留尾部内容：worker 异常退出时这就是唯一的崩溃线索。
+            var stderrTail = new WorkerStderrTail();
+            process.ErrorDataReceived += (_, e) => stderrTail.Append(e.Data);
+            process.BeginErrorReadLine();
+
             try
             {
                 var ready = stdout.ReadLine();
                 if (ready != ReadyMarker)
                 {
-                    errors.Enqueue(ParseWorkerError(ready));
+                    errors.Enqueue(ParseWorkerError(ready, stderrTail));
                     cancellation.Cancel();
                     return;
                 }
@@ -347,6 +359,15 @@ namespace ArchivePasswordTestTool
                         foreach (var password in batch)
                         {
                             retry.Enqueue(password);
+                        }
+
+                        // 退出但无回复 = 崩溃。把 stderr 尾部当作错误上报，
+                        // 否则用户只能看到"工作进程已退出"而无从定位
+                        string diagnostics = stderrTail.Describe();
+                        if (diagnostics.Length > 0)
+                        {
+                            errors.Enqueue(diagnostics);
+                            cancellation.Cancel();
                         }
 
                         break;
@@ -421,14 +442,58 @@ namespace ArchivePasswordTestTool
                         // 进程可能已自行退出
                     }
                 }
+
+                process.CancelErrorRead();
             }
         }
 
-        private static string ParseWorkerError(string? line)
+        /// <summary>
+        /// 缓存在 worker 的 stderr 尾部若干行，用于崩溃诊断。
+        /// 只留尾部：正常运行时 stderr 应该是空的，大量输出意味着出了状况，
+        /// 而最能说明问题的是最后几行。
+        /// </summary>
+        private sealed class WorkerStderrTail
+        {
+            private const int MaxLines = 20;
+
+            private readonly Lock gate = new();
+            private readonly Queue<string> lines = new();
+
+            public void Append(string? line)
+            {
+                if (string.IsNullOrWhiteSpace(line))
+                {
+                    return;
+                }
+
+                lock (gate)
+                {
+                    lines.Enqueue(line);
+                    while (lines.Count > MaxLines)
+                    {
+                        lines.Dequeue();
+                    }
+                }
+            }
+
+            /// <summary>拼成可直接展示的诊断文本；无内容时返回空串</summary>
+            public string Describe()
+            {
+                lock (gate)
+                {
+                    return lines.Count == 0
+                        ? string.Empty
+                        : string.Join(Environment.NewLine, lines);
+                }
+            }
+        }
+
+        private static string ParseWorkerError(string? line, WorkerStderrTail stderrTail)
         {
             if (line is null)
             {
-                return "工作进程已退出";
+                string diagnostics = stderrTail.Describe();
+                return diagnostics.Length > 0 ? diagnostics : "工作进程已退出";
             }
 
             try

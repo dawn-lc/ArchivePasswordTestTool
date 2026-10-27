@@ -1,6 +1,7 @@
 using ArchivePasswordTestTool.Properties;
 using System.Diagnostics;
 using System.Security.Cryptography;
+using System.Text;
 using Spectre.Console;
 
 namespace ArchivePasswordTestTool
@@ -110,6 +111,14 @@ namespace ArchivePasswordTestTool
                 using var dictionary = new PasswordDictionary(dictionaryPath, onlinePassword: onlinePassword);
                 dictionaryCount = dictionary.Count;
 
+                // 非 UTF-8 字典（典型：简中 Windows 记事本另存的 ANSI/GBK）照旧能正常破解，
+                // 但要让用户知道密码文本是按哪种编码解读的，否则看到"怪字符"会以为读错了
+                if (dictionary.Encoding.CodePage != Encoding.UTF8.CodePage)
+                {
+                    Ui.WriteWarning(string.Format(
+                        Resources.DictionaryEncodingDetected, dictionary.Encoding.WebName));
+                }
+
                 var (Mode, WorkerCount, ThreadParallelism, DisplayParallelism) = planner.Plan(options.SevenZipDllPath, archiveInfo, archivePath, dictionaryCount);
                 Ui.WriteArchiveInfo(
                     archivePath,
@@ -146,13 +155,10 @@ namespace ArchivePasswordTestTool
                     Sync.ReportFoundPassword(options.OnlineServiceUrl, archiveHashHex, foundPassword);
                 }
             }
-            catch (FileNotFoundException ex)
-            {
-                Ui.WriteError(ex.Message);
-                Environment.Exit(1);
-            }
             catch (Exception ex)
             {
+                // FileNotFoundException 与其它异常处理完全相同（打印 + exit 1），
+                // 原先分成两个 catch 块只是重复
                 Ui.WriteError(ex.Message);
                 Environment.Exit(1);
             }
@@ -196,17 +202,7 @@ namespace ArchivePasswordTestTool
             HashAlgorithm.Initialize();
             long fileLength = Math.Max(1, file.Length);
 
-            AnsiConsole.Progress()
-                .AutoClear(true)
-                .HideCompleted(true)
-                .Columns([
-                    new TaskDescriptionColumn(),
-                    new ProgressBarColumn(),
-                    new PercentageColumn(),
-                    new ElapsedTimeColumn(),
-                    new RemainingTimeColumn(),
-                    new SpinnerColumn()
-                ])
+            CreateProgress()
                 .Start(ctx =>
                 {
                     var hashTask = ctx.AddTask(Resources.AnalyzingArchiveInformation, maxValue: fileLength);
@@ -240,17 +236,7 @@ namespace ArchivePasswordTestTool
         {
             stopwatch.Restart();
 
-            AnsiConsole.Progress()
-                .AutoClear(true)
-                .HideCompleted(true)
-                .Columns([
-                    new TaskDescriptionColumn(),
-                            new ProgressBarColumn(),
-                            new PercentageColumn(),
-                            new ElapsedTimeColumn(),
-                            new RemainingTimeColumn(),
-                            new SpinnerColumn()
-                ])
+            CreateProgress()
                 .Start(ctx =>
                 {
                     var testProgressBar = ctx.AddTask(Resources.TestingPasswordProgress, maxValue: dictionaryCount);
@@ -272,8 +258,12 @@ namespace ArchivePasswordTestTool
                             stopwatch.Stop();
                         });
 
-                    // 确保进度条完成
-                    testProgressBar.Value = testProgressBar.MaxValue;
+                    // 只在真正跑完（字典耗尽）时才拉满：找到密码后剩余密码并未测试，
+                    // 拉满会谎称 100%，而重定向输出下用户就是靠这个百分比判断进度
+                    if (string.IsNullOrEmpty(foundPassword))
+                    {
+                        testProgressBar.Value = testProgressBar.MaxValue;
+                    }
                 });
         }
 
@@ -287,17 +277,7 @@ namespace ArchivePasswordTestTool
 
             stopwatch.Restart();
 
-            AnsiConsole.Progress()
-                .AutoClear(true)
-                .HideCompleted(true)
-                .Columns([
-                    new TaskDescriptionColumn(),
-                            new ProgressBarColumn(),
-                            new PercentageColumn(),
-                            new ElapsedTimeColumn(),
-                            new RemainingTimeColumn(),
-                            new SpinnerColumn()
-                ])
+            CreateProgress()
                 .Start(ctx =>
                 {
                     var testProgressBar = ctx.AddTask(Resources.TestingPasswordProgress, maxValue: dictionaryCount);
@@ -354,11 +334,32 @@ namespace ArchivePasswordTestTool
                         }
                     });
 
-                    // 确保进度条完成
-                    testProgressBar.Value = testProgressBar.MaxValue;
+                    // 只在真正跑完（字典耗尽）时才拉满：找到密码后 state.Stop() 提前退出，
+                    // 剩余密码并未测试，拉满会谎称 100%
+                    if (string.IsNullOrEmpty(foundPassword))
+                    {
+                        testProgressBar.Value = testProgressBar.MaxValue;
+                    }
                 });
 
             planner.DisposeAll();
         }
+
+        /// <summary>
+        /// 进度条统一样式（哈希计算与两处测密的列配置此前各写一份，且缩进都跑偏了）。
+        /// 重定向/非终端环境下 Spectre 自动退化，测试安全。
+        /// </summary>
+        private static Progress CreateProgress() =>
+            AnsiConsole.Progress()
+                .AutoClear(true)
+                .HideCompleted(true)
+                .Columns([
+                    new TaskDescriptionColumn(),
+                    new ProgressBarColumn(),
+                    new PercentageColumn(),
+                    new ElapsedTimeColumn(),
+                    new RemainingTimeColumn(),
+                    new SpinnerColumn()
+                ]);
     }
 }

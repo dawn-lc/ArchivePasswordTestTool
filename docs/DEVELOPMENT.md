@@ -11,7 +11,8 @@ ArchivePasswordTestTool/
 ├─ Interop/          7-Zip 原生互操作：COM 契约与回调、库加载、格式检测、Windows API 汇集
 ├─ Services/         业务核心：Runner（主流程）、Planner（执行规划）、MultiProcess（多进程引擎）、
 │                    SevenZip（环境定位）、Sync（在线共享交互）、PasswordDictionary、
-│                    ResultsWriter、HttpTransport、Upgrade、OnlineService
+│                    DictionaryEncoding（字典编码探测）、ResultsWriter、HttpTransport、
+│                    Upgrade、OnlineService
 ├─ Ui/               界面输出与交互引导（Spectre.Console）
 └─ Properties/       多语言资源（resx，en/zh-CN/ja/fr/ru）
 
@@ -36,6 +37,10 @@ RAR5/Zip 的 KDF 不在全局锁内，仍走进程内线程模式，可正常线
 - 序列化：行式 JSON，源生成（`WorkerJsonContext`，IL 裁剪后可用）
 - 协议：严格停等（写一批 → 阻塞等回复 → 再写下一批），控制帧 `READY` / `STOP` / `QUIT`
 - 容错：工作进程中途退出时整批重投（宁可重测，不可漏测）
+- **stderr 必须持续消费**：重定向后若无人读取，工作进程写满管道缓冲（未处理异常、OOM、
+  failfast 都会写）就会阻塞在 Write，而主进程在 `stdout.ReadLine` 等回复——双方互等即死锁。
+  `WorkerStderrTail` 异步读取并保留尾部 20 行：工作进程无回复退出时，这就是唯一的崩溃线索
+  （否则用户只能看到"工作进程已退出"）。
 
 **传输层不需要更复杂的方案**（实测依据）：5000 密码 / 20 进程达 1318 个/秒，单进程 121 个/秒
 → 10.9× 线性扩展；单批 64 个密码约 1.2s 计算，一次管道往返 <1ms，开销占比 <0.1%。
@@ -191,6 +196,12 @@ dotnet test ArchivePasswordTestTool.Tests\ArchivePasswordTestTool.Tests.csproj
 - 需要断言"某提示未出现"时，**文案从各语言资源枚举**，不能写死一两种语言——
   写死会在其它 UI 语言下永不命中（假绿），失败被静默吞掉
 
+> 输出编码：主程序在 `Console.IsOutputRedirected` 时把 stdout/stderr 改为 **UTF-8 无 BOM**
+> （见 `Program.Main`）。默认编码是系统 OEM 代码页（中文 Windows = 936/GBK），
+> 而界面支持 5 种语言——法语重音、俄语西里尔在 GBK 下无法表示，会变成 `?`（数据损坏）。
+> **任何 `RedirectStandardOutput` 的测试都必须显式设 `StandardOutputEncoding = UTF8`**，
+> 否则读到的中文是乱码。
+
 ### 关键守护测试
 
 | 测试 | 守护的内容 |
@@ -200,6 +211,24 @@ dotnet test ArchivePasswordTestTool.Tests\ArchivePasswordTestTool.Tests.csproj
 | `VersionMetadataTests` | 版本号恰好三段、元数据注入生效、`Version` 确实来自元数据 |
 | `SourceEncodingTests` | 全仓源码文件为 UTF-8 无 BOM |
 | `MultiProcessBatchSizeTests` | 每个工作进程至少分到一批活 |
+| `DictionaryEncodingTests` | 字典编码探测（GBK/UTF-8/BOM/截断尾字符）与真实密码可读性 |
+| `ResultsWriterTests` | 结果文件密码行三态；保存询问按"已探测"而非"已加密"守卫 |
+
+## 字典编码
+
+`DictionaryEncoding` 按文件探测编码，**不能硬定 UTF-8**：GBK 密码本（简中 Windows
+记事本另存为 ANSI 的默认结果）整份读成乱码时，密码就在字典里也必然报"未找到"。
+
+探测顺序：BOM → 严格 UTF-8 校验（64KB 窗口，容忍切在多字节字符中间）→ GBK(936) → 系统 ANSI。
+探测到非 UTF-8 时界面会提示一行，避免用户对"怪字符"密码困惑。
+
+两个 .NET 陷阱：
+
+- `Encoding.Default` 在 .NET Core 起**恒为 UTF-8**，不是系统 ANSI
+- `Encoding.GetEncoding(936)` 需先 `Encoding.RegisterProvider(CodePagesEncodingProvider.Instance)`
+  否则抛 `NotSupportedException`。该包在 .NET 10 内置（`NU1510` 会提示无需显式引用），
+  但**引用 `CodePagesEncodingProvider` 会让裁剪器保留整份代码页数据：实测 +494 KB（+4%）**。
+  这是"能破解 GBK 字典 vs 不能"的必要代价。
 
 ## 多语言资源约定
 

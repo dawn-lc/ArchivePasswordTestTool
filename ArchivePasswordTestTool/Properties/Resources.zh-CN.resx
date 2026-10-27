@@ -130,6 +130,18 @@
   <data name="DictionaryFileNotFound" xml:space="preserve">
     <value>未找到密码字典文件。</value>
   </data>
+  <data name="DictionaryEncodingDetected" xml:space="preserve">
+    <value>检测到字典使用非 UTF-8 编码，按 {0} 读取。</value>
+  </data>
+  <data name="UnsupportedArchiveFormat" xml:space="preserve">
+    <value>无法识别该文件的格式，请检查该文件是否是支持的压缩包！</value>
+  </data>
+  <data name="CreateArchiveInterfaceFailed" xml:space="preserve">
+    <value>创建压缩包接口失败。</value>
+  </data>
+  <data name="ProcessPathUnavailable" xml:space="preserve">
+    <value>无法确定主程序路径。</value>
+  </data>
   <data name="ArchiveFileNotFound" xml:space="preserve">
     <value>未找到压缩包文件。</value>
   </data>

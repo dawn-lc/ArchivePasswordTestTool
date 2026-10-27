@@ -130,6 +130,18 @@ Veuillez d'abord télécharger et installer 7-Zip.</value>
   <data name="DictionaryFileNotFound" xml:space="preserve">
     <value>Fichier de dictionnaire de mots de passe introuvable.</value>
   </data>
+  <data name="DictionaryEncodingDetected" xml:space="preserve">
+    <value>Dictionnaire non UTF-8 détecté, lecture en {0}.</value>
+  </data>
+  <data name="UnsupportedArchiveFormat" xml:space="preserve">
+    <value>Format de fichier non reconnu. Vérifiez qu'il s'agit d'une archive prise en charge.</value>
+  </data>
+  <data name="CreateArchiveInterfaceFailed" xml:space="preserve">
+    <value>Échec de la création de l'interface d'archive.</value>
+  </data>
+  <data name="ProcessPathUnavailable" xml:space="preserve">
+    <value>Impossible de déterminer le chemin du programme en cours.</value>
+  </data>
   <data name="ArchiveFileNotFound" xml:space="preserve">
     <value>Fichier d'archive introuvable.</value>
   </data>

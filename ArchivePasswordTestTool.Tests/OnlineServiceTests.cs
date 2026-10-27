@@ -309,6 +309,9 @@ public sealed class OnlineServiceTests(TestDataFixture fx)
             CreateNoWindow = true,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
+            // 主程序在输出重定向时把 stdout/stderr 改为 UTF-8（见 Program.Main）
+            StandardOutputEncoding = Encoding.UTF8,
+            StandardErrorEncoding = Encoding.UTF8,
         };
 
         using var process = Process.Start(startInfo);

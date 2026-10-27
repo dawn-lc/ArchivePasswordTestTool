@@ -95,7 +95,7 @@ namespace ArchivePasswordTestTool
         /// <summary>主程序自身路径（单文件发布下即 exe 本体）</summary>
         public static string ExecutablePath =>
             Environment.ProcessPath
-            ?? throw new InvalidOperationException("无法确定主程序路径");
+            ?? throw new InvalidOperationException(Resources.ProcessPathUnavailable);
 
         public static string DownloadingPath => ExecutablePath + DownloadingSuffix;
 

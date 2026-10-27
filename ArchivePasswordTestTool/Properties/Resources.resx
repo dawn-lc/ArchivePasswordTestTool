@@ -130,6 +130,18 @@ Please download and install 7-Zip first.</value>
   <data name="DictionaryFileNotFound" xml:space="preserve">
     <value>Password dictionary file not found.</value>
   </data>
+  <data name="DictionaryEncodingDetected" xml:space="preserve">
+    <value>Non-UTF-8 dictionary detected, reading as {0}.</value>
+  </data>
+  <data name="UnsupportedArchiveFormat" xml:space="preserve">
+    <value>Cannot recognize the file format. Please check that this is a supported archive.</value>
+  </data>
+  <data name="CreateArchiveInterfaceFailed" xml:space="preserve">
+    <value>Failed to create the archive interface.</value>
+  </data>
+  <data name="ProcessPathUnavailable" xml:space="preserve">
+    <value>Cannot determine the path of the running program.</value>
+  </data>
   <data name="ArchiveFileNotFound" xml:space="preserve">
     <value>Archive file not found.</value>
   </data>

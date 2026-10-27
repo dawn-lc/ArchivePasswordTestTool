@@ -105,7 +105,7 @@ namespace ArchivePasswordTestTool
             if (hr < 0 || archiveObj == null)
             {
                 Marshal.ThrowExceptionForHR(hr);
-                throw new InvalidOperationException("创建 IInArchive 接口失败");
+                throw new InvalidOperationException(Resources.CreateArchiveInterfaceFailed);
             }
 
             IInArchive archive = (IInArchive)archiveObj;
@@ -159,7 +159,8 @@ namespace ArchivePasswordTestTool
                 Type = format;
                 if (Type == Guid.Empty)
                 {
-                    throw new InvalidOperationException("无法识别该文件的格式，请检查该文件是否是支持的压缩包！");
+                    // 面向用户的错误消息必须走资源：定死中文会让 en/ja/fr/ru 用户看到中文
+                    throw new InvalidOperationException(Resources.UnsupportedArchiveFormat);
                 }
 
                 Info = new ArchiveInfo { Type = Type };

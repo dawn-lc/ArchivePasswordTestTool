@@ -130,6 +130,18 @@
   <data name="DictionaryFileNotFound" xml:space="preserve">
     <value>Файл словаря паролей не найден.</value>
   </data>
+  <data name="DictionaryEncodingDetected" xml:space="preserve">
+    <value>Обнаружена не-UTF-8 кодировка словаря, чтение как {0}.</value>
+  </data>
+  <data name="UnsupportedArchiveFormat" xml:space="preserve">
+    <value>Не удалось определить формат файла. Проверьте, что это поддерживаемый архив.</value>
+  </data>
+  <data name="CreateArchiveInterfaceFailed" xml:space="preserve">
+    <value>Не удалось создать интерфейс архива.</value>
+  </data>
+  <data name="ProcessPathUnavailable" xml:space="preserve">
+    <value>Не удалось определить путь запущенной программы.</value>
+  </data>
   <data name="ArchiveFileNotFound" xml:space="preserve">
     <value>Файл архива не найден.</value>
   </data>

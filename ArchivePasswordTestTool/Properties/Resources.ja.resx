@@ -130,6 +130,18 @@
   <data name="DictionaryFileNotFound" xml:space="preserve">
     <value>パスワード辞書ファイルが見つかりません。</value>
   </data>
+  <data name="DictionaryEncodingDetected" xml:space="preserve">
+    <value>UTF-8 以外の辞書を検出しました。{0} として読み込みます。</value>
+  </data>
+  <data name="UnsupportedArchiveFormat" xml:space="preserve">
+    <value>ファイル形式を認識できません。対応している書庫か確認してください。</value>
+  </data>
+  <data name="CreateArchiveInterfaceFailed" xml:space="preserve">
+    <value>書庫インターフェイスの作成に失敗しました。</value>
+  </data>
+  <data name="ProcessPathUnavailable" xml:space="preserve">
+    <value>実行中のプログラムのパスを特定できません。</value>
+  </data>
   <data name="ArchiveFileNotFound" xml:space="preserve">
     <value>アーカイブファイルが見つかりません。</value>
   </data>

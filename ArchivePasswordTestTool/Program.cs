@@ -1,4 +1,5 @@
 using System.Reflection;
+using System.Text;
 
 namespace ArchivePasswordTestTool
 {
@@ -35,6 +36,23 @@ namespace ArchivePasswordTestTool
 
         static int Main(string[] args)
         {
+            // 输出被重定向时改用 UTF-8：默认编码是系统 OEM 代码页（中文 Windows = 936/GBK），
+            // 而本程序支持 5 种语言界面——法语的 é、俄语的西里尔字母在 GBK 下无法表示，
+            // 会全部变成 '?'（数据损坏，不是显示问题）。重定向到文件/管道的输出
+            // 通常要被其它工具读取，必须是自描述的 UTF-8。
+            // 终端交互时不改：沿用系统设置，不冒险改变现有观感。
+            if (Console.IsOutputRedirected)
+            {
+                try
+                {
+                    Console.OutputEncoding = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false);
+                }
+                catch (Exception)
+                {
+                    // 极端环境（无控制台句柄）下设置失败不影响功能
+                }
+            }
+
             // 自我替换必须是启动动作的第一步：早于 GUI 委派、早于主流程。
             // 但工作进程要排除在外——它是主进程拉起的临时子进程，抢着替换会让
             // 主进程的多进程测密凭空少一个 worker，还会把替换后的新进程当成

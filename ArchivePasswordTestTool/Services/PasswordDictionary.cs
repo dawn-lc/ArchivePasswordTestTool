@@ -26,6 +26,9 @@ namespace ArchivePasswordTestTool
 
         public string DictionaryPath { get; init; }
 
+        /// <summary>实际使用的字典编码（探测结果）。非 UTF-8 时界面会提示，避免用户对乱码密码困惑</summary>
+        public Encoding Encoding { get; init; } = Encoding.UTF8;
+
         /// <summary>
         /// 构造字典。onlinePassword 为在线服务按压缩包哈希下发的共享密码（可为 null，
         /// 一个哈希对应一个密码）：置于待办列表头部，保证被最先测试；
@@ -34,6 +37,9 @@ namespace ArchivePasswordTestTool
         public PasswordDictionary(string dictionaryPath, string? onlinePassword = null)
         {
             DictionaryPath = dictionaryPath;
+
+            // 编码自适应：早年硬编 UTF-8，GBK 密码本会整份读成乱码、必然破解失败
+            Encoding = DictionaryEncoding.Detect(dictionaryPath);
 
             // 单趟顺序扫描：边读边去重（去重集合只为判定重复，不保序，读完即可回收）
             var seen = new HashSet<string>(StringComparer.Ordinal);
@@ -46,7 +52,7 @@ namespace ArchivePasswordTestTool
                 ordered.Add(onlinePassword);
             }
 
-            foreach (var line in File.ReadLines(dictionaryPath, Encoding.UTF8))
+            foreach (var line in File.ReadLines(dictionaryPath, Encoding))
             {
                 if (seen.Add(line))
                 {
