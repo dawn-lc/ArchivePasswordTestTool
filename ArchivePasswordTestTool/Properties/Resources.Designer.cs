@@ -324,6 +324,17 @@ namespace ArchivePasswordTestTool.Properties
         }
 
         /// <summary>
+        ///   查找类似 Archive is not encrypted 的本地化字符串。
+        /// </summary>
+        public static string TestResultArchiveNotEncrypted
+        {
+            get
+            {
+                return ResourceManager.GetString("TestResultArchiveNotEncrypted", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   查找类似 Using installed 7-Zip: {0} 的本地化字符串。
         /// </summary>
         public static string UsingInstalledSevenZip

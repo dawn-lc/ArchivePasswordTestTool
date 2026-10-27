@@ -178,6 +178,9 @@ Veuillez d'abord télécharger et installer 7-Zip.</value>
   <data name="TestResultDecompressionPassword" xml:space="preserve">
     <value>Mot de passe de décompression : {0}</value>
   </data>
+  <data name="TestResultArchiveNotEncrypted" xml:space="preserve">
+    <value>L'archive n'est pas chiffrée</value>
+  </data>
   <data name="TestResultPasswordNotFound" xml:space="preserve">
     <value>Le mot de passe de décompression correct n'a pas été trouvé !</value>
   </data>

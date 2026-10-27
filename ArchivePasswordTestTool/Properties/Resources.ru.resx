@@ -178,6 +178,9 @@
   <data name="TestResultDecompressionPassword" xml:space="preserve">
     <value>Пароль для распаковки: {0}</value>
   </data>
+  <data name="TestResultArchiveNotEncrypted" xml:space="preserve">
+    <value>Архив не зашифрован</value>
+  </data>
   <data name="TestResultPasswordNotFound" xml:space="preserve">
     <value>Правильный пароль для распаковки не найден!</value>
   </data>

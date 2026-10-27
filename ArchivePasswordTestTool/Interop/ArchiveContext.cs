@@ -1,3 +1,4 @@
+using ArchivePasswordTestTool.Properties;
 using System.Runtime.InteropServices;
 
 namespace ArchivePasswordTestTool
@@ -145,7 +146,8 @@ namespace ArchivePasswordTestTool
         {
             if (!File.Exists(archivePath))
             {
-                throw new FileNotFoundException($"Archive file not found: {archivePath}");
+                // 消息走资源本地化：这里原本硬编码英文，与项目其余错误提示不一致
+                throw new FileNotFoundException(Resources.ArchiveFileNotFound);
             }
 
             // 共享 Info 只带格式；签名偏移仍需按文件解析（命中检测缓存，开销极小）

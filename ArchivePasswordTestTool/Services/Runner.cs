@@ -26,7 +26,18 @@ namespace ArchivePasswordTestTool
         private string archiveHashHex = string.Empty;
         private bool hashComputed;
 
-        /// <summary>未加密压缩包没有密码可记录，结果文件无意义（跳过保存询问）</summary>
+        /// <summary>
+        /// 归档是否已成功探测（决定是否询问保存报告）。
+        /// <para>
+        /// 不能用「是否加密」守卫：未加密的包同样值得留一份报告——里面有哈希、用时，
+        /// 以及「未加密」这个结论，是「我检查过这个包」的凭证。
+        /// 真正不该问的是探测就失败的路径（格式不识别、缺参数、7z 初始化失败），
+        /// 那些连归档信息都拿不到。
+        /// </para>
+        /// </summary>
+        private bool archiveInspected;
+
+        /// <summary>归档是否加密（决定报告里的密码行写密码 / 未找到 / 未加密）</summary>
         private bool archiveEncrypted = true;
 
         private long dictionaryCount;
@@ -71,6 +82,9 @@ namespace ArchivePasswordTestTool
 
                 using var archiveContext = new ArchiveContext(options.SevenZipDllPath, archivePath, password: null);
                 var archiveInfo = archiveContext.Info;
+
+                // 归档已打开、信息已知：后续无论加密与否都要给用户留一份报告
+                archiveInspected = true;
 
                 if (!archiveInfo.IsEncrypted)
                 {
@@ -149,13 +163,14 @@ namespace ArchivePasswordTestTool
                 // 两者不会抢屏幕：进度条已 AutoClear，结果面板也已输出完毕。
                 Upgrade.CompleteBackgroundCheck();
 
-                if (archiveEncrypted && !string.IsNullOrEmpty(archivePath) && !string.IsNullOrEmpty(dictionaryPath))
+                if (archiveInspected && !string.IsNullOrEmpty(archivePath) && !string.IsNullOrEmpty(dictionaryPath))
                 {
                     // 哈希按需计算：用户确认保存后才读文件（见 WriteIfRequested 内部调用顺序）
                     ResultsWriter.WriteIfRequested(
                         archivePath,
                         dictionaryPath,
                         foundPassword,
+                        archiveEncrypted,
                         stopwatch.Elapsed,
                         () =>
                         {
