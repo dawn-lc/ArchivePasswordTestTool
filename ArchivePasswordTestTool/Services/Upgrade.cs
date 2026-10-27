@@ -52,6 +52,12 @@ namespace ArchivePasswordTestTool
 
         private static readonly TimeSpan CheckInterval = TimeSpan.FromDays(1);
 
+        /// <summary>
+        /// 后台检查的等待上限。后台请求需要 1~2 秒，而快速测试（前几个密码就命中）
+        /// 往往几百毫秒就结束；不等待会导致更新提示几乎永远来不及展示。
+        /// </summary>
+        private static readonly TimeSpan CompletionGrace = TimeSpan.FromSeconds(3);
+
         /// <summary>后台进行中的检查（null 表示本次启动无需检查）</summary>
         private static Task<UpgradeReleasesInfo?>? pendingCheck;
 
@@ -66,7 +72,9 @@ namespace ArchivePasswordTestTool
 
         /// <summary>
         /// 启动时调用：满足 24h 间隔才在后台发起检查（不阻塞、不打印）。
-        /// 检查成功后才写入时间戳，失败可在下次启动重试。
+        /// 时间戳由 <see cref="CompleteBackgroundCheck"/> 在真正消费结果后才写入——
+        /// 若写在请求内部，一旦本次来不及展示提示（后台请求未完成），
+        /// 用户就要再等一个 24h 周期才能看到，等于把提示静默吞掉。
         /// </summary>
         public static void StartBackgroundCheck()
         {
@@ -90,17 +98,7 @@ namespace ArchivePasswordTestTool
                     return;
                 }
 
-                pendingCheck = Task.Run(() =>
-                {
-                    var info = FetchLatestRelease();
-                    if (info is not null)
-                    {
-                        // 只有成功拿到数据才算"已检查"，网络故障下次启动重试
-                        SaveConfig(new UpgradeConfig { LastCheckUpgrade = DateTime.Now });
-                    }
-
-                    return info;
-                });
+                pendingCheck = Task.Run(FetchLatestRelease);
             }
             catch
             {
@@ -110,28 +108,58 @@ namespace ArchivePasswordTestTool
         }
 
         /// <summary>
-        /// 测试结束后调用：消费后台结果。后台请求尚未完成时直接放弃本次提示（绝不阻塞退出），
-        /// 下次启动会重试。发现新版本时询问是否前往发布页。
+        /// 测试结束后调用：消费后台结果并（视情况）提示更新。
+        /// <para>
+        /// 后台请求需要 1~2 秒，而快速测试（前几个密码就命中）往往几百毫秒就结束——
+        /// 若像早年实现那样「未完成就放弃」，更新提示几乎永远不会出现。
+        /// 因此这里给一个有上限的等待窗口：此时测试结果面板已输出完毕，
+        /// 用户正在阅读结果或多等一个确认，短暂等待无感。重定向场景不等待（无人值守，纯属浪费）。
+        /// </para>
+        /// 只有真正拿到响应才写时间戳；放弃时不写，下次启动立即重试。
         /// </summary>
         public static void CompleteBackgroundCheck()
         {
             var task = pendingCheck;
             pendingCheck = null;
 
-            if (task is null || !task.IsCompletedSuccessfully)
+            if (task is null)
             {
+                return;
+            }
+
+            if (!task.IsCompleted && !Console.IsInputRedirected)
+            {
+                try
+                {
+                    task.Wait(CompletionGrace);
+                }
+                catch
+                {
+                    // 任务内异常由下面的 IsCompletedSuccessfully 统一处理；
+                    // 此处若让异常逃逸会中断调用方的 finally，连带跳过"保存测试结果"确认
+                }
+            }
+
+            if (!task.IsCompletedSuccessfully)
+            {
+                // 仍未完成或已失败：不写时间戳，下次启动会立即重试（而非等满 24h）
                 return;
             }
 
             try
             {
                 var info = task.Result;
-                if (info?.TagName is null)
+                if (info is null)
                 {
+                    // 请求失败（网络故障、或 GitHub API 限流 403）：
+                    // 不写时间戳，下次启动立即重试
                     return;
                 }
 
-                if (!IsNewerVersion(info.TagName, Program.Version, Program.VersionType)
+                SaveConfig(new UpgradeConfig { LastCheckUpgrade = DateTime.Now });
+
+                if (info.TagName is null
+                    || !IsNewerVersion(info.TagName, Program.Version, Program.VersionType)
                     || Console.IsInputRedirected)
                 {
                     return;

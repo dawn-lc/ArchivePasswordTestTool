@@ -138,6 +138,11 @@ namespace ArchivePasswordTestTool
             }
             finally
             {
+                // 更新提示先于保存结果确认消费：后者含两个阻塞式确认（是否保存、是否打开报告），
+                // 用户若卡在那里（或直接关窗口）就再也看不到更新提示了。
+                // 两者不会抢屏幕：进度条已 AutoClear，结果面板也已输出完毕。
+                Upgrade.CompleteBackgroundCheck();
+
                 if (archiveEncrypted && !string.IsNullOrEmpty(archivePath) && !string.IsNullOrEmpty(dictionaryPath))
                 {
                     // 哈希按需计算：用户确认保存后才读文件（见 WriteIfRequested 内部调用顺序）
@@ -152,9 +157,6 @@ namespace ArchivePasswordTestTool
                             return archiveHash;
                         });
                 }
-
-                // 更新检查结果放到最后消费：不与测试进度条、结果确认抢屏幕
-                Upgrade.CompleteBackgroundCheck();
             }
         }
 
