@@ -35,10 +35,11 @@ namespace ArchivePasswordTestTool
 
         static int Main(string[] args)
         {
-            // 自我替换必须发生得最早：一旦有校验通过的待应用更新，
-            // 就把自己换成新版本并重启新进程，当前进程立即退出。
-            // 放在这里（而非 Instance 内）是为了让 worker 进程也能完成替换。
-            if (PendingUpdate.TryApply(args))
+            // 自我替换必须是启动动作的第一步：早于 GUI 委派、早于主流程。
+            // 但工作进程要排除在外——它是主进程拉起的临时子进程，抢着替换会让
+            // 主进程的多进程测密凭空少一个 worker，还会把替换后的新进程当成
+            // worker 去跑 JSON 协议。多开场景下别人的 worker 同理。
+            if (!args.Contains(MultiProcess.WorkerFlag) && PendingUpdate.TryApply(args))
             {
                 return 0;
             }

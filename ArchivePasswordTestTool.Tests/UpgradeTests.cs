@@ -162,8 +162,9 @@ public class UpgradeTests
 
     /// <summary>
     /// 自我替换必须发生在启动路由之前：<see cref="PendingUpdate.TryApply"/> 返回 true 时
-    /// 说明已换成新版本并拉起了新进程，当前进程要立刻退出——若排在路由之后，
-    /// 旧版本会先把活干完，替换结果被无谓地推迟到再下一次启动。
+    /// 说明已换成新版本并拉起了新进程，当前进程要立刻退出。
+    /// 同时必须排除工作进程——它由主进程拉起，抢着替换会让多进程测密少一个 worker，
+    /// 还会把替换后的新进程当成 worker 去跑 JSON 协议。
     /// </summary>
     [Fact]
     public void PendingUpdateIsAppliedBeforeStartupRouting()
@@ -171,11 +172,14 @@ public class UpgradeTests
         string programPath = Path.Combine(TestPaths.RepoRoot, "ArchivePasswordTestTool", "Program.cs");
         string source = File.ReadAllText(programPath);
 
+        int workerGuardIndex = source.IndexOf("MultiProcess.WorkerFlag", StringComparison.Ordinal);
         int applyIndex = source.IndexOf("PendingUpdate.TryApply(", StringComparison.Ordinal);
         int routeIndex = source.IndexOf("Instance.Execute(", StringComparison.Ordinal);
 
+        Assert.True(workerGuardIndex >= 0, "Program.cs 中未找到工作进程排除条件");
         Assert.True(applyIndex >= 0, "Program.cs 中未找到 PendingUpdate.TryApply 调用");
         Assert.True(routeIndex >= 0, "Program.cs 中未找到 Instance.Execute 调用");
+        Assert.True(workerGuardIndex < applyIndex, "自我替换前必须先排除工作进程");
         Assert.True(applyIndex < routeIndex, "自我替换必须排在启动路由之前");
     }
 }
