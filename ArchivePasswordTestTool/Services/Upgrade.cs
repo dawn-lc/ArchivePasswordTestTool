@@ -16,9 +16,6 @@ namespace ArchivePasswordTestTool
         [JsonPropertyName("html_url")]
         public string? HtmlUrl { get; set; }
 
-        [JsonPropertyName("prerelease")]
-        public bool Prerelease { get; set; }
-
         [JsonPropertyName("assets")]
         public List<UpgradeAsset>? Assets { get; set; }
 
@@ -97,9 +94,6 @@ namespace ArchivePasswordTestTool
         public static string ReadyPath => ExecutablePath + ReadySuffix;
 
         public static string BackupPath => ExecutablePath + BackupSuffix;
-
-        /// <summary>是否已有校验通过、等待应用的更新</summary>
-        public static bool IsReady => File.Exists(ReadyPath);
 
         /// <summary>静默删除（文件可能被占用或不存在，失败不影响主流程）</summary>
         public static void TryDelete(string path)
