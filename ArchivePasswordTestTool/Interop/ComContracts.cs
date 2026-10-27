@@ -1,4 +1,5 @@
 using System.Runtime.InteropServices;
+using System.Runtime.InteropServices.Marshalling;
 
 namespace ArchivePasswordTestTool
 {
@@ -180,24 +181,6 @@ namespace ArchivePasswordTestTool
             }
         }
 
-        public object? GetObject()
-        {
-            return VarType switch
-            {
-                VarEnum.VT_EMPTY => null,
-                VarEnum.VT_BOOL => Bool,
-                VarEnum.VT_UI1 => byteValue,
-                VarEnum.VT_UI2 => (ushort)longValue,
-                VarEnum.VT_UI4 => (uint)longValue,
-                VarEnum.VT_UI8 => (ulong)longValue,
-                VarEnum.VT_I8 => longValue,
-                VarEnum.VT_BSTR => String,
-                VarEnum.VT_LPWSTR => String,
-                VarEnum.VT_FILETIME => DateTime,
-                _ => MarshalVariant()
-            };
-        }
-
         public void Clear()
         {
             switch (VarType)
@@ -236,33 +219,18 @@ namespace ArchivePasswordTestTool
                     break;
             }
         }
-
-        private readonly object? MarshalVariant()
-        {
-            GCHandle handle = GCHandle.Alloc(this, GCHandleType.Pinned);
-
-            try
-            {
-                return Marshal.GetObjectForNativeVariant(handle.AddrOfPinnedObject());
-            }
-            finally
-            {
-                handle.Free();
-            }
-        }
     }
 
 
-    [ComImport]
+    [GeneratedComInterface]
     [Guid("23170F69-40C1-278A-0000-000600600000")]
-    [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-    internal interface IInArchive
+    internal unsafe partial interface IInArchive
     {
         [PreserveSig]
         int Open(
             IInStream stream,
-            [In] ref ulong maxCheckStartPosition,
-            [MarshalAs(UnmanagedType.Interface)] IArchiveOpenCallback? openCallback
+            ref ulong maxCheckStartPosition,
+            IArchiveOpenCallback? openCallback
         );
 
         // native: Close()
@@ -279,10 +247,10 @@ namespace ArchivePasswordTestTool
 
         [PreserveSig]
         int Extract(
-            [MarshalAs(UnmanagedType.LPArray, SizeParamIndex = 1)] uint[]? indices,
+            [MarshalUsing(CountElementName = nameof(numItems))] uint[]? indices,
             uint numItems,
             int testMode,
-            [MarshalAs(UnmanagedType.Interface)] IArchiveExtractCallback extractCallback);
+            IArchiveExtractCallback extractCallback);
 
         // native: GetArchiveProperty(PROPID propID, PROPVARIANT *value)
         [PreserveSig]
@@ -296,7 +264,7 @@ namespace ArchivePasswordTestTool
         [PreserveSig]
         int GetPropertyInfo(
             uint index,
-            [MarshalAs(UnmanagedType.BStr)] out string name,
+            [MarshalUsing(typeof(BStrStringMarshaller))] out string name,
             out ItemPropId propID,
             out ushort varType);
 
@@ -308,55 +276,46 @@ namespace ArchivePasswordTestTool
         [PreserveSig]
         int GetArchivePropertyInfo(
             uint index,
-            [MarshalAs(UnmanagedType.BStr)] out string name,
+            [MarshalUsing(typeof(BStrStringMarshaller))] out string name,
             out uint propID,
             out ushort varType);
     }
 
     // 官方 GUID: IStream.h 中 IInStream = 03 组 0x03
     // 注意：IInStream 继承 ISequentialInStream，其 Read 是 3 参数签名（含 processedSize 出参）
-    [ComImport]
+    [GeneratedComInterface]
     [Guid("23170F69-40C1-278A-0000-000300030000")]
-    [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-    internal interface IInStream
+    internal unsafe partial interface IInStream
     {
         // ISequentialInStream::Read(void *data, UInt32 size, UInt32 *processedSize)
         // 调用方承诺 processedSize != NULL，实现必须写入实际读取字节数，返回 HRESULT
         [PreserveSig]
-        int Read(
-            IntPtr data,
-            uint size,
-            IntPtr processedSize);
+        int Read(byte* data, uint size, uint* processedSize);
 
         // IInStream::Seek(Int64 offset, UInt32 seekOrigin, UInt64 *newPosition)
         [PreserveSig]
-        int Seek(
-            long offset,
-            uint seekOrigin,
-            IntPtr newPosition);
+        int Seek(long offset, uint seekOrigin, ulong* newPosition);
     }
 
     // 官方 GUID: {23170F69-40C1-278A-0000-00yy00xx0000}, IArchive.h 中 IArchiveOpenCallback = 06 组 0x10
-    [ComImport]
+    [GeneratedComInterface]
     [Guid("23170F69-40C1-278A-0000-000600100000")]
-    [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-    internal interface IArchiveOpenCallback
+    internal unsafe partial interface IArchiveOpenCallback
     {
         // native: SetTotal(const UInt64 *files, const UInt64 *bytes)
         [PreserveSig]
-        int SetTotal(IntPtr files, IntPtr bytes);
+        int SetTotal(ulong* files, ulong* bytes);
 
         // native: SetCompleted(const UInt64 *files, const UInt64 *bytes)
         [PreserveSig]
-        int SetCompleted(IntPtr files, IntPtr bytes);
+        int SetCompleted(ulong* files, ulong* bytes);
     }
 
     // 官方 GUID: Guid.txt 06 组 0x30 —— 打开分卷压缩包（secret.7z.001/.002...）时，
-    // 7-Zip 会 QI 此接口并向回调索要后续分卷的流；不实现则 QI 失败，只能解鬳第一个分卷。
-    [ComImport]
+    // 7-Zip 会 QI 此接口并向回调索要后续分卷的流；不实现则 QI 失败，只能解出第一个分卷。
+    [GeneratedComInterface]
     [Guid("23170F69-40C1-278A-0000-000600300000")]
-    [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-    internal interface IArchiveOpenVolumeCallback
+    internal unsafe partial interface IArchiveOpenVolumeCallback
     {
         // native: GetProperty(PROPID propID, PROPVARIANT *value)
         [PreserveSig]
@@ -369,10 +328,9 @@ namespace ArchivePasswordTestTool
             out IInStream? inStream);
     }
 
-    [ComImport]
+    [GeneratedComInterface]
     [Guid("23170F69-40C1-278A-0000-000600200000")]
-    [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-    internal interface IArchiveExtractCallback
+    internal unsafe partial interface IArchiveExtractCallback
     {
         // native: SetTotal(UInt64 total)
         [PreserveSig]
@@ -380,13 +338,13 @@ namespace ArchivePasswordTestTool
 
         // native: SetCompleted(const UInt64 *completeValue)
         [PreserveSig]
-        int SetCompleted([In] ref ulong completeValue);
+        int SetCompleted(ulong* completeValue);
 
         // native: GetStream(UInt32 index, ISequentialOutStream **outStream, Int32 askExtractMode)
         [PreserveSig]
         int GetStream(
             uint index,
-            [MarshalAs(UnmanagedType.Interface)] out ISequentialOutStream? outStream,
+            out ISequentialOutStream? outStream,
             AskMode askExtractMode);
 
         // native: PrepareOperation(Int32 askExtractMode)
@@ -399,26 +357,23 @@ namespace ArchivePasswordTestTool
     }
 
     // 官方 GUID: IStream.h 中 ISequentialOutStream = 03 组 0x02
-    [ComImport]
+    [GeneratedComInterface]
     [Guid("23170F69-40C1-278A-0000-000300020000")]
-    [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-    internal interface ISequentialOutStream
+    internal unsafe partial interface ISequentialOutStream
     {
         // ISequentialOutStream::Write(const void *data, UInt32 size, UInt32 *processedSize)
-        // 注意：data 用 IntPtr 而非 byte[]——若用 byte[] 必须加 [MarshalAs(UnmanagedType.LPArray, SizeParamIndex = 1)]
-        // 否则 CCW stub 无法确定数组长度，native 传入真实数据时会越界 marshal 导致崩溃。
-        // 测试模式无需访问数据内容，只需要回写 processedSize，用 IntPtr 最安全高效。
+        // 用指针而非 byte[]：源生成下数组参数需要 SizeParamIndex 之类的 CountElementName，
+        // 而测试模式不需要访问数据内容，只回写 processedSize，指针最简单也最快。
         [PreserveSig]
-        int Write(IntPtr data, uint size, IntPtr processedSize);
+        int Write(byte* data, uint size, uint* processedSize);
     }
 
-    [ComImport]
+    [GeneratedComInterface]
     [Guid("23170F69-40C1-278A-0000-000500100000")]
-    [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-    internal interface ICryptoGetTextPassword
+    internal unsafe partial interface ICryptoGetTextPassword
     {
         [PreserveSig]
         int CryptoGetTextPassword(
-            [MarshalAs(UnmanagedType.BStr)] out string password);
+            [MarshalUsing(typeof(BStrStringMarshaller))] out string password);
     }
 }

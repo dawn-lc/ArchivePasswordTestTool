@@ -100,15 +100,13 @@ namespace ArchivePasswordTestTool
 
         private static IInArchive OpenArchive(SevenZipLibrary library, Guid formatGuid, Guid iidInArchive, string archivePath, string? password, long streamOffset, out IArchiveSourceStream stream, out int openResult)
         {
-            int hr = library.CreateObject(ref formatGuid, ref iidInArchive, out object archiveObj);
+            int hr = library.CreateObject<IInArchive>(ref formatGuid, ref iidInArchive, out IInArchive? archive);
 
-            if (hr < 0 || archiveObj == null)
+            if (hr < 0 || archive is null)
             {
                 Marshal.ThrowExceptionForHR(hr);
                 throw new InvalidOperationException(Resources.CreateArchiveInterfaceFailed);
             }
-
-            IInArchive archive = (IInArchive)archiveObj;
 
             // 分卷压缩包（secret.7z.001 等）：7-Zip 的分卷链接逻辑在 UI 层（7z.exe 的 OpenArchive.cpp），
             // 不在 7z.dll 内，因此需由调用方自行把全部分卷拼成连续虚拟流再交给 Open。
@@ -125,7 +123,17 @@ namespace ArchivePasswordTestTool
 
             if (hr < 0)
             {
-                Marshal.ReleaseComObject(archive);
+                // 源生成 COM 无 Marshal.ReleaseComObject 等价物：RCW 由 GC 回收。
+                // 这里主动 Close 以尽快释放 7z 内部句柄（这才是真正占资源的部分）
+                try
+                {
+                    archive.Close();
+                }
+                catch
+                {
+                    // 打开失败时 Close 可能也报错，忽略
+                }
+
                 stream.Dispose();
                 throw new ArchivePasswordException(hr);
             }
@@ -338,7 +346,10 @@ namespace ArchivePasswordTestTool
                     {
                         // 忽略关闭异常
                     }
-                    Marshal.ReleaseComObject(archive);
+
+                    // 源生成 COM 下没有 Marshal.ReleaseComObject 等价物：
+                    // RCW 的引用计数由 ComWrappers 管理，最终由 GC 回收。
+                    // Close() 已释放 7z 内部的原生资源，这里无需（也无法）手动减计数。
                 }
 
                 fileStream?.Dispose();
