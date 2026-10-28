@@ -461,10 +461,16 @@ CET 位**不在** `OptionalHeader.DllCharacteristics`，而在调试目录
 发布新版本只需打 tag（版本号由 tag 注入，不需要改源码）：
 
 ```text
-git tag 2.1.0-Release
+git tag -a 2.1.0-Release -m "2.1.0-Release"
 git push origin 2.1.0-Release
 ```
 
+- **必须用 `-a`（annotated）**：`2.0.0` 起的正式 tag 都是 annotated，带 tagger 与日期，
+  可 GPG 签名。lightweight（`git tag` 不带 `-a`）只是 commit 指针——凡依赖 tag 对象的
+  工具都会看不到它（`git describe` 默认忽略、`git push --follow-tags` 不会推、`git show`
+  或 `git tag -n` 也没有标签消息）。发布流程本身不受影响（版本号取自 tag **名字**，
+  `--verify-tag` 与 `checkout` 都正常），但会留下与历史不一致、且无法事后补救的记录——
+  已发布的 tag 删掉会连带删掉 GitHub Release 并重跑整个工作流。
 - tag 格式 `v2.0.0` / `2.0.0` / `2.0.0-Release` 均可；`Upgrade` 会剥掉 `v` 前缀，
   无后缀按 `Release` 处理，同版本号时按 `-Type` 后缀比较等级
 - 工作流硬校验版本号为三段 `x.y.z`，不合法直接失败
