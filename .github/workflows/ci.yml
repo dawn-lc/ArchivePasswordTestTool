@@ -19,6 +19,14 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+# 构建供应链版本：固定而非跟 latest。
+# 跟随 latest 时，同一 commit 的两次构建可能拿到不同的 7z.dll / UPX，产物不可重现；
+# 上游发新版也会在没有任何代码变更的情况下改变产物大小与哈希。
+# 升级方式：改这里两个值（同时会让 tools 缓存失效，下次重新下载）。
+env:
+  SEVEN_ZIP_VERSION: '26.05'
+  UPX_VERSION: '5.2.1'
+
 permissions:
   contents: read
 
@@ -26,7 +34,7 @@ jobs:
   verify:
     name: Build, test and verify published binary
     runs-on: windows-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
 
     steps:
       - name: Checkout
@@ -40,8 +48,23 @@ jobs:
           cache: true
           cache-dependency-path: '**/*.csproj'
 
+      # tools\ 被 .gitignore 排除（7z.dll / upx.exe 不入库），所以缓存要显式做。
+      # 不缓存的话每个 job 都要重新下载 7zr.exe + 7-Zip 安装包 + UPX 发行包，
+      # 网络抖动就直接变成一次构建失败（本仓库碰过多次间歇性 TLS 断连）。
+      # key 里带版本：升级版本时自然失效，不会拿到旧版本的缓存。
+      - name: Cache build tools
+        uses: actions/cache@v4
+        with:
+          path: |
+            tools/upx
+            tools/7zip
+          key: build-tools-${{ runner.os }}-7z${{ env.SEVEN_ZIP_VERSION }}-upx${{ env.UPX_VERSION }}
+
       - name: Build and verify
         uses: ./.github/actions/build-verify
+        with:
+          sevenZipVersion: ${{ env.SEVEN_ZIP_VERSION }}
+          upxVersion: ${{ env.UPX_VERSION }}
 
       - name: Upload test results
         if: always()
@@ -57,5 +80,15 @@ jobs:
         with:
           name: ArchivePasswordTestTool-win-x64
           path: ArchivePasswordTestTool/bin/Release/net10.0/win-x64/publish/ArchivePasswordTestTool.exe
+          if-no-files-found: error
+          retention-days: 7
+
+      # AOT 是**对外发布形态**（见 release.yml），因此在 CI 里必须有独立产物留档，
+      # 否则「AOT 能构建并通过验收」这句结论无法复核。
+      - name: Upload AOT binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: ArchivePasswordTestTool-win-x64-aot
+          path: dist/aot/ArchivePasswordTestTool.exe
           if-no-files-found: error
           retention-days: 7

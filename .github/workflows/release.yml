@@ -19,6 +19,12 @@ concurrency:
   group: release-${{ github.ref }}
   cancel-in-progress: false
 
+# 构建供应链版本：固定而非跟 latest，保证同一个 tag 重跑得到同一份产物。
+# 与 ci.yml 必须保持一致，否则「CI 验过的」与「发出去的」可能不是同一种构建。
+env:
+  SEVEN_ZIP_VERSION: '26.05'
+  UPX_VERSION: '5.2.1'
+
 permissions:
   contents: write
 
@@ -67,11 +73,24 @@ jobs:
           Write-Host "发布 tag：$tag"
           Write-Host "注入版本：$version-$versionType"
 
+      # tools\ 被 .gitignore 排除（7z.dll / upx.exe 不入库），所以缓存要显式做。
+      # 不缓存的话每个 job 都要重新下载 7zr.exe + 7-Zip 安装包 + UPX 发行包，
+      # 网络抖动就直接变成一次发布失败（本仓库碰过多次间歇性 TLS 断连）。
+      - name: Cache build tools
+        uses: actions/cache@v4
+        with:
+          path: |
+            tools/upx
+            tools/7zip
+          key: build-tools-${{ runner.os }}-7z${{ env.SEVEN_ZIP_VERSION }}-upx${{ env.UPX_VERSION }}
+
       - name: Build and verify
         uses: ./.github/actions/build-verify
         with:
           appVersion: ${{ env.APP_VERSION }}
           appVersionType: ${{ env.APP_VERSION_TYPE }}
+          sevenZipVersion: ${{ env.SEVEN_ZIP_VERSION }}
+          upxVersion: ${{ env.UPX_VERSION }}
 
       - name: Upload test results
         if: always()
@@ -82,14 +101,31 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
+      # 发布资产 = AOT 产物（单文件原生 PE，UPX 压缩后约 4.2 MB）。
+      # 只作为 workflow artifact 留档，同时供下面 Create Release 取用。
+      - name: Upload AOT binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: ArchivePasswordTestTool-win-x64-aot
+          path: dist/aot/ArchivePasswordTestTool.exe
+          if-no-files-found: error
+          retention-days: 7
+
       - name: Create or update GitHub Release
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           $tag = $env:RELEASE_TAG
-          $exe = 'ArchivePasswordTestTool\bin\Release\net10.0\win-x64\publish\ArchivePasswordTestTool.exe'
+
+          # **只发 AOT 这一个 exe**。Upgrade.MainAsset 取「第一个 .exe 资产」，
+          # 两个 .exe 会让自更新在两种形态间不确定地切换（用户装的是不压缩版，
+          # 更新后变成 UPX 版，或反之），因此 Release 永远只挂一个 exe。
+          # 该文件已由 build-verify 的 Smoke test published binaries 验收过（单文件、UPX 已压缩、
+          # 内嵌 7z.dll 可用、版本号等于注入值），此处不重复断言，只确认路径取对了。
+          $exe = 'dist\aot\ArchivePasswordTestTool.exe'
           if (-not (Test-Path $exe)) { throw "发布产物不存在：$exe" }
+          Write-Host "发布产物：$exe（$((Get-Item $exe).Length) 字节）"
 
           $repo = '${{ github.repository }}'
 

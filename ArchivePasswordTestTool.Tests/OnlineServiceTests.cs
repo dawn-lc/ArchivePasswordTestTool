@@ -265,7 +265,7 @@ public sealed class OnlineServiceTests(TestDataFixture fx)
     }
 
     /// <summary>
-    /// 受支持语言，对应 Properties/Resources.*.resx 的卫星程序集（en 为中性资源）。
+    /// 受支持语言（en 为中性资源）。
     /// 新增语言时必须同步这里，否则「不含某提示」的断言会在新语言下漏检。
     /// </summary>
     private static readonly string[] SupportedCultures = ["en", "zh-CN", "ja", "fr", "ru"];
@@ -276,7 +276,7 @@ public sealed class OnlineServiceTests(TestDataFixture fx)
     private static string[] LocalizedPrefixes(string resourceKey)
     {
         return SupportedCultures
-            .Select(culture => Resources.ResourceManager.GetString(resourceKey, new CultureInfo(culture)))
+            .Select(culture => EmbeddedResourceManager.GetString(resourceKey, new CultureInfo(culture)))
             .Where(text => !string.IsNullOrWhiteSpace(text))
             .Select(text => text!.Split('{')[0].Trim())
             .Distinct(StringComparer.Ordinal)

@@ -1,4 +1,5 @@
 using System.Runtime.InteropServices;
+using System.Runtime.InteropServices.Marshalling;
 
 namespace ArchivePasswordTestTool
 {
@@ -13,10 +14,17 @@ namespace ArchivePasswordTestTool
 
     /// <summary>
     /// 文件流包装器，实现 IInStream 接口
+    /// <para>
+    /// [GeneratedComClass] 是 Native AOT 的前提：运行时 CCW（[ComVisible]+[ClassInterface]）
+    /// 依赖内置 COM 封送，AOT 下直接报 "COM Interop requires ComWrapper instance registered
+    /// for marshalling"。源生成版本编译期产出 CCW stub，AOT 可用。
+    /// </para>
+    /// <para>
+    /// 也不需要 GCHandle 手动固定：CCW 存活期间 ComWrappers 持有托管对象的强引用。
+    /// </para>
     /// </summary>
-    [ComVisible(true)]
-    [ClassInterface(ClassInterfaceType.None)]
-    internal class FileInStream : IInStream, IArchiveSourceStream
+    [GeneratedComClass]
+    internal sealed unsafe partial class FileInStream : IInStream, IArchiveSourceStream
     {
         // APTT_TRACE=1 时输出 COM 回调跟踪到 stderr（仅诊断用）
         internal static readonly bool TraceEnabled = Environment.GetEnvironmentVariable("APTT_TRACE") == "1";
@@ -30,24 +38,13 @@ namespace ArchivePasswordTestTool
         }
 
         private readonly Stream _stream;
-        private readonly string? _filePath;
-        private GCHandle _gcHandle;
 
         public FileInStream(string filePath)
         {
             _stream = File.OpenRead(filePath);
-            _filePath = filePath;
-            _gcHandle = GCHandle.Alloc(this, GCHandleType.Normal);
         }
 
-        public FileInStream(Stream stream)
-        {
-            _stream = stream;
-            _filePath = null;
-            _gcHandle = GCHandle.Alloc(this, GCHandleType.Normal);
-        }
-
-        public int Read(IntPtr data, uint size, IntPtr processedSize)
+        public int Read(byte* data, uint size, uint* processedSize)
         {
             ComTrace($"FileInStream.Read size={size}");
 
@@ -55,42 +52,30 @@ namespace ArchivePasswordTestTool
             int request = size > int.MaxValue ? int.MaxValue : (int)size;
             int read = 0;
 
-            if (request > 0)
+            if (request > 0 && data is not null)
             {
-                var buf = System.Buffers.ArrayPool<byte>.Shared.Rent(request);
-                try
-                {
-                    read = _stream.Read(buf, 0, request);
-                    if (read > 0)
-                    {
-                        Marshal.Copy(buf, 0, data, read);
-                    }
-                }
-                finally
-                {
-                    System.Buffers.ArrayPool<byte>.Shared.Return(buf);
-                }
+                read = _stream.Read(new Span<byte>(data, request));
             }
 
             // 必须回写实际读取字节数，否则 7z 内部会读到未初始化的栈值导致内存越界
-            if (processedSize != IntPtr.Zero)
+            if (processedSize is not null)
             {
-                Marshal.WriteInt32(processedSize, read);
+                *processedSize = (uint)read;
             }
 
             return 0; // S_OK
         }
 
-        public int Seek(long offset, uint seekOrigin, IntPtr newPosition)
+        public int Seek(long offset, uint seekOrigin, ulong* newPosition)
         {
             ComTrace($"FileInStream.Seek offset={offset} origin={seekOrigin}");
 
             SeekOrigin origin = (SeekOrigin)seekOrigin;
             long position = _stream.Seek(offset, origin);
 
-            if (newPosition != IntPtr.Zero)
+            if (newPosition is not null)
             {
-                Marshal.WriteInt64(newPosition, position);
+                *newPosition = (ulong)position;
             }
 
             return 0; // S_OK
@@ -98,20 +83,7 @@ namespace ArchivePasswordTestTool
 
         public void Dispose()
         {
-            // DebugHelper.Log($"FileInStream.Dispose: 文件={_filePath ?? "Stream"}");
             _stream?.Dispose();
-            if (_gcHandle.IsAllocated)
-            {
-                _gcHandle.Free();
-            }
-        }
-
-        ~FileInStream()
-        {
-            if (_gcHandle.IsAllocated)
-            {
-                _gcHandle.Free();
-            }
         }
     }
 
@@ -120,22 +92,19 @@ namespace ArchivePasswordTestTool
     /// 7-Zip 对 .7z/.zip 分卷的链接逻辑位于 UI 层（7z.exe 的 OpenArchive.cpp，拼装后递归打开内部归档），
     /// 不在 7z.dll 内，因此直接调用 IInArchive.Open 时必须由调用方自行拼接分卷流。
     /// </summary>
-    [ComVisible(true)]
-    [ClassInterface(ClassInterfaceType.None)]
-    internal class MultiVolumeInStream : IInStream, IArchiveSourceStream
+    [GeneratedComClass]
+    internal sealed unsafe partial class MultiVolumeInStream : IInStream, IArchiveSourceStream
     {
         private readonly FileStream[] _streams;
         private readonly long[] _starts;    // 每个分卷在虚拟流中的起始偏移
         private readonly long _total;
         private long _position;
-        private GCHandle _gcHandle;
         private bool _disposed;
 
         public MultiVolumeInStream(IReadOnlyList<string> paths)
         {
             _streams = new FileStream[paths.Count];
             _starts = new long[paths.Count];
-            _gcHandle = GCHandle.Alloc(this, GCHandleType.Normal);
 
             long pos = 0;
             for (int i = 0; i < paths.Count; i++)
@@ -161,14 +130,14 @@ namespace ArchivePasswordTestTool
             return -1;
         }
 
-        public int Read(IntPtr data, uint size, IntPtr processedSize)
+        public int Read(byte* data, uint size, uint* processedSize)
         {
             FileInStream.ComTrace($"MultiVolumeInStream.Read size={size} pos={_position}");
 
             int totalRead = 0;
             int request = size > int.MaxValue ? int.MaxValue : (int)size;
 
-            while (totalRead < request && data != IntPtr.Zero)
+            while (totalRead < request && data is not null)
             {
                 int vol = FindVolume(_position);
 
@@ -189,15 +158,15 @@ namespace ArchivePasswordTestTool
                 int chunk = (int)Math.Min(avail, request - totalRead);
                 _streams[vol].Seek(within, SeekOrigin.Begin);
 
-                var buf = new byte[chunk];
-                int read = _streams[vol].Read(buf, 0, chunk);
+                // 直接写进 native 缓冲区，省掉一次 ArrayPool 租借 + Marshal.Copy
+                var span = new Span<byte>(data + totalRead, chunk);
+                int read = _streams[vol].Read(span);
 
                 if (read <= 0)
                 {
                     break;
                 }
 
-                Marshal.Copy(buf, 0, data + totalRead, read);
                 _position += read;
                 totalRead += read;
 
@@ -208,15 +177,15 @@ namespace ArchivePasswordTestTool
             }
 
             // 必须回写实际读取字节数，否则 7z 内部会当作错误处理
-            if (processedSize != IntPtr.Zero)
+            if (processedSize is not null)
             {
-                Marshal.WriteInt32(processedSize, totalRead);
+                *processedSize = (uint)totalRead;
             }
 
             return 0; // S_OK
         }
 
-        public int Seek(long offset, uint seekOrigin, IntPtr newPosition)
+        public int Seek(long offset, uint seekOrigin, ulong* newPosition)
         {
             // STREAM_SEEK_SET=0 / STREAM_SEEK_CUR=1 / STREAM_SEEK_END=2，与 .NET SeekOrigin 数值一致
             long target = seekOrigin switch
@@ -229,9 +198,9 @@ namespace ArchivePasswordTestTool
 
             _position = Math.Clamp(target, 0, _total);
 
-            if (newPosition != IntPtr.Zero)
+            if (newPosition is not null)
             {
-                Marshal.WriteInt64(newPosition, _position);
+                *newPosition = (ulong)_position;
             }
 
             return 0; // S_OK
@@ -250,107 +219,43 @@ namespace ArchivePasswordTestTool
             {
                 stream.Dispose();
             }
-
-            if (_gcHandle.IsAllocated)
-            {
-                _gcHandle.Free();
-            }
-        }
-
-        ~MultiVolumeInStream()
-        {
-            if (_gcHandle.IsAllocated)
-            {
-                _gcHandle.Free();
-            }
         }
     }
 
-    /// <summary>
-    /// 密码提供者，实现 ICryptoGetTextPassword 接口
-    /// </summary>
-    internal class PasswordProvider(string password) : ICryptoGetTextPassword
+    [GeneratedComClass]
+    internal sealed unsafe partial class DummyOutStream : ISequentialOutStream, IDisposable
     {
-        private readonly string _password = password;
-
-        public int CryptoGetTextPassword(
-            [MarshalAs(UnmanagedType.BStr)] out string password)
-        {
-            password = _password;
-            return 0; // 返回 0 表示成功
-        }
-    }
-
-    [ComVisible(true)]
-    [ClassInterface(ClassInterfaceType.None)]
-    internal class DummyOutStream : ISequentialOutStream, IDisposable
-    {
-        private GCHandle _gcHandle;
-        private bool _disposed;
-
-        public DummyOutStream()
-        {
-            // 固定对象，防止在COM调用期间被垃圾回收
-            _gcHandle = GCHandle.Alloc(this, GCHandleType.Normal);
-        }
-
-        public int Write(IntPtr data, uint size, IntPtr processedSize)
+        public int Write(byte* data, uint size, uint* processedSize)
         {
             FileInStream.ComTrace($"DummyOutStream.Write size={size}");
 
-            if (processedSize != IntPtr.Zero)
-                Marshal.WriteInt32(processedSize, (int)size);
+            if (processedSize is not null)
+            {
+                *processedSize = size;
+            }
 
             return 0; // S_OK
         }
 
         public void Dispose()
         {
-            if (_disposed)
-                return;
-
-            if (_gcHandle.IsAllocated)
-            {
-                _gcHandle.Free();
-            }
-
-            _disposed = true;
-        }
-
-        ~DummyOutStream()
-        {
-            if (_gcHandle.IsAllocated)
-            {
-                _gcHandle.Free();
-            }
         }
     }
     /// <summary>
     /// 简单的提取回调，用于测试模式
     /// </summary>
-    [ComVisible(true)]
-    [ClassInterface(ClassInterfaceType.None)]
-    internal class TestExtractCallback : IArchiveExtractCallback, ICryptoGetTextPassword
+    [GeneratedComClass]
+    internal sealed unsafe partial class TestExtractCallback : IArchiveExtractCallback, ICryptoGetTextPassword
     {
         private readonly string _password;
-        private GCHandle _gcHandle;
         private OperationResult _lastOperationResult;
         private readonly List<DummyOutStream> _outStreams;
-
-        public int ProcessedFiles { get; private set; }
 
         public TestExtractCallback(string password)
         {
             _password = password;
             _lastOperationResult = OperationResult.OK;
             _outStreams = [];
-            _gcHandle = GCHandle.Alloc(this, GCHandleType.Normal);
-        }
-
-        ~TestExtractCallback()
-        {
-            if (_gcHandle.IsAllocated)
-                _gcHandle.Free();
         }
 
         public OperationResult LastOperationResult => _lastOperationResult;
@@ -361,9 +266,9 @@ namespace ArchivePasswordTestTool
             return 0; // S_OK
         }
 
-        public int SetCompleted([In] ref ulong completeValue)
+        public int SetCompleted(ulong* completeValue)
         {
-            FileInStream.ComTrace($"TestExtractCallback.SetCompleted value={completeValue}");
+            FileInStream.ComTrace($"TestExtractCallback.SetCompleted value={(completeValue is null ? 0 : *completeValue)}");
             return 0; // S_OK
         }
 
@@ -379,7 +284,6 @@ namespace ArchivePasswordTestTool
             }
 
             // Extract 和 Test 都需要流
-            ProcessedFiles++;
             var dummyStream = new DummyOutStream();
             _outStreams.Add(dummyStream);
             outStream = dummyStream;
@@ -399,8 +303,7 @@ namespace ArchivePasswordTestTool
             return 0; // S_OK
         }
 
-        public int CryptoGetTextPassword(
-            [MarshalAs(UnmanagedType.BStr)] out string password)
+        public int CryptoGetTextPassword(out string password)
         {
             password = _password;
             return 0;
@@ -421,9 +324,8 @@ namespace ArchivePasswordTestTool
     /// 分卷压缩包的 7z 流头部引用的尾头部在最后一个分卷中，
     /// 7-Zip 必须通过 IArchiveOpenVolumeCallback 把全部分卷链接成连续虚拟流才能解析。
     /// </summary>
-    [ComVisible(true)]
-    [ClassInterface(ClassInterfaceType.None)]
-    internal class PasswordOpenCallback : IArchiveOpenCallback, ICryptoGetTextPassword, IArchiveOpenVolumeCallback
+    [GeneratedComClass]
+    internal sealed unsafe partial class PasswordOpenCallback : IArchiveOpenCallback, ICryptoGetTextPassword, IArchiveOpenVolumeCallback
     {
         private readonly string _password;
         private readonly string _archivePath;
@@ -434,19 +336,19 @@ namespace ArchivePasswordTestTool
             _archivePath = archivePath;
         }
 
-        public int SetTotal(IntPtr files, IntPtr bytes)
+        public int SetTotal(ulong* files, ulong* bytes)
         {
             FileInStream.ComTrace("PasswordOpenCallback.SetTotal");
             return 0; // S_OK
         }
 
-        public int SetCompleted(IntPtr files, IntPtr bytes)
+        public int SetCompleted(ulong* files, ulong* bytes)
         {
             FileInStream.ComTrace("PasswordOpenCallback.SetCompleted");
             return 0; // S_OK
         }
 
-        public int CryptoGetTextPassword([MarshalAs(UnmanagedType.BStr)] out string password)
+        public int CryptoGetTextPassword(out string password)
         {
             FileInStream.ComTrace("PasswordOpenCallback.CryptoGetTextPassword");
             password = _password;

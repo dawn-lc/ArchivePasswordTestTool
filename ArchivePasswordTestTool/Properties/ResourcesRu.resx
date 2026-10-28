@@ -109,92 +109,95 @@
     <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
   </resheader>
   <data name="SevenZipDllPathRequired" xml:space="preserve">
-    <value>未找到 7z.dll（7-Zip 未安装或文件缺失）。</value>
+    <value>7z.dll не найден (7-Zip не установлен или отсутствуют его файлы).</value>
   </data>
   <data name="SevenZipDownloadHint" xml:space="preserve">
-    <value>请从以下地址下载并安装 7-Zip：{0}</value>
+    <value>Скачайте и установите 7-Zip по адресу: {0}</value>
   </data>
   <data name="SevenZipOpenBrowserPrompt" xml:space="preserve">
-    <value>是否在浏览器中打开下载页面？</value>
+    <value>Открыть страницу загрузки в браузере?</value>
   </data>
   <data name="OpenBrowserFailed" xml:space="preserve">
-    <value>打开浏览器失败：{0}</value>
+    <value>Не удалось открыть браузер: {0}</value>
   </data>
   <data name="SevenZipDllNotFound" xml:space="preserve">
-    <value>未找到7z.dll: {0}
-请先下载并安装7zip。</value>
+    <value>7z.dll не найден: {0}
+Сначала скачайте и установите 7-Zip.</value>
   </data>
   <data name="SevenZipDllInitializationFailed" xml:space="preserve">
-    <value>初始化7z.dll失败: {0}</value>
+    <value>Не удалось инициализировать 7z.dll: {0}</value>
   </data>
   <data name="DictionaryFileNotFound" xml:space="preserve">
-    <value>未找到密码字典文件。</value>
+    <value>Файл словаря паролей не найден.</value>
   </data>
   <data name="DictionaryEncodingDetected" xml:space="preserve">
-    <value>检测到字典使用非 UTF-8 编码，按 {0} 读取。</value>
+    <value>Обнаружена не-UTF-8 кодировка словаря, чтение как {0}.</value>
   </data>
   <data name="UnsupportedArchiveFormat" xml:space="preserve">
-    <value>无法识别该文件的格式，请检查该文件是否是支持的压缩包！</value>
+    <value>Не удалось определить формат файла. Проверьте, что это поддерживаемый архив.</value>
   </data>
   <data name="CreateArchiveInterfaceFailed" xml:space="preserve">
-    <value>创建压缩包接口失败。</value>
+    <value>Не удалось создать интерфейс архива.</value>
   </data>
   <data name="ProcessPathUnavailable" xml:space="preserve">
-    <value>无法确定主程序路径。</value>
+    <value>Не удалось определить путь запущенной программы.</value>
   </data>
   <data name="ArchiveFileNotFound" xml:space="preserve">
-    <value>未找到压缩包文件。</value>
+    <value>Файл архива не найден.</value>
   </data>
   <data name="UsingInstalledSevenZip" xml:space="preserve">
-    <value>使用已安装的7-Zip: {0}</value>
+    <value>Используется установленный 7-Zip: {0}</value>
   </data>
   <data name="UsingSpecifiedSevenZipDll" xml:space="preserve">
-    <value>使用指定的7z.dll: {0}</value>
+    <value>Используется указанный 7z.dll: {0}</value>
+  </data>
+  <data name="UsingEmbeddedSevenZip" xml:space="preserve">
+    <value>Используется встроенный 7z.dll: {0}</value>
   </data>
   <data name="AnalyzingArchiveInformation" xml:space="preserve">
-    <value>正在分析压缩包信息...</value>
+    <value>Анализ информации об архиве...</value>
   </data>
   <data name="FullyEncryptedArchiveWarning" xml:space="preserve">
-    <value>注意：压缩包完全加密，无法使用快速测试！</value>
+    <value>Внимание: архив полностью зашифрован, быстрый тест недоступен!</value>
   </data>
   <data name="TestingPasswordProgress" xml:space="preserve">
-    <value>测试密码</value>
+    <value>Проверка пароля</value>
   </data>
   <data name="PasswordFoundSuccess" xml:space="preserve">
-    <value>找到解压密码: {0}</value>
+    <value>Найден пароль для распаковки: {0}</value>
   </data>
   <data name="PasswordNotFound" xml:space="preserve">
-    <value>未找到正确的解压密码！</value>
+    <value>Правильный пароль для распаковки не найден!</value>
   </data>
   <data name="ArchiveNotEncrypted" xml:space="preserve">
-    <value>{0} 不是加密的压缩包。</value>
+    <value>{0} не является зашифрованным архивом.</value>
   </data>
   <data name="SaveTestResultsPrompt" xml:space="preserve">
-    <value>是否要保存测试结果？</value>
+    <value>Сохранить результаты теста?</value>
   </data>
   <data name="ViewTestReportPrompt" xml:space="preserve">
-    <value>是否要查看测试报告？</value>
+    <value>Просмотреть отчёт о тесте?</value>
   </data>
   <data name="TestResultArchive" xml:space="preserve">
-    <value>压缩包: {0}</value>
+    <value>Архив: {0}</value>
   </data>
   <data name="TestResultDictionary" xml:space="preserve">
-    <value>字典文件: {0}</value>
+    <value>Словарь: {0}</value>
   </data>
   <data name="TestResultElapsedTime" xml:space="preserve">
-    <value>耗时: {0}</value>
+    <value>Затрачено времени: {0}</value>
   </data>
   <data name="TestResultArchiveHash" xml:space="preserve">
-    <value>压缩包哈希: {0}</value>
+    <value>Хеш архива: {0}</value>
   </data>
   <data name="TestResultDecompressionPassword" xml:space="preserve">
-    <value>解压密码: {0}</value>
+    <value>Пароль для распаковки: {0}</value>
   </data>
   <data name="TestResultArchiveNotEncrypted" xml:space="preserve">
-    <value>压缩包未加密</value>
+    <value>Архив не зашифрован</value>
   </data>
   <data name="TestResultPasswordNotFound" xml:space="preserve">
-    <value>未找到正确的解压密码！</value>
+    <value>Правильный пароль для распаковки не найден!</value>
   </data>
   <data name="AppHomePage" xml:space="preserve">
     <value>https://github.com/dawn-lc/ArchivePasswordTestTool</value>
@@ -203,114 +206,114 @@
     <value>dawn-lc</value>
   </data>
   <data name="InfoTitle" xml:space="preserve">
-    <value>压缩包信息</value>
+    <value>Информация об архиве</value>
   </data>
   <data name="InfoArchive" xml:space="preserve">
-    <value>压缩文件</value>
+    <value>Архив</value>
   </data>
   <data name="InfoFormat" xml:space="preserve">
-    <value>格式</value>
+    <value>Формат</value>
   </data>
   <data name="InfoFiles" xml:space="preserve">
-    <value>文件数量</value>
+    <value>Файлы</value>
   </data>
   <data name="InfoEncryption" xml:space="preserve">
-    <value>加密状态</value>
+    <value>Шифрование</value>
   </data>
   <data name="InfoQuickTest" xml:space="preserve">
-    <value>快速测试</value>
+    <value>Быстрый тест</value>
   </data>
   <data name="InfoHash" xml:space="preserve">
-    <value>哈希值</value>
+    <value>Хеш</value>
   </data>
   <data name="InfoDictionary" xml:space="preserve">
-    <value>密码字典</value>
+    <value>Словарь паролей</value>
   </data>
   <data name="InfoPasswords" xml:space="preserve">
-    <value>密码数量</value>
+    <value>Количество паролей</value>
   </data>
   <data name="InfoParallelism" xml:space="preserve">
-    <value>并行度</value>
+    <value>Параллелизм</value>
   </data>
   <data name="ValueYes" xml:space="preserve">
-    <value>是</value>
+    <value>Да</value>
   </data>
   <data name="ValueNo" xml:space="preserve">
-    <value>否</value>
+    <value>Нет</value>
   </data>
   <data name="ValueHeaderEncryption" xml:space="preserve">
-    <value>Header 加密（完全加密）</value>
+    <value>Шифрование заголовка (полное шифрование)</value>
   </data>
   <data name="ResultElapsed" xml:space="preserve">
-    <value>耗时</value>
+    <value>Затрачено времени</value>
   </data>
   <data name="ResultTested" xml:space="preserve">
-    <value>已测试</value>
+    <value>Проверено</value>
   </data>
   <data name="ResultSpeed" xml:space="preserve">
-    <value>速度</value>
+    <value>Скорость</value>
   </data>
   <data name="ResultPwPerSec" xml:space="preserve">
-    <value>{0} 个/秒</value>
+    <value>{0} паролей/с</value>
   </data>
   <data name="OnlineQueryRequesting" xml:space="preserve">
-    <value>正在向在线服务请求该压缩包哈希对应的共享密码（{0}）...</value>
+    <value>Запрос общего пароля в онлайн-сервисе (хеш {0})...</value>
   </data>
   <data name="OnlineQueryReceived" xml:space="preserve">
-    <value>已获取在线共享密码，将优先测试。</value>
+    <value>Получен общий пароль из онлайн-сервиса; он будет проверен первым.</value>
   </data>
   <data name="OnlineQueryEmpty" xml:space="preserve">
-    <value>在线服务暂无该压缩包的密码记录。</value>
+    <value>В онлайн-сервисе нет записи пароля для этого архива.</value>
   </data>
   <data name="OnlineQueryFailed" xml:space="preserve">
-    <value>在线密码查询失败：{0}</value>
+    <value>Сбой запроса онлайн-пароля: {0}</value>
   </data>
   <data name="OnlineReportSending" xml:space="preserve">
-    <value>正在回传密码到在线服务...</value>
+    <value>Отправка найденного пароля в онлайн-сервис...</value>
   </data>
   <data name="OnlineReportDone" xml:space="preserve">
-    <value>密码已回传，感谢共享。</value>
+    <value>Пароль отправлен. Спасибо за публикацию.</value>
   </data>
   <data name="OnlineReportFailed" xml:space="preserve">
-    <value>密码回传失败：{0}</value>
+    <value>Сбой отправки пароля: {0}</value>
   </data>
   <data name="OnlineNotConfigured" xml:space="preserve">
-    <value>在线服务地址尚未配置（修改 OnlineService.DefaultServiceUrl 或使用 -Api 指定）。</value>
+    <value>Онлайн-сервис ещё не настроен (измените OnlineService.DefaultServiceUrl или укажите -Api).</value>
   </data>
   <data name="InteractiveDictionaryPrompt" xml:space="preserve">
-    <value>[bold cyan]请将“密码本”拖入本窗口！[/]
-[dodgerblue1]密码本位置: [/]</value>
+    <value>[bold cyan]Перетащите словарь паролей в это окно.[/]
+[dodgerblue1]Путь к словарю: [/]</value>
   </data>
   <data name="InteractiveArchivePrompt" xml:space="preserve">
-    <value>[bold cyan]请将“压缩包”拖入本窗口！[/]
-[dodgerblue1]压缩包位置: [/]</value>
+    <value>[bold cyan]Перетащите архив в это окно.[/]
+[dodgerblue1]Путь к архиву: [/]</value>
   </data>
   <data name="InteractiveFileNotFound" xml:space="preserve">
-    <value>没有找到文件，请重新输入。</value>
+    <value>Файл не найден, попробуйте ещё раз.</value>
   </data>
   <data name="InteractivePressAnyKeyToExit" xml:space="preserve">
-    <value>按任意键退出。</value>
+    <value>Нажмите любую клавишу для выхода.</value>
   </data>
   <data name="InteractiveInputKept" xml:space="preserve">
-    <value>内容已保留。</value>
+    <value>Содержимое сохранено.</value>
   </data>
   <data name="UpgradeAvailable" xml:space="preserve">
-    <value>发现新版本：{0}</value>
+    <value>Доступна новая версия: {0}</value>
   </data>
   <data name="UpgradeOpenReleasesPrompt" xml:space="preserve">
-    <value>是否打开发布页？</value>
+    <value>Открыть страницу релизов?</value>
   </data>
   <data name="UpgradeDownloading" xml:space="preserve">
-    <value>正在下载新版本...</value>
+    <value>Загрузка новой версии...</value>
   </data>
   <data name="UpgradeDownloadFailed" xml:space="preserve">
-    <value>下载失败：{0}
-也可前往发布页手动下载。</value>
+    <value>Сбой загрузки: {0}
+Вы также можете загрузить вручную со страницы релизов.</value>
   </data>
   <data name="UpgradeReadyForNextLaunch" xml:space="preserve">
-    <value>新版本已下载完成，下次启动时自动更新。</value>
+    <value>Новая версия загружена и будет применена автоматически при следующем запуске.</value>
   </data>
   <data name="UpgradeApplied" xml:space="preserve">
-    <value>已更新到 {0}。</value>
+    <value>Обновлено до {0}.</value>
   </data>
 </root>

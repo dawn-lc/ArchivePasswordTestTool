@@ -151,6 +151,9 @@ Please download and install 7-Zip first.</value>
   <data name="UsingSpecifiedSevenZipDll" xml:space="preserve">
     <value>Using specified 7z.dll: {0}</value>
   </data>
+  <data name="UsingEmbeddedSevenZip" xml:space="preserve">
+    <value>Using bundled 7z.dll: {0}</value>
+  </data>
   <data name="AnalyzingArchiveInformation" xml:space="preserve">
     <value>Analyzing archive information...</value>
   </data>

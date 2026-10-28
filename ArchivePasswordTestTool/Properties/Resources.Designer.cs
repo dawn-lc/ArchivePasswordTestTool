@@ -16,40 +16,27 @@ namespace ArchivePasswordTestTool.Properties
     /// <summary>
     ///   一个强类型的资源类，用于查找本地化的字符串等。
     /// </summary>
-    // 此类是由 StronglyTypedResourceBuilder
-    // 类通过类似于 ResGen 或 Visual Studio 的工具自动生成的。
-    // 若要添加或移除成员，请编辑 .ResX 文件，然后重新运行 ResGen
-    // (以 /str 作为命令选项)，或重新生成 VS 项目。
-    [global::System.CodeDom.Compiler.GeneratedCodeAttribute("System.Resources.Tools.StronglyTypedResourceBuilder", "18.0.0.0")]
+    // 本文件原由 StronglyTypedResourceBuilder / VS 设计器生成，现已改为**手工维护**：
+    // 加过中文说明注释、按字母序人工排序，并改用 EmbeddedResourceManager。
+    //
+    // 为什么不使用 System.Resources.ResourceManager：
+    // 它只在**卫星程序集**（zh-CN\App.resources.dll）里查找 culture 资源，不会去主程序集找。
+    // 而 Native AOT 无法把卫星程序集打进 exe，产物必然是「exe + 语言目录」，
+    // 与「单 exe 下载 + 自更新替换单文件」的发布形态冲突。
+    // 因此各语言 .resources 用 LogicalName 直接编进主程序集（见 csproj），
+    // 由 EmbeddedResourceManager 按 culture 链解析——常规构建与 AOT 产物都只有一个 exe。
+    //
+    // csproj 里刻意不再挂 Generator/LastGenOutput（那会让 VS 保存 resx 时覆盖本文件）。
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
     [global::System.Runtime.CompilerServices.CompilerGeneratedAttribute()]
     public class Resources
     {
-
-        private static global::System.Resources.ResourceManager resourceMan;
 
         private static global::System.Globalization.CultureInfo resourceCulture;
 
         [global::System.Diagnostics.CodeAnalysis.SuppressMessageAttribute("Microsoft.Performance", "CA1811:AvoidUncalledPrivateCode")]
         internal Resources()
         {
-        }
-
-        /// <summary>
-        ///   返回此类使用的缓存的 ResourceManager 实例。
-        /// </summary>
-        [global::System.ComponentModel.EditorBrowsableAttribute(global::System.ComponentModel.EditorBrowsableState.Advanced)]
-        public static global::System.Resources.ResourceManager ResourceManager
-        {
-            get
-            {
-                if (object.ReferenceEquals(resourceMan, null))
-                {
-                    global::System.Resources.ResourceManager temp = new global::System.Resources.ResourceManager("ArchivePasswordTestTool.Properties.Resources", typeof(Resources).Assembly);
-                    resourceMan = temp;
-                }
-                return resourceMan;
-            }
         }
 
         /// <summary>
@@ -76,7 +63,7 @@ namespace ArchivePasswordTestTool.Properties
         {
             get
             {
-                return ResourceManager.GetString("AnalyzingArchiveInformation", resourceCulture);
+                return EmbeddedResourceManager.GetString("AnalyzingArchiveInformation", resourceCulture);
             }
         }
 
@@ -87,7 +74,7 @@ namespace ArchivePasswordTestTool.Properties
         {
             get
             {
-                return ResourceManager.GetString("AppHomePage", resourceCulture);
+                return EmbeddedResourceManager.GetString("AppHomePage", resourceCulture);
             }
         }
 
@@ -98,7 +85,7 @@ namespace ArchivePasswordTestTool.Properties
         {
             get
             {
-                return ResourceManager.GetString("ArchiveFileNotFound", resourceCulture);
+                return EmbeddedResourceManager.GetString("ArchiveFileNotFound", resourceCulture);
             }
         }
 
@@ -109,7 +96,7 @@ namespace ArchivePasswordTestTool.Properties
         {
             get
             {
-                return ResourceManager.GetString("ArchiveNotEncrypted", resourceCulture);
+                return EmbeddedResourceManager.GetString("ArchiveNotEncrypted", resourceCulture);
             }
         }
 
@@ -120,7 +107,7 @@ namespace ArchivePasswordTestTool.Properties
         {
             get
             {
-                return ResourceManager.GetString("CreateArchiveInterfaceFailed", resourceCulture);
+                return EmbeddedResourceManager.GetString("CreateArchiveInterfaceFailed", resourceCulture);
             }
         }
 
@@ -131,7 +118,7 @@ namespace ArchivePasswordTestTool.Properties
         {
             get
             {
-                return ResourceManager.GetString("Developer", resourceCulture);
+                return EmbeddedResourceManager.GetString("Developer", resourceCulture);
             }
         }
 
@@ -142,7 +129,7 @@ namespace ArchivePasswordTestTool.Properties
         {
             get
             {
-                return ResourceManager.GetString("DictionaryEncodingDetected", resourceCulture);
+                return EmbeddedResourceManager.GetString("DictionaryEncodingDetected", resourceCulture);
             }
         }
 
@@ -153,7 +140,7 @@ namespace ArchivePasswordTestTool.Properties
         {
             get
             {
-                return ResourceManager.GetString("DictionaryFileNotFound", resourceCulture);
+                return EmbeddedResourceManager.GetString("DictionaryFileNotFound", resourceCulture);
             }
         }
 
@@ -164,7 +151,7 @@ namespace ArchivePasswordTestTool.Properties
         {
             get
             {
-                return ResourceManager.GetString("FullyEncryptedArchiveWarning", resourceCulture);
+                return EmbeddedResourceManager.GetString("FullyEncryptedArchiveWarning", resourceCulture);
             }
         }
 
@@ -175,7 +162,7 @@ namespace ArchivePasswordTestTool.Properties
         {
             get
             {
-                return ResourceManager.GetString("PasswordFoundSuccess", resourceCulture);
+                return EmbeddedResourceManager.GetString("PasswordFoundSuccess", resourceCulture);
             }
         }
 
@@ -186,7 +173,7 @@ namespace ArchivePasswordTestTool.Properties
         {
             get
             {
-                return ResourceManager.GetString("PasswordNotFound", resourceCulture);
+                return EmbeddedResourceManager.GetString("PasswordNotFound", resourceCulture);
             }
         }
 
@@ -197,7 +184,7 @@ namespace ArchivePasswordTestTool.Properties
         {
             get
             {
-                return ResourceManager.GetString("SaveTestResultsPrompt", resourceCulture);
+                return EmbeddedResourceManager.GetString("SaveTestResultsPrompt", resourceCulture);
             }
         }
 
@@ -208,7 +195,7 @@ namespace ArchivePasswordTestTool.Properties
         {
             get
             {
-                return ResourceManager.GetString("SevenZipDllInitializationFailed", resourceCulture);
+                return EmbeddedResourceManager.GetString("SevenZipDllInitializationFailed", resourceCulture);
             }
         }
 
@@ -220,7 +207,7 @@ namespace ArchivePasswordTestTool.Properties
         {
             get
             {
-                return ResourceManager.GetString("SevenZipDllNotFound", resourceCulture);
+                return EmbeddedResourceManager.GetString("SevenZipDllNotFound", resourceCulture);
             }
         }
 
@@ -231,7 +218,7 @@ namespace ArchivePasswordTestTool.Properties
         {
             get
             {
-                return ResourceManager.GetString("SevenZipDllPathRequired", resourceCulture);
+                return EmbeddedResourceManager.GetString("SevenZipDllPathRequired", resourceCulture);
             }
         }
 
@@ -242,7 +229,7 @@ namespace ArchivePasswordTestTool.Properties
         {
             get
             {
-                return ResourceManager.GetString("SevenZipDownloadHint", resourceCulture);
+                return EmbeddedResourceManager.GetString("SevenZipDownloadHint", resourceCulture);
             }
         }
 
@@ -253,7 +240,7 @@ namespace ArchivePasswordTestTool.Properties
         {
             get
             {
-                return ResourceManager.GetString("SevenZipOpenBrowserPrompt", resourceCulture);
+                return EmbeddedResourceManager.GetString("SevenZipOpenBrowserPrompt", resourceCulture);
             }
         }
 
@@ -264,7 +251,7 @@ namespace ArchivePasswordTestTool.Properties
         {
             get
             {
-                return ResourceManager.GetString("OpenBrowserFailed", resourceCulture);
+                return EmbeddedResourceManager.GetString("OpenBrowserFailed", resourceCulture);
             }
         }
 
@@ -275,7 +262,7 @@ namespace ArchivePasswordTestTool.Properties
         {
             get
             {
-                return ResourceManager.GetString("TestingPasswordProgress", resourceCulture);
+                return EmbeddedResourceManager.GetString("TestingPasswordProgress", resourceCulture);
             }
         }
 
@@ -286,7 +273,7 @@ namespace ArchivePasswordTestTool.Properties
         {
             get
             {
-                return ResourceManager.GetString("TestResultArchive", resourceCulture);
+                return EmbeddedResourceManager.GetString("TestResultArchive", resourceCulture);
             }
         }
 
@@ -297,7 +284,7 @@ namespace ArchivePasswordTestTool.Properties
         {
             get
             {
-                return ResourceManager.GetString("TestResultArchiveHash", resourceCulture);
+                return EmbeddedResourceManager.GetString("TestResultArchiveHash", resourceCulture);
             }
         }
 
@@ -308,7 +295,7 @@ namespace ArchivePasswordTestTool.Properties
         {
             get
             {
-                return ResourceManager.GetString("TestResultDecompressionPassword", resourceCulture);
+                return EmbeddedResourceManager.GetString("TestResultDecompressionPassword", resourceCulture);
             }
         }
 
@@ -319,7 +306,7 @@ namespace ArchivePasswordTestTool.Properties
         {
             get
             {
-                return ResourceManager.GetString("TestResultDictionary", resourceCulture);
+                return EmbeddedResourceManager.GetString("TestResultDictionary", resourceCulture);
             }
         }
 
@@ -330,7 +317,7 @@ namespace ArchivePasswordTestTool.Properties
         {
             get
             {
-                return ResourceManager.GetString("TestResultElapsedTime", resourceCulture);
+                return EmbeddedResourceManager.GetString("TestResultElapsedTime", resourceCulture);
             }
         }
 
@@ -341,7 +328,7 @@ namespace ArchivePasswordTestTool.Properties
         {
             get
             {
-                return ResourceManager.GetString("TestResultPasswordNotFound", resourceCulture);
+                return EmbeddedResourceManager.GetString("TestResultPasswordNotFound", resourceCulture);
             }
         }
 
@@ -352,7 +339,7 @@ namespace ArchivePasswordTestTool.Properties
         {
             get
             {
-                return ResourceManager.GetString("TestResultArchiveNotEncrypted", resourceCulture);
+                return EmbeddedResourceManager.GetString("TestResultArchiveNotEncrypted", resourceCulture);
             }
         }
 
@@ -363,7 +350,18 @@ namespace ArchivePasswordTestTool.Properties
         {
             get
             {
-                return ResourceManager.GetString("UsingInstalledSevenZip", resourceCulture);
+                return EmbeddedResourceManager.GetString("UsingInstalledSevenZip", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   查找类似 Using bundled 7z.dll: {0} 的本地化字符串。
+        /// </summary>
+        public static string UsingEmbeddedSevenZip
+        {
+            get
+            {
+                return EmbeddedResourceManager.GetString("UsingEmbeddedSevenZip", resourceCulture);
             }
         }
 
@@ -374,7 +372,7 @@ namespace ArchivePasswordTestTool.Properties
         {
             get
             {
-                return ResourceManager.GetString("UsingSpecifiedSevenZipDll", resourceCulture);
+                return EmbeddedResourceManager.GetString("UsingSpecifiedSevenZipDll", resourceCulture);
             }
         }
 
@@ -385,7 +383,7 @@ namespace ArchivePasswordTestTool.Properties
         {
             get
             {
-                return ResourceManager.GetString("ViewTestReportPrompt", resourceCulture);
+                return EmbeddedResourceManager.GetString("ViewTestReportPrompt", resourceCulture);
             }
         }
 
@@ -396,7 +394,7 @@ namespace ArchivePasswordTestTool.Properties
         {
             get
             {
-                return ResourceManager.GetString("InfoTitle", resourceCulture);
+                return EmbeddedResourceManager.GetString("InfoTitle", resourceCulture);
             }
         }
 
@@ -407,7 +405,7 @@ namespace ArchivePasswordTestTool.Properties
         {
             get
             {
-                return ResourceManager.GetString("InfoArchive", resourceCulture);
+                return EmbeddedResourceManager.GetString("InfoArchive", resourceCulture);
             }
         }
 
@@ -418,7 +416,7 @@ namespace ArchivePasswordTestTool.Properties
         {
             get
             {
-                return ResourceManager.GetString("InfoFormat", resourceCulture);
+                return EmbeddedResourceManager.GetString("InfoFormat", resourceCulture);
             }
         }
 
@@ -429,7 +427,7 @@ namespace ArchivePasswordTestTool.Properties
         {
             get
             {
-                return ResourceManager.GetString("InfoFiles", resourceCulture);
+                return EmbeddedResourceManager.GetString("InfoFiles", resourceCulture);
             }
         }
 
@@ -440,7 +438,7 @@ namespace ArchivePasswordTestTool.Properties
         {
             get
             {
-                return ResourceManager.GetString("InfoEncryption", resourceCulture);
+                return EmbeddedResourceManager.GetString("InfoEncryption", resourceCulture);
             }
         }
 
@@ -451,7 +449,7 @@ namespace ArchivePasswordTestTool.Properties
         {
             get
             {
-                return ResourceManager.GetString("InfoQuickTest", resourceCulture);
+                return EmbeddedResourceManager.GetString("InfoQuickTest", resourceCulture);
             }
         }
 
@@ -462,7 +460,7 @@ namespace ArchivePasswordTestTool.Properties
         {
             get
             {
-                return ResourceManager.GetString("InfoHash", resourceCulture);
+                return EmbeddedResourceManager.GetString("InfoHash", resourceCulture);
             }
         }
 
@@ -473,7 +471,7 @@ namespace ArchivePasswordTestTool.Properties
         {
             get
             {
-                return ResourceManager.GetString("InfoDictionary", resourceCulture);
+                return EmbeddedResourceManager.GetString("InfoDictionary", resourceCulture);
             }
         }
 
@@ -484,7 +482,7 @@ namespace ArchivePasswordTestTool.Properties
         {
             get
             {
-                return ResourceManager.GetString("InfoPasswords", resourceCulture);
+                return EmbeddedResourceManager.GetString("InfoPasswords", resourceCulture);
             }
         }
 
@@ -495,7 +493,7 @@ namespace ArchivePasswordTestTool.Properties
         {
             get
             {
-                return ResourceManager.GetString("InfoParallelism", resourceCulture);
+                return EmbeddedResourceManager.GetString("InfoParallelism", resourceCulture);
             }
         }
 
@@ -506,7 +504,7 @@ namespace ArchivePasswordTestTool.Properties
         {
             get
             {
-                return ResourceManager.GetString("ValueYes", resourceCulture);
+                return EmbeddedResourceManager.GetString("ValueYes", resourceCulture);
             }
         }
 
@@ -517,7 +515,7 @@ namespace ArchivePasswordTestTool.Properties
         {
             get
             {
-                return ResourceManager.GetString("ValueNo", resourceCulture);
+                return EmbeddedResourceManager.GetString("ValueNo", resourceCulture);
             }
         }
 
@@ -528,7 +526,7 @@ namespace ArchivePasswordTestTool.Properties
         {
             get
             {
-                return ResourceManager.GetString("ValueHeaderEncryption", resourceCulture);
+                return EmbeddedResourceManager.GetString("ValueHeaderEncryption", resourceCulture);
             }
         }
 
@@ -539,7 +537,7 @@ namespace ArchivePasswordTestTool.Properties
         {
             get
             {
-                return ResourceManager.GetString("ResultElapsed", resourceCulture);
+                return EmbeddedResourceManager.GetString("ResultElapsed", resourceCulture);
             }
         }
 
@@ -550,7 +548,7 @@ namespace ArchivePasswordTestTool.Properties
         {
             get
             {
-                return ResourceManager.GetString("ResultTested", resourceCulture);
+                return EmbeddedResourceManager.GetString("ResultTested", resourceCulture);
             }
         }
 
@@ -561,7 +559,7 @@ namespace ArchivePasswordTestTool.Properties
         {
             get
             {
-                return ResourceManager.GetString("ResultSpeed", resourceCulture);
+                return EmbeddedResourceManager.GetString("ResultSpeed", resourceCulture);
             }
         }
 
@@ -572,7 +570,7 @@ namespace ArchivePasswordTestTool.Properties
         {
             get
             {
-                return ResourceManager.GetString("ResultPwPerSec", resourceCulture);
+                return EmbeddedResourceManager.GetString("ResultPwPerSec", resourceCulture);
             }
         }
 
@@ -583,7 +581,7 @@ namespace ArchivePasswordTestTool.Properties
         {
             get
             {
-                return ResourceManager.GetString("OnlineQueryRequesting", resourceCulture);
+                return EmbeddedResourceManager.GetString("OnlineQueryRequesting", resourceCulture);
             }
         }
 
@@ -594,7 +592,7 @@ namespace ArchivePasswordTestTool.Properties
         {
             get
             {
-                return ResourceManager.GetString("OnlineQueryReceived", resourceCulture);
+                return EmbeddedResourceManager.GetString("OnlineQueryReceived", resourceCulture);
             }
         }
 
@@ -605,7 +603,7 @@ namespace ArchivePasswordTestTool.Properties
         {
             get
             {
-                return ResourceManager.GetString("OnlineQueryEmpty", resourceCulture);
+                return EmbeddedResourceManager.GetString("OnlineQueryEmpty", resourceCulture);
             }
         }
 
@@ -616,7 +614,7 @@ namespace ArchivePasswordTestTool.Properties
         {
             get
             {
-                return ResourceManager.GetString("OnlineQueryFailed", resourceCulture);
+                return EmbeddedResourceManager.GetString("OnlineQueryFailed", resourceCulture);
             }
         }
 
@@ -627,7 +625,7 @@ namespace ArchivePasswordTestTool.Properties
         {
             get
             {
-                return ResourceManager.GetString("OnlineReportSending", resourceCulture);
+                return EmbeddedResourceManager.GetString("OnlineReportSending", resourceCulture);
             }
         }
 
@@ -638,7 +636,7 @@ namespace ArchivePasswordTestTool.Properties
         {
             get
             {
-                return ResourceManager.GetString("OnlineReportDone", resourceCulture);
+                return EmbeddedResourceManager.GetString("OnlineReportDone", resourceCulture);
             }
         }
 
@@ -649,7 +647,7 @@ namespace ArchivePasswordTestTool.Properties
         {
             get
             {
-                return ResourceManager.GetString("OnlineReportFailed", resourceCulture);
+                return EmbeddedResourceManager.GetString("OnlineReportFailed", resourceCulture);
             }
         }
 
@@ -660,7 +658,7 @@ namespace ArchivePasswordTestTool.Properties
         {
             get
             {
-                return ResourceManager.GetString("OnlineNotConfigured", resourceCulture);
+                return EmbeddedResourceManager.GetString("OnlineNotConfigured", resourceCulture);
             }
         }
 
@@ -671,7 +669,7 @@ namespace ArchivePasswordTestTool.Properties
         {
             get
             {
-                return ResourceManager.GetString("InteractiveDictionaryPrompt", resourceCulture);
+                return EmbeddedResourceManager.GetString("InteractiveDictionaryPrompt", resourceCulture);
             }
         }
 
@@ -682,7 +680,7 @@ namespace ArchivePasswordTestTool.Properties
         {
             get
             {
-                return ResourceManager.GetString("InteractiveArchivePrompt", resourceCulture);
+                return EmbeddedResourceManager.GetString("InteractiveArchivePrompt", resourceCulture);
             }
         }
 
@@ -693,7 +691,7 @@ namespace ArchivePasswordTestTool.Properties
         {
             get
             {
-                return ResourceManager.GetString("InteractiveFileNotFound", resourceCulture);
+                return EmbeddedResourceManager.GetString("InteractiveFileNotFound", resourceCulture);
             }
         }
 
@@ -704,7 +702,7 @@ namespace ArchivePasswordTestTool.Properties
         {
             get
             {
-                return ResourceManager.GetString("InteractivePressAnyKeyToExit", resourceCulture);
+                return EmbeddedResourceManager.GetString("InteractivePressAnyKeyToExit", resourceCulture);
             }
         }
 
@@ -715,7 +713,7 @@ namespace ArchivePasswordTestTool.Properties
         {
             get
             {
-                return ResourceManager.GetString("InteractiveInputKept", resourceCulture);
+                return EmbeddedResourceManager.GetString("InteractiveInputKept", resourceCulture);
             }
         }
 
@@ -726,7 +724,7 @@ namespace ArchivePasswordTestTool.Properties
         {
             get
             {
-                return ResourceManager.GetString("UpgradeAvailable", resourceCulture);
+                return EmbeddedResourceManager.GetString("UpgradeAvailable", resourceCulture);
             }
         }
 
@@ -737,7 +735,7 @@ namespace ArchivePasswordTestTool.Properties
         {
             get
             {
-                return ResourceManager.GetString("UpgradeOpenReleasesPrompt", resourceCulture);
+                return EmbeddedResourceManager.GetString("UpgradeOpenReleasesPrompt", resourceCulture);
             }
         }
 
@@ -748,7 +746,7 @@ namespace ArchivePasswordTestTool.Properties
         {
             get
             {
-                return ResourceManager.GetString("UpgradeDownloading", resourceCulture);
+                return EmbeddedResourceManager.GetString("UpgradeDownloading", resourceCulture);
             }
         }
 
@@ -759,7 +757,7 @@ namespace ArchivePasswordTestTool.Properties
         {
             get
             {
-                return ResourceManager.GetString("UpgradeDownloadFailed", resourceCulture);
+                return EmbeddedResourceManager.GetString("UpgradeDownloadFailed", resourceCulture);
             }
         }
 
@@ -770,7 +768,7 @@ namespace ArchivePasswordTestTool.Properties
         {
             get
             {
-                return ResourceManager.GetString("UpgradeReadyForNextLaunch", resourceCulture);
+                return EmbeddedResourceManager.GetString("UpgradeReadyForNextLaunch", resourceCulture);
             }
         }
 
@@ -781,7 +779,7 @@ namespace ArchivePasswordTestTool.Properties
         {
             get
             {
-                return ResourceManager.GetString("UpgradeApplied", resourceCulture);
+                return EmbeddedResourceManager.GetString("UpgradeApplied", resourceCulture);
             }
         }
 
@@ -792,7 +790,7 @@ namespace ArchivePasswordTestTool.Properties
         {
             get
             {
-                return ResourceManager.GetString("ProcessPathUnavailable", resourceCulture);
+                return EmbeddedResourceManager.GetString("ProcessPathUnavailable", resourceCulture);
             }
         }
 
@@ -803,7 +801,7 @@ namespace ArchivePasswordTestTool.Properties
         {
             get
             {
-                return ResourceManager.GetString("UnsupportedArchiveFormat", resourceCulture);
+                return EmbeddedResourceManager.GetString("UnsupportedArchiveFormat", resourceCulture);
             }
         }
     }

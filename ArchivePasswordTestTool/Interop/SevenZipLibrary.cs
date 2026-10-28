@@ -1,4 +1,5 @@
 using System.Runtime.InteropServices;
+using System.Runtime.InteropServices.Marshalling;
 
 namespace ArchivePasswordTestTool
 {
@@ -12,7 +13,7 @@ namespace ArchivePasswordTestTool
     /// 不使用 Marshal.GetDelegateForFunctionPointer——后者依赖运行时封送元数据，
     /// 在 IL 裁剪后会 TypeLoadException（已实测）。
     /// </summary>
-    internal sealed partial class SevenZipLibrary
+    internal sealed unsafe partial class SevenZipLibrary
     {
         private static readonly Lock Gate = new();
         private static readonly Dictionary<string, SevenZipLibrary> Shared = new(StringComparer.OrdinalIgnoreCase);
@@ -65,24 +66,37 @@ namespace ArchivePasswordTestTool
         }
 
         /// <summary>
-        /// 创建 COM 对象
+        /// 创建 COM 对象并转成源生成托管接口。
+        /// <para>
+        /// 取代原先的 <c>Marshal.GetObjectForIUnknown</c>：那个 API 依赖运行时内置 COM 封送，
+        /// Native AOT 下会抛 "COM Interop requires ComWrapper instance registered for marshalling"。
+        /// <see cref="ComInterfaceMarshaller{T}.ConvertToManaged"/> 走编译期生成的 marshaller，AOT 可用。
+        /// </para>
+        /// <para>
+        /// 注意转换后的 RCW 生命周期由 GC 决定（没有 <c>Marshal.ReleaseComObject</c> 的等价物），
+        /// 及时释放原生资源必须靠显式 <c>Close()</c> —— 调用方已这样做。
+        /// </para>
         /// </summary>
-        public int CreateObject(
-            ref Guid clsID,
-            ref Guid interfaceID,
-            out object outObject)
+        public int CreateObject<T>(ref Guid clsID, ref Guid interfaceID, out T? outObject)
+            where T : class
         {
             int hr = CreateObjectNative(ref clsID, ref interfaceID, out IntPtr unknownPtr);
             if (hr < 0 || unknownPtr == IntPtr.Zero)
             {
-                outObject = null!;
+                outObject = null;
                 return hr;
             }
 
-            // IUnknown → RCW（内部会 AddRef），这里释放原生引用以平衡调用约定的一次计数；
-            // 后续生命周期由 Marshal.ReleaseComObject 管理，与原 out object 封送语义一致
-            outObject = Marshal.GetObjectForIUnknown(unknownPtr);
-            Marshal.Release(unknownPtr);
+            try
+            {
+                outObject = ComInterfaceMarshaller<T>.ConvertToManaged((void*)unknownPtr);
+            }
+            finally
+            {
+                // 释放 CreateObjectNative 带来的那一份原生引用
+                Marshal.Release(unknownPtr);
+            }
+
             return hr;
         }
     }

@@ -81,39 +81,64 @@ namespace ArchivePasswordTestTool
         }
 
         /// <summary>
-        /// 解析 7z.dll 路径：已安装 7-Zip → CWD\7z.dll → -lib 参数。
-        /// 未找到且未指定 -lib：报错后等待确认再退出（避免 GUI 双击启动时错误信息
-        /// 随控制台立即关闭而不可见；重定向输入时 WaitBeforeExit 直接返回，不阻塞）。
-        /// -lib 指定但路径不存在：抛 FileNotFoundException 走统一错误路径。
+        /// 解析 7z.dll 路径，优先级：已安装 7-Zip → 显式 -lib / 程序目录 7z.dll → 内嵌版。
+        /// <para>
+        /// 已安装的 7-Zip 排最前：不写盘，且用户自己更新过就跟着用新版。
+        /// 内嵌版是“没装 7-Zip”的兜底（构建期内嵌，运行时解压到 %LOCALAPPDATA% 缓存），
+        /// 使「下载单个 exe 即可用」成立。
+        /// </para>
+        /// <para>
+        /// 显式 -lib 指向的文件不存在时**直接报错**，不会静默改用内嵌版——
+        /// 那样会掩盖用户的配置错误。
+        /// </para>
+        /// 全部落空：报错 + 官方下载引导 + 等待确认再退出（避免 GUI 双击启动时
+        /// 错误信息随控制台立即关闭而不可见；重定向输入时不等待、不阻塞）。
         /// </summary>
         private static string ResolveSevenZipDll(string[] args)
         {
-            string? installed = SevenZip.LocateInstalledLibrary();
+            // 诊断开关：跳过"已安装 7-Zip"，强制走内嵌版。
+            // 用途 ① 验证内置 dll 本身可用；② 机器上装的 7-Zip 损坏/版本过旧时临时绕开。
+            bool forceEmbedded = Environment.GetEnvironmentVariable("APTT_FORCE_EMBEDDED_7Z") == "1";
+
+            // ① 系统已安装的 7-Zip
+            string? installed = forceEmbedded ? null : SevenZip.LocateInstalledLibrary();
             if (installed is not null)
             {
                 AnsiConsole.MarkupLine(string.Format(Resources.UsingInstalledSevenZip, Ui.Escape(installed)));
                 return installed;
             }
 
-            string dllPath = Path.Combine(Environment.CurrentDirectory, "7z.dll");
-            if (!File.Exists(dllPath) && !Arguments.StartupParametersCheck(args, "lib"))
+            // ② 显式 -lib，或程序目录下的 7z.dll（便携场景）
+            string defaultPath = Path.Combine(Environment.CurrentDirectory, "7z.dll");
+            bool libSpecified = Arguments.StartupParametersCheck(args, "lib");
+            string explicitPath = Arguments.GetParameter(args, "lib", defaultPath).Replace("\"", "");
+
+            if (File.Exists(explicitPath))
             {
-                // 未找到 7z.dll 且未指定 -lib：报错 + 显示官方下载链接 + 询问打开浏览器
-                // + 等待确认退出（避免 GUI 双击启动时错误信息随控制台立即关闭而不可见）。
-                // 重定向输入（管道/自动化）时浏览器询问与等待均自动跳过，不阻塞。
-                InstallerGuide.ShowMissingDllAndOfferInstall(Resources.SevenZipDllPathRequired);
-                Environment.Exit(1);
+                AnsiConsole.MarkupLine(string.Format(Resources.UsingSpecifiedSevenZipDll, Ui.Escape(explicitPath)));
+                return explicitPath;
             }
 
-            dllPath = Arguments.GetParameter(args, "lib", dllPath).Replace("\"", "");
-            AnsiConsole.MarkupLine(string.Format(Resources.UsingSpecifiedSevenZipDll, Ui.Escape(dllPath)));
-
-            if (!File.Exists(dllPath))
+            if (libSpecified)
             {
-                throw new FileNotFoundException(string.Format(Resources.SevenZipDllNotFound, dllPath));
+                // 用户明确指定了路径却不存在：报错而不是偷偷改用内嵌版
+                throw new FileNotFoundException(string.Format(Resources.SevenZipDllNotFound, explicitPath));
             }
 
-            return dllPath;
+            // ③ 构建期内嵌的 7z.dll（解压到 %LOCALAPPDATA%\\ArchivePasswordTestTool\\native）
+            string? embedded = EmbeddedSevenZip.TryExtractDll();
+            if (embedded is not null)
+            {
+                AnsiConsole.MarkupLine(string.Format(Resources.UsingEmbeddedSevenZip, Ui.Escape(embedded)));
+                return embedded;
+            }
+
+            // ④ 全部落空：官方下载引导 + 等待确认退出
+            InstallerGuide.ShowMissingDllAndOfferInstall(Resources.SevenZipDllPathRequired);
+            Environment.Exit(1);
+
+            // 进程已在上一行终止；此处只为满足编译期的返回值检查
+            return string.Empty;
         }
     }
 }

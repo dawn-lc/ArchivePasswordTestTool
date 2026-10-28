@@ -18,17 +18,6 @@ namespace ArchivePasswordTestTool
         [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
         public static extern IntPtr LoadLibrary(string lpFileName);
 
-        [DllImport("kernel32.dll", SetLastError = true)]
-        public static extern bool FreeLibrary(IntPtr hModule);
-
-        // 注意：GetProcAddress 的 lpProcName 是 ANSI (LPCSTR)，
-        // 必须用 Ansi marshal，否则 UTF-16 字符串会在第一个 \0 处被截断成单字符
-        [DllImport("kernel32.dll", CharSet = CharSet.Ansi, SetLastError = true)]
-        public static extern IntPtr GetProcAddress(IntPtr hModule, string lpProcName);
-
-        [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
-        public static extern uint GetModuleFileName(IntPtr hModule, System.Text.StringBuilder lpFilename, uint nSize);
-
         // ---------- 控制台（启动场景判定 / 焦点管理） ----------
 
         /// <summary>
