@@ -718,6 +718,39 @@ namespace ArchivePasswordTestTool.Properties
         }
 
         /// <summary>
+        ///   查找类似 Analyzing 的本地化字符串（控制台窗口标题用，需短）。
+        /// </summary>
+        public static string TitleAnalyzing
+        {
+            get
+            {
+                return EmbeddedResourceManager.GetString("TitleAnalyzing", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   查找类似 Password found 的本地化字符串（控制台窗口标题用，需短）。
+        /// </summary>
+        public static string TitlePasswordFound
+        {
+            get
+            {
+                return EmbeddedResourceManager.GetString("TitlePasswordFound", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   查找类似 Password not found 的本地化字符串（控制台窗口标题用，需短）。
+        /// </summary>
+        public static string TitlePasswordNotFound
+        {
+            get
+            {
+                return EmbeddedResourceManager.GetString("TitlePasswordNotFound", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   查找类似 New version available: {0} 的本地化字符串。
         /// </summary>
         public static string UpgradeAvailable

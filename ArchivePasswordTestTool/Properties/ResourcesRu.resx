@@ -163,6 +163,15 @@
   <data name="TestingPasswordProgress" xml:space="preserve">
     <value>Проверка пароля</value>
   </data>
+  <data name="TitleAnalyzing" xml:space="preserve">
+    <value>Анализ</value>
+  </data>
+  <data name="TitlePasswordFound" xml:space="preserve">
+    <value>Пароль найден</value>
+  </data>
+  <data name="TitlePasswordNotFound" xml:space="preserve">
+    <value>Пароль не найден</value>
+  </data>
   <data name="PasswordFoundSuccess" xml:space="preserve">
     <value>Найден пароль для распаковки: {0}</value>
   </data>

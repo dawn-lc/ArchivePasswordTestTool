@@ -23,6 +23,9 @@ inputs:
   upxVersion:
     description: UPX 版本（'latest' 则跟随上游；仅 AOT 发布用到）
     required: true
+  resvgVersion:
+    description: resvg 版本（SVG 栅格化，用于生成程序图标；图标必需，缺失会让构建失败）
+    required: true
 
 runs:
   using: composite
@@ -35,13 +38,20 @@ runs:
     # RequireEmbeddedSevenZip=true：内嵌 7z.dll 拿不到时直接失败。
     # 默认行为是只警告，而本地「缺网也能构建」是有意设计；但 CI 上照样降级，
     # 就会产出不自包含的产物并绿勾发布（smoke test 会走 runner 已安装的 7-Zip）。
+    # 需要 GH_TOKEN：构建期的 EnsureResvgToolTask 优先用 `gh api` 读取 resvg 发布里
+    # 真实的资产列表来挑 win-x64 包（不猜文件名，上游改命名也不会挂）。
+    # GitHub 只把 token 以 ${{ github.token }} 形式提供，不会自动变成 GH_TOKEN 环境变量；
+    # 不注入也能构建（会自动回退到候选文件名），但换命名时就可能失败。
     - name: Build
       shell: pwsh
+      env:
+        GH_TOKEN: ${{ github.token }}
       run: >
         dotnet build ArchivePasswordTestTool.sln -c Release --no-restore
         -p:AppVersion=${{ inputs.appVersion }}
         -p:AppVersionType=${{ inputs.appVersionType }}
         -p:SevenZipVersion=${{ inputs.sevenZipVersion }}
+        -p:ResvgVersion=${{ inputs.resvgVersion }}
         -p:RequireEmbeddedSevenZip=true
 
     - name: Test
@@ -73,6 +83,8 @@ runs:
     # 用无 RID 的 restore 结果会报 NETSDK1047。
     - name: Publish single file
       shell: pwsh
+      env:
+        GH_TOKEN: ${{ github.token }}
       run: >
         dotnet publish ArchivePasswordTestTool\ArchivePasswordTestTool.csproj
         -c Release
@@ -80,6 +92,7 @@ runs:
         -p:AppVersion=${{ inputs.appVersion }}
         -p:AppVersionType=${{ inputs.appVersionType }}
         -p:SevenZipVersion=${{ inputs.sevenZipVersion }}
+        -p:ResvgVersion=${{ inputs.resvgVersion }}
         -p:RequireEmbeddedSevenZip=true
 
     # 形态 B（**对外发布形态**）：Native AOT + UPX，约 4.2 MB 单文件原生 PE。
@@ -97,6 +110,8 @@ runs:
     #   ③ AOT 没有 bundle 自解压步骤，也不依赖 .NET 运行时。
     - name: Publish Native AOT
       shell: pwsh
+      env:
+        GH_TOKEN: ${{ github.token }}
       run: |
         $out = Join-Path $env:GITHUB_WORKSPACE 'dist\aot'
         dotnet publish ArchivePasswordTestTool\ArchivePasswordTestTool.csproj `
@@ -106,6 +121,7 @@ runs:
           -p:AppVersionType=${{ inputs.appVersionType }} `
           -p:SevenZipVersion=${{ inputs.sevenZipVersion }} `
           -p:UpxVersion=${{ inputs.upxVersion }} `
+          -p:ResvgVersion=${{ inputs.resvgVersion }} `
           -p:RequireEmbeddedSevenZip=true `
           -o $out
         if ($LASTEXITCODE -ne 0) { throw "AOT 发布失败（exit $LASTEXITCODE）。" }

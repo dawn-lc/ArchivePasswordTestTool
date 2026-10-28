@@ -26,6 +26,7 @@ concurrency:
 env:
   SEVEN_ZIP_VERSION: '26.05'
   UPX_VERSION: '5.2.1'
+  RESVG_VERSION: '0.49.0'
 
 permissions:
   contents: read
@@ -58,13 +59,15 @@ jobs:
           path: |
             tools/upx
             tools/7zip
-          key: build-tools-${{ runner.os }}-7z${{ env.SEVEN_ZIP_VERSION }}-upx${{ env.UPX_VERSION }}
+            tools/resvg
+          key: build-tools-${{ runner.os }}-7z${{ env.SEVEN_ZIP_VERSION }}-upx${{ env.UPX_VERSION }}-resvg${{ env.RESVG_VERSION }}
 
       - name: Build and verify
         uses: ./.github/actions/build-verify
         with:
           sevenZipVersion: ${{ env.SEVEN_ZIP_VERSION }}
           upxVersion: ${{ env.UPX_VERSION }}
+          resvgVersion: ${{ env.RESVG_VERSION }}
 
       - name: Upload test results
         if: always()

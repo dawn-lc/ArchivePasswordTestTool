@@ -163,6 +163,15 @@
   <data name="TestingPasswordProgress" xml:space="preserve">
     <value>パスワードをテスト中</value>
   </data>
+  <data name="TitleAnalyzing" xml:space="preserve">
+    <value>解析中</value>
+  </data>
+  <data name="TitlePasswordFound" xml:space="preserve">
+    <value>パスワード検出</value>
+  </data>
+  <data name="TitlePasswordNotFound" xml:space="preserve">
+    <value>パスワード未検出</value>
+  </data>
   <data name="PasswordFoundSuccess" xml:space="preserve">
     <value>解凍パスワードが見つかりました: {0}</value>
   </data>

@@ -163,6 +163,15 @@ Please download and install 7-Zip first.</value>
   <data name="TestingPasswordProgress" xml:space="preserve">
     <value>Testing password</value>
   </data>
+  <data name="TitleAnalyzing" xml:space="preserve">
+    <value>Analyzing</value>
+  </data>
+  <data name="TitlePasswordFound" xml:space="preserve">
+    <value>Password found</value>
+  </data>
+  <data name="TitlePasswordNotFound" xml:space="preserve">
+    <value>Password not found</value>
+  </data>
   <data name="PasswordFoundSuccess" xml:space="preserve">
     <value>Found decompression password: {0}</value>
   </data>

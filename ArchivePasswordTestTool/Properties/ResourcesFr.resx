@@ -163,6 +163,15 @@ Veuillez d'abord télécharger et installer 7-Zip.</value>
   <data name="TestingPasswordProgress" xml:space="preserve">
     <value>Test du mot de passe</value>
   </data>
+  <data name="TitleAnalyzing" xml:space="preserve">
+    <value>Analyse</value>
+  </data>
+  <data name="TitlePasswordFound" xml:space="preserve">
+    <value>Mot de passe trouvé</value>
+  </data>
+  <data name="TitlePasswordNotFound" xml:space="preserve">
+    <value>Mot de passe introuvable</value>
+  </data>
   <data name="PasswordFoundSuccess" xml:space="preserve">
     <value>Mot de passe de décompression trouvé : {0}</value>
   </data>

@@ -359,6 +359,11 @@ tools/upx/
 # 7z.dll 约 1.9MB；见 docs/DEVELOPMENT.md「内嵌 7z.dll」
 tools/7zip/
 
+# resvg（SVG 栅格化工具，用于把 build/AppIcon.svg 渲染成各尺寸 PNG 帧）。
+# 单个静态链接的可执行文件约 4.3MB，自动下载，不入库：
+# 离线环境可手工把 resvg.exe 放到 tools/resvg/，见 csproj「程序图标」段
+tools/resvg/
+
 # 对外分发产物（AOT 发布的独立输出目录，与单文件产物分开，避免两个 publish 互相覆盖）。
 # 刻意不用 artifacts/：那个名字在 .NET 8+ 是 SDK 托管输出目录（--artifacts-path /
 # UseArtifactsOutput），而本仓库实测 --artifacts-path 会让 TestPaths.FindRepoRoot()

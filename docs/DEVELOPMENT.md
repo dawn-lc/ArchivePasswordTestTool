@@ -258,11 +258,19 @@ dotnet test ArchivePasswordTestTool.Tests\ArchivePasswordTestTool.Tests.csproj
 dotnet build -c Release
 
 # 形态 A：单文件 + 裁剪 + bundle（CI 构建验证，不对外发布）
-dotnet publish -c Release -p:PublishProfile=Properties\PublishProfiles\win-x64.pubxml
+dotnet publish ArchivePasswordTestTool\ArchivePasswordTestTool.csproj -c Release `
+  -p:PublishProfile=Properties\PublishProfiles\win-x64.pubxml
 
 # 形态 B：Native AOT（默认自动用 UPX 压缩；upx.exe 自动获取）—— **对外发布就是这个**
-dotnet publish -c Release -p:PublishProfile=Properties\PublishProfiles\win-x64-aot.pubxml -o dist\aot
+dotnet publish ArchivePasswordTestTool\ArchivePasswordTestTool.csproj -c Release `
+  -p:PublishProfile=Properties\PublishProfiles\win-x64-aot.pubxml -o dist\aot
 ```
+
+**为什么命令里要写 csproj**：`-p:PublishProfile` 的路径相对**项目目录**解析，不指定项目就在仓库根
+发布了整个解决方案——那个配置文件在测试项目里不存在，会多出一条 NETSDK1198 警告，并在
+`ArchivePasswordTestTool.Tests\bin\Release\net10.0\publish\` 里凭空产出一份无意义的发布。
+测试项目已设 `IsPublishable=false`（`Publish` 目标的条件就是它），所以从根目录发布也不会再出这些噪音；
+显式写 csproj 是为了让意图明确、也避免误发布将来的其他项目。
 
 两种形态都只产出一个 exe。单文件落在默认目录 `bin\Release\net10.0\win-x64\publish\`，AOT 在 CI 里被 `-o` 重定向到 `dist\aot\`。
 
@@ -293,7 +301,7 @@ dotnet publish -c Release -p:PublishProfile=Properties\PublishProfiles\win-x64-a
 
 ### 构建期 MSBuild 任务
 
-csproj 里的 `EnsureUpxToolTask` / `EnsureSevenZipDllTask` 是 `RoslynCodeTaskFactory` 内联任务，但**源码不在 csproj 里**——`<Code Source=...>` 指向仓库根的 `build/BuildTasks.cs`：
+csproj 里的 `EnsureResvgToolTask` / `EnsureUpxToolTask` / `EnsureSevenZipDllTask` / `PackAppIconTask` 都是 `RoslynCodeTaskFactory` 内联任务，但**源码不在 csproj 里**——`<Code Source=...>` 指向仓库根的 `build/`：`BuildTasks.cs`（前三个「定位或下载外部工具」共用同一份 `BuildTaskHelpers`）与 `AppIconTask.cs`（把 resvg 渲染出的 PNG 帧装进 ICO）：
 
 ```xml
 <UsingTask TaskName="EnsureUpxToolTask" TaskFactory="RoslynCodeTaskFactory" AssemblyFile="$(MSBuildToolsPath)\Microsoft.Build.Tasks.Core.dll">
@@ -314,7 +322,7 @@ csproj 里的 `EnsureUpxToolTask` / `EnsureSevenZipDllTask` 是 `RoslynCodeTaskF
 
 两点注意：
 
-- `build/` 在仓库根，**不在任何项目的 `**/*.cs` 通配范围内**，不会被编进程序集（`dotnet msbuild -getItem:Compile` 可验证）。因为它被两个 `UsingTask` 同时引用，所以没有 namespace —— `RoslynCodeTaskFactory` 按 `TaskName` 全名匹配类型。
+- `build/` 在仓库根，**不在任何项目的 `**/*.cs` 通配范围内**，不会被编进程序集（`dotnet msbuild -getItem:Compile` 可验证）。因为这些文件被多个 `UsingTask` 引用，所以没有 namespace —— `RoslynCodeTaskFactory` 按 `TaskName` 全名匹配类型。
 - `RoslynCodeTaskFactory` 的编译参考集较旧：没有 `ProcessStartInfo.ArgumentList`（只能手工拼 `Arguments` 并自行加引号，见 `BuildTaskHelpers.Quote`），也缺部分 .NET Core 后才有的 API。
 
 ### Native AOT
@@ -327,6 +335,19 @@ AOT 产物没有 apphost / bundle 概念，COM 与资源两条链路都需要专
 - **UPX**：在 csproj 的 `UpxCompressNativeBinary` target 里做，挂在 `AfterTargets="CopyNativeBinary"`。不能挂在 `Publish` 上——`CopyNativeBinary` 本身也是 `AfterTargets="Publish"`，两个 target 相对顺序不确定，UPX 跑在前时压缩的是中间产物，随后被「删除 + 复制」覆盖回未压缩文件（日志会显示 "Packed 1 file" 但输出目录仍是 9.4 MB，就这么来的）。`UpxPath` 为空则整个 target 跳过。
 
 注意：UPX 压缩过的 exe 是杀软误报的经典模式，而本工具本身是密码破解器，发布前必须在开启实时防护的机器上实测确认。
+
+### 程序图标
+
+唯一真相源是 `build/AppIcon.svg`，仓库里不存 `.ico`。构建期 `GenerateAppIcon` target（`BeforeTargets="CoreCompile"`）分两步：resvg 按 8 档尺寸分别 `--width/--height` 渲染 PNG，再由 `PackAppIconTask` 把这些 PNG 原样装进 ICO 容器，路径通过 `ApplicationIcon` 交给 Csc 的 `/win32icon`；AOT 用 `--win32resourcemodule` 把托管 PE 的 Win32 资源整段搬进原生产物，图标自动跟过去。
+
+几个不那么直观的决定：
+
+- **不用自写渲染器**：内联任务不参与 NuGet 还原，引不进任何图形库，`System.Drawing` 也只在 WindowsDesktop 共享框架里；自己画则要放弃贝塞尔、transform、渐变、mask 等全部标准 SVG 特性。resvg 是单个静态链接的可执行文件，且是完整 SVG 渲染器，代价只是首次构建下载一次（之后命中 `tools/resvg/` 缓存）。
+- **resvg 缺失直接失败，不降级**（与 UPX / 7z.dll 不同）：图标是产物的一部分，少一个图标或不报错地画错，都比构建失败难发现。
+- **每一帧都原样嵌 PNG，不做 DIB 转换**：ICO 自 Vista 起允许任意尺寸用 PNG 帧。早期实现把 <256 的帧转 32 位 DIB，理由是「System.Drawing 读不了 ≥64px 的 PNG 帧」；实测该顾虑不成立（全 PNG 与 DIB 版在 System.Drawing 下读取结果相同、Shell 位图摘要逐像素一致，两者请求 256 都退回 64），而 DIB 转换要多写 PNG 解码与反滤波约 300 行、ICO 体积也大 3 倍（51.6 KB vs 17.7 KB）。本项目最低要求 Windows 10，故全部直嵌。
+- **仍校验帧尺寸**：只读 PNG 签名与 IHDR 的宽高。resvg 若没按 `--width/--height` 出图，ICO 目录项记的尺寸会与真实像素不符，得到一个「能打开但显示错乱」的图标——这类问题极难发现。
+- **`ApplicationIcon` 必须在 target 里赋值**：项目求值阶段 `$(IntermediateOutputPath)` 还不带 `$(TargetFramework)`，提前取会指到 `obj\Debug\` 而不是 `obj\Debug\net10.0\`，Csc 找不到文件就报 CS7064。
+- **不挂 `Inputs`/`Outputs`**：那样 target 在增量构建时会被整体跳过，里面给 `ApplicationIcon` 赋值的 `PropertyGroup` 也跟着不执行，Csc 就收不到 `/win32icon`。增量判定改在 `PackAppIconTask` 内部按内容比对（内容没变就不写文件，避免无谓触发重新编译）。
 
 ## 内嵌 7z.dll
 

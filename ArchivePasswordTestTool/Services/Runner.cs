@@ -54,6 +54,10 @@ namespace ArchivePasswordTestTool
         {
             try
             {
+                // 标题最先设：后面读字典、算哈希都可能要几秒到几十秒，
+                // 那段时间用户看到的应该已经是本程序，而不是 shell 遗留的标题
+                ConsoleTitle.Initialize();
+
                 // 启动流程微调：头部最先展示，其后依次是 7z 环境解析、
                 // 路径引导/参数校验、初始化与分析
                 if (AnsiConsole.Profile.Out.IsTerminal)
@@ -148,6 +152,15 @@ namespace ArchivePasswordTestTool
                     stopwatch.Elapsed,
                     Interlocked.Read(ref testedCount));
 
+                if (string.IsNullOrEmpty(foundPassword))
+                {
+                    ConsoleTitle.ShowNotFound();
+                }
+                else
+                {
+                    ConsoleTitle.ShowFound();
+                }
+
                 // 密码回传（默认开启）：找到即把 哈希+密码 POST 给服务端供他人共享；失败只提示
                 if (!string.IsNullOrEmpty(foundPassword) && options.ReportOnline && onlineEnabled)
                 {
@@ -160,6 +173,9 @@ namespace ArchivePasswordTestTool
                 // FileNotFoundException 与其它异常处理完全相同（打印 + exit 1），
                 // 原先分成两个 catch 块只是重复
                 Ui.WriteError(ex.Message);
+
+                // Environment.Exit 不跑 finally，标题只能在这里自己还
+                ConsoleTitle.Restore();
                 Environment.Exit(1);
             }
             finally
@@ -184,6 +200,10 @@ namespace ArchivePasswordTestTool
                             return archiveHash;
                         });
                 }
+
+                // 放在 finally 的最后：上面的保存/打开报告确认可能让用户停留很久，
+                // 那期间标题应该还是结果（或进度），不该提前变回壳层标题
+                ConsoleTitle.Restore();
             }
         }
 
@@ -213,6 +233,7 @@ namespace ArchivePasswordTestTool
                     {
                         HashAlgorithm.TransformBlock(buffer, 0, read, null, 0);
                         hashTask.Increment(read);
+                        ConsoleTitle.ShowProgress(Resources.TitleAnalyzing, hashTask.Value, hashTask.MaxValue);
                     }
 
                     HashAlgorithm.TransformFinalBlock([], 0, 0);
@@ -251,6 +272,7 @@ namespace ArchivePasswordTestTool
                         {
                             Interlocked.Add(ref testedCount, acked);
                             testProgressBar.Increment(acked);
+                            ConsoleTitle.ShowProgress(Resources.TestingPasswordProgress, testProgressBar.Value, testProgressBar.MaxValue);
                         },
                         onFound: password =>
                         {
@@ -331,6 +353,7 @@ namespace ArchivePasswordTestTool
 
                             Interlocked.Increment(ref testedCount);
                             testProgressBar.Increment(1);
+                            ConsoleTitle.ShowProgress(Resources.TestingPasswordProgress, testProgressBar.Value, testProgressBar.MaxValue);
                         }
                     });
 

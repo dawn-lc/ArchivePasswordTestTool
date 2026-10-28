@@ -11,6 +11,8 @@
 - **自带 7-Zip 引擎**：下载单个 exe 即可使用，无需预装 7-Zip（也可用系统已安装的版本或 `-lib` 指定）
 - 自动查找系统中已安装的 7-Zip，也可手动指定 7z.dll 路径；三者全无时给出官方下载引导（可选一键打开浏览器）
 - 界面语言按系统自动切换：English / 简体中文 / 日本語 / Français / Русский
+- **窗口标题反映真实进度**：`ArchivePasswordTestTool v2.3.0 · 测试密码 42%`，切到别的窗口也能从任务栏看出跑到哪了；结束时停在「已找到密码 / 未找到密码」。从终端启动时，退出后会把标题还给 shell，不留痕迹
+- 程序图标由 `build/AppIcon.svg` 在构建期用 [resvg](https://github.com/linebender/resvg) 栅格化成多分辨率透明 ICO（16/20/24/32/40/48/64/256），不随源码存放二进制图标；图标源是标准 SVG，可随意使用渐变、贝塞尔曲线、transform 等特性
 
 ## 使用方法
 
@@ -87,11 +89,17 @@ ArchivePasswordTestTool.exe -D dict.txt -F installer.exe -lib "C:\Program Files\
 dotnet build -c Release
 
 # Native AOT + UPX（约 4.2 MB）—— **对外发布用的就是这个**
-dotnet publish -c Release -p:PublishProfile=Properties\PublishProfiles\win-x64-aot.pubxml
+dotnet publish ArchivePasswordTestTool\ArchivePasswordTestTool.csproj -c Release `
+  -p:PublishProfile=Properties\PublishProfiles\win-x64-aot.pubxml
 
 # 单文件 + 裁剪（约 13.3 MB，兼容形态，CI 仍会构建验证）
-dotnet publish -c Release -p:PublishProfile=Properties\PublishProfiles\win-x64.pubxml
+dotnet publish ArchivePasswordTestTool\ArchivePasswordTestTool.csproj -c Release `
+  -p:PublishProfile=Properties\PublishProfiles\win-x64.pubxml
 ```
+
+命令里显式写了 csproj：`-p:PublishProfile` 的路径是相对**项目目录**解析的，在仓库根不指定项目
+就会发布整个解决方案，那个配置文件在测试项目里并不存在（会报 NETSDK1198 警告）。
+测试项目已设 `IsPublishable=false`，所以即使从根目录发布也只会产出主程序。
 
 两种形态都只产出一个 `ArchivePasswordTestTool.exe`，免安装 .NET、免装 7-Zip，自更新替换单文件。
 **Release 只挂 AOT 那一个 exe**（体积与启动都更优；且 `Upgrade` 取「第一个 exe 资产」，
@@ -107,6 +115,15 @@ AOT 需本机装有 MSVC 链接器（Visual Studio「使用 C++ 的桌面开发�
 **UPX 默认开启**：把 UPX 发行包里的 `upx.exe` 放到 `tools\upx\` 即可（或用 `-p:UpxPath=...`），
 之后每次 AOT 发布都会自动压缩；没放则打警告并跳过（产物约 11.3 MB 未压缩）。
 `-p:EnableUpx=false` 可显式关闭。
+
+**程序图标需要 resvg**：`build\AppIcon.svg` 由 [resvg](https://github.com/linebender/resvg)
+渲染成各尺寸 PNG 再打包成 ICO。首次构建会自动下载 win-x64 版并缓存到 `tools\resvg\`
+（约 4.3 MB 的单个静态可执行文件，无运行库依赖）。资产地址优先通过 `gh api` 读取发布里
+**真实的资产列表**再按平台挑（上游改过命名，猜文件名不可靠）；装了 [GitHub CLI](https://cli.github.com/)
+并已登录即自动走这条路，否则回退到「跟随 latest 重定向 + 候选文件名」，两者都能构建成功。
+与 UPX / 7z.dll 不同，**resvg 缺失会让构建失败**——图标是产物的一部分，不能降级。
+离线环境可手工把 `resvg.exe` 放进 `tools\resvg\`，或用 `-p:ResvgPath=...` 指定；
+固定版本用 `-p:ResvgVersion=0.49.0`（带不带 `v` 前缀都行）。
 
 构建选项、体积/启动实测数据与取舍见[开发文档](docs/DEVELOPMENT.md#构建与发布)。
 
