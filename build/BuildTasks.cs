@@ -24,8 +24,15 @@ using Microsoft.Build.Utilities;
 /// <summary>两个任务共用的网络 / 文本辅助。</summary>
 public static class BuildTaskHelpers
 {
-    /// <summary>下载与探测的重试次数。一次性失败会让构建静默产出「未内嵌」的二进制，代价不对称。</summary>
-    public const int DownloadAttempts = 3;
+    /// <summary>
+    /// 下载与探测的重试次数。一次性失败会让构建静默产出「未内嵌」的二进制，代价不对称。
+    /// <para>
+    /// 为什么是 4 次：GitHub 的 TLS 握手会被间歇性掐断，实测持续过 <b>139 秒</b>（整个构建窗口）。
+    /// 原先 3 次 ×（1s + 2s）只有 3 秒重试窗口，对那种抖动毫无作用。现在总退避
+    /// 2 + 4 + 8 = 14 秒，加上每次尝试自身的连接超时，容错窗口约 3 分钟。
+    /// </para>
+    /// </summary>
+    public const int DownloadAttempts = 4;
 
     public const string UserAgent = "ArchivePasswordTestTool-build";
 
@@ -56,24 +63,30 @@ public static class BuildTaskHelpers
     /// <summary>
     /// 下载字节并重试。网络会间歇性掐断发往 github.com 的 TLS 握手
     /// （“SSL connection could not be established” / “unexpected EOF”），
-    /// 而同一地址下一秒往往又能连通。
+    /// 而同一地址往往过几秒又能连通。
     /// </summary>
-    public static byte[] GetBytesWithRetry(HttpClient client, string url)
+    public static byte[] GetBytesWithRetry(HttpClient client, string url, Action<string> log)
     {
         return Retry(
             () => client.GetByteArrayAsync(url).GetAwaiter().GetResult(),
-            $"下载失败（已重试 {DownloadAttempts} 次）：{url}");
+            $"下载失败（已重试 {DownloadAttempts} 次）：{url}",
+            log);
     }
 
     /// <summary>发请求拿响应（常用于读取 302 的 Location），失败重试</summary>
-    public static HttpResponseMessage GetResponseWithRetry(HttpClient client, string url)
+    public static HttpResponseMessage GetResponseWithRetry(HttpClient client, string url, Action<string> log)
     {
         return Retry(
             () => client.GetAsync(url).GetAwaiter().GetResult(),
-            $"请求失败（已重试 {DownloadAttempts} 次）：{url}");
+            $"请求失败（已重试 {DownloadAttempts} 次）：{url}",
+            log);
     }
 
-    private static T Retry<T>(Func<T> action, string failureMessage)
+    /// <summary>
+    /// 重试包装。<paramref name="log"/> 每次重试前报告原因与等待时长 ——
+    /// 否则用户只会看到一个没有任何输出的构建（实测卡了 139 秒才报错）。
+    /// </summary>
+    private static T Retry<T>(Func<T> action, string failureMessage, Action<string> log)
     {
         Exception last = null;
         for (var attempt = 1; attempt <= DownloadAttempts; attempt++)
@@ -87,7 +100,14 @@ public static class BuildTaskHelpers
                 last = ex;
                 if (attempt < DownloadAttempts)
                 {
-                    Thread.Sleep(attempt * 1000);
+                    // 指数退避：2、4、8 秒。瞬时抖动常持续数十秒，固定短间隔重试无意义。
+                    int delaySeconds = 1 << attempt;
+                    if (log != null)
+                    {
+                        log($"第 {attempt}/{DownloadAttempts} 次尝试失败（{Describe(ex)}），{delaySeconds} 秒后重试…");
+                    }
+
+                    Thread.Sleep(delaySeconds * 1000);
                 }
             }
         }
@@ -120,7 +140,7 @@ public static class BuildTaskHelpers
     /// 跟随 releases/latest 的 302 重定向读取 tag，避免消耗 GitHub API 配额
     /// （未认证 60 次/小时，本地反复构建很容易耗尽）。读不到返回 null。
     /// </summary>
-    public static string ResolveLatestVersion(string releasesLatestUrl)
+    public static string ResolveLatestVersion(string releasesLatestUrl, Action<string> log)
     {
         using (var handler = new HttpClientHandler { AllowAutoRedirect = false })
         using (var probe = CreateClient(TimeSpan.FromSeconds(30)))
@@ -130,7 +150,8 @@ public static class BuildTaskHelpers
 
             using (var response = GetResponseWithRetry(
                        new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(30) },
-                       releasesLatestUrl))
+                       releasesLatestUrl,
+                       log))
             {
                 var location = response.Headers.Location;
                 if (location == null)
@@ -205,6 +226,20 @@ public class EnsureUpxToolTask : Task
 
     private const string ReleasesLatest = "https://github.com/upx/upx/releases/latest";
 
+    /// <summary>
+    /// 重试时报告原因与等待时长。
+    /// <para>
+    /// 直接用 <c>Console.Error</c> 而不是 <c>Log.LogMessage</c>：实测 <c>dotnet build</c> 的默认
+    /// minimal verbosity 不显示任务里发的 High / Normal 消息（只有 error / warning 会出），
+    /// 而重试不属于错误，不该用 LogError/LogWarning 抬高警告计数。
+    /// 不写出来就是一次没有任何输出的长时间等待——实测卡过 139 秒才报错，无法判断是卡死还是在重试。
+    /// </para>
+    /// </summary>
+    private void RetryLog(string message)
+    {
+        Console.Error.WriteLine(message);
+    }
+
     public override bool Execute()
     {
         WasDownloaded = false;
@@ -262,7 +297,7 @@ public class EnsureUpxToolTask : Task
 
             using (var http = BuildTaskHelpers.CreateClient(TimeSpan.FromMinutes(5)))
             {
-                string version = wantPinned ? pinned : BuildTaskHelpers.ResolveLatestVersion(ReleasesLatest);
+                string version = wantPinned ? pinned : BuildTaskHelpers.ResolveLatestVersion(ReleasesLatest, RetryLog);
                 if (string.IsNullOrEmpty(version))
                 {
                     Log.LogWarning("无法确定 UPX 最新版本，跳过压缩。可改用 -p:UpxVersion=x.y.z 固定版本。");
@@ -272,7 +307,7 @@ public class EnsureUpxToolTask : Task
                 string zipUrl = $"https://github.com/upx/upx/releases/download/v{version}/upx-{version}-win64.zip";
                 Log.LogMessage(MessageImportance.High, $"下载 UPX {version}：{zipUrl}");
 
-                byte[] payload = BuildTaskHelpers.GetBytesWithRetry(http, zipUrl);
+                byte[] payload = BuildTaskHelpers.GetBytesWithRetry(http, zipUrl, RetryLog);
 
                 Directory.CreateDirectory(ToolDirectory);
 
@@ -339,6 +374,20 @@ public class EnsureSevenZipDllTask : Task
     private const string ReleaseBase = "https://github.com/ip7z/7zip/releases/download/";
 
     /// <summary>
+    /// 重试时报告原因与等待时长。
+    /// <para>
+    /// 直接用 <c>Console.Error</c> 而不是 <c>Log.LogMessage</c>：实测 <c>dotnet build</c> 的默认
+    /// minimal verbosity 不显示任务里发的 High / Normal 消息（只有 error / warning 会出），
+    /// 而重试不属于错误，不该用 LogError/LogWarning 抬高警告计数。
+    /// 不写出来就是一次没有任何输出的长时间等待——实测卡过 139 秒才报错，无法判断是卡死还是在重试。
+    /// </para>
+    /// </summary>
+    private void RetryLog(string message)
+    {
+        Console.Error.WriteLine(message);
+    }
+
+    /// <summary>
     /// 内嵌失败的唯一处置点。严格模式下报错并让 target 失败，宽松模式下只警告。
     /// 返回值即 <see cref="Execute"/> 的返回值，调用处直接 <c>return FailOrWarn(...)</c>。
     /// </summary>
@@ -397,7 +446,7 @@ public class EnsureSevenZipDllTask : Task
 
             using (var http = BuildTaskHelpers.CreateClient(TimeSpan.FromMinutes(5)))
             {
-                string version = wantPinned ? pinned : BuildTaskHelpers.ResolveLatestVersion(ReleasesLatest);
+                string version = wantPinned ? pinned : BuildTaskHelpers.ResolveLatestVersion(ReleasesLatest, RetryLog);
                 if (string.IsNullOrEmpty(version))
                 {
                     if (File.Exists(cachedDll))
@@ -472,9 +521,10 @@ public class EnsureSevenZipDllTask : Task
         Log.LogMessage(MessageImportance.High, message);
     }
 
-    private static void Download(HttpClient http, string url, string destination)
+    /// <summary>下载到文件。实例方法（非 static）是为了能访问 <see cref="RetryLog"/>。</summary>
+    private void Download(HttpClient http, string url, string destination)
     {
-        File.WriteAllBytes(destination, BuildTaskHelpers.GetBytesWithRetry(http, url));
+        File.WriteAllBytes(destination, BuildTaskHelpers.GetBytesWithRetry(http, url, RetryLog));
     }
 
     /// <summary>
