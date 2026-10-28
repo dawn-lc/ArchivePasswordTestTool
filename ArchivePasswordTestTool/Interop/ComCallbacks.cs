@@ -38,18 +38,10 @@ namespace ArchivePasswordTestTool
         }
 
         private readonly Stream _stream;
-        private readonly string? _filePath;
 
         public FileInStream(string filePath)
         {
             _stream = File.OpenRead(filePath);
-            _filePath = filePath;
-        }
-
-        public FileInStream(Stream stream)
-        {
-            _stream = stream;
-            _filePath = null;
         }
 
         public int Read(byte* data, uint size, uint* processedSize)
@@ -230,21 +222,6 @@ namespace ArchivePasswordTestTool
         }
     }
 
-    /// <summary>
-    /// 密码提供者，实现 ICryptoGetTextPassword 接口
-    /// </summary>
-    [GeneratedComClass]
-    internal sealed partial class PasswordProvider(string password) : ICryptoGetTextPassword
-    {
-        private readonly string _password = password;
-
-        public int CryptoGetTextPassword(out string password)
-        {
-            password = _password;
-            return 0; // 返回 0 表示成功
-        }
-    }
-
     [GeneratedComClass]
     internal sealed unsafe partial class DummyOutStream : ISequentialOutStream, IDisposable
     {
@@ -273,8 +250,6 @@ namespace ArchivePasswordTestTool
         private readonly string _password;
         private OperationResult _lastOperationResult;
         private readonly List<DummyOutStream> _outStreams;
-
-        public int ProcessedFiles { get; private set; }
 
         public TestExtractCallback(string password)
         {
@@ -309,7 +284,6 @@ namespace ArchivePasswordTestTool
             }
 
             // Extract 和 Test 都需要流
-            ProcessedFiles++;
             var dummyStream = new DummyOutStream();
             _outStreams.Add(dummyStream);
             outStream = dummyStream;

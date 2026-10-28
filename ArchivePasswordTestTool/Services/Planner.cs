@@ -17,7 +17,7 @@ namespace ArchivePasswordTestTool
     /// </summary>
     internal sealed class Planner
     {
-        private readonly ConcurrentBag<ArchiveContext> _contextPool = new();
+        private readonly ConcurrentBag<ArchiveContext> _contextPool = [];
 
         /// <summary>
         /// 执行模式与并发配置。多进程仅对 7z 且字典足够大时启用（绕开 dll 内 KDF 全局锁）

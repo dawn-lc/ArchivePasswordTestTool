@@ -8,7 +8,8 @@
 - 支持分卷压缩包：`xxx.7z.001`、`xxx.zip.001`、`xxx.part1.rar`（测试时传入第一分卷）
 - 支持自解压格式（SFX）：exe 封装的压缩包，自动在 PE stub 之后定位压缩数据
 - 支持 header 加密压缩包（如 7z `-mhe=on`、RAR `-hp` 密码模式）
-- 自动查找系统中已安装的 7-Zip，也可手动指定 7z.dll 路径；未安装时给出官方下载引导（可选一键打开浏览器）
+- **自带 7-Zip 引擎**：下载单个 exe 即可使用，无需预装 7-Zip（也可用系统已安装的版本或 `-lib` 指定）
+- 自动查找系统中已安装的 7-Zip，也可手动指定 7z.dll 路径；三者全无时给出官方下载引导（可选一键打开浏览器）
 - 界面语言按系统自动切换：English / 简体中文 / 日本語 / Français / Русский
 
 ## 使用方法
@@ -55,6 +56,7 @@ ArchivePasswordTestTool.exe -D dict.txt -F installer.exe -lib "C:\Program Files\
 | `APTT_PARALLELISM` | 限制并行度（进程内线程数/工作进程数共用的总并发上限），设为 `1` 表示单线程执行 |
 | `APTT_WORKERS` | 指定 7z 测密的工作进程数（默认 = 逻辑核心数，取值 1 时退回进程内线程模式） |
 | `APTT_TRACE` | 设为 `1` 时将 COM 回调跟踪日志输出到 stderr，用于问题诊断 |
+| `APTT_FORCE_EMBEDDED_7Z` | 设为 `1` 时跳过系统已安装的 7-Zip，强制用内置的 `7z.dll`（系统那份版本过旧/损坏时可用） |
 | `APTT_NO_UPGRADE_CHECK` | 设为 `1` 时跳过启动时的后台更新检查（离线/内网环境用） |
 
 更新检查在后台异步进行（每小时最多请求一次，同一版本只提示一次），仅当有新版本时才提示，不阻塞测密。发现新版本时会自动下载到程序目录，**下次启动自动完成替换并重启**，无需手动覆盖；下载失败（目录只读、断网等）只提示不重试阻塞，下个周期自动重试。配置（含检查时间戳与已提示版本）保存在 `%LOCALAPPDATA%\ArchivePasswordTestTool\config.json`，不会写入程序目录。
@@ -72,20 +74,41 @@ ArchivePasswordTestTool.exe -D dict.txt -F installer.exe -lib "C:\Program Files\
 
 ## 运行要求
 
-- Windows x64 与 .NET 10 运行时（单文件发布已内置）
+- Windows x64 与 .NET 10 运行时（单文件发布 / Native AOT 已内置）
 - 兼容未打全累积更新的旧版 Windows 10 / 11（宿主不启用 CET 影子栈，避免 .NET 10 启动自检直接退出）
-- 已安装 7-Zip，或程序目录下存在 64 位 `7z.dll`；两者皆无时给出 7-Zip 官方下载引导
+- **不要求预装 7-Zip**：程序自带 7-Zip 官方 `7z.dll`（构建时内嵌，首次运行解压到
+  `%LOCALAPPDATA%\ArchivePasswordTestTool\native`）。若系统已安装 7-Zip，优先用系统那份；
+  也可用 `-lib` 指定自己的 `7z.dll`
 - 若程序目录存在 `ArchivePasswordTestToolGUI.exe`，启动命令行版时会自动拉起 GUI
 
 ## 构建与发布
 
 ```text
 dotnet build -c Release
+
+# Native AOT + UPX（约 4.2 MB）—— **对外发布用的就是这个**
+dotnet publish -c Release -p:PublishProfile=Properties\PublishProfiles\win-x64-aot.pubxml
+
+# 单文件 + 裁剪（约 13.3 MB，兼容形态，CI 仍会构建验证）
 dotnet publish -c Release -p:PublishProfile=Properties\PublishProfiles\win-x64.pubxml
 ```
 
-发布产物为单文件 `ArchivePasswordTestTool.exe`（约 12 MB，自包含运行时，免安装 .NET）。
-`7z.dll` 按设计保持外部依赖。构建选项与体积取舍见[开发文档](docs/DEVELOPMENT.md#构建与发布)。
+两种形态都只产出一个 `ArchivePasswordTestTool.exe`，免安装 .NET、免装 7-Zip，自更新替换单文件。
+**Release 只挂 AOT 那一个 exe**（体积与启动都更优；且 `Upgrade` 取「第一个 exe 资产」，
+挂两个会让自更新在两种形态间不确定地切换）。
+AOT 需本机装有 MSVC 链接器（Visual Studio「使用 C++ 的桌面开发」）。
+
+**7z.dll 自动内嵌**：首次构建会从 7-Zip 官方 GitHub 发布点（`github.com/ip7z/7zip`，即
+7-zip.org 下载页指向的仓库）取最新版，缓存到 `tools\7zip\` 并编进程序集。缺网也能构建
+（只是不内嵌，运行时回退到「需自行安装 7-Zip」）。固定版本用 `-p:SevenZipVersion=26.05`，
+关闭内嵌用 `-p:EnableEmbeddedSevenZip=false`；CI 与发布额外传 `-p:RequireEmbeddedSevenZip=true`
+让「拿不到 dll」变成构建失败，而不是静默产出不自包含的包。
+
+**UPX 默认开启**：把 UPX 发行包里的 `upx.exe` 放到 `tools\upx\` 即可（或用 `-p:UpxPath=...`），
+之后每次 AOT 发布都会自动压缩；没放则打警告并跳过（产物约 11.3 MB 未压缩）。
+`-p:EnableUpx=false` 可显式关闭。
+
+构建选项、体积/启动实测数据与取舍见[开发文档](docs/DEVELOPMENT.md#构建与发布)。
 
 ## 开发
 

@@ -407,6 +407,59 @@ public sealed class EndToEndTests(TestDataFixture fx, ITestOutputHelper output)
         Assert.Contains(TestDataFixture.CorrectPassword, Output);
     }
 
+    /// <summary>
+    /// 强制走内嵌 7z.dll（跳过本机已安装的 7-Zip），验证「没装 7-Zip 也能用」这条链路。
+    /// <para>
+    /// 判据全部语言无关：exit 0 + 命中 ASCII 密码，说明解压出来的 dll 真的能加载并破解；
+    /// 若提取失败，程序会走「7z.dll not found」分支 exit 1，此用例立刻红。
+    /// </para>
+    /// </summary>
+    [Fact]
+    public void EmbeddedSevenZipWorksWhenNoInstalledSevenZip()
+    {
+        // 先清掉缓存，确保这次真的重新从资源解压，而不是命中上次的残留
+        if (Directory.Exists(EmbeddedSevenZip.CacheDirectory))
+        {
+            Directory.Delete(EmbeddedSevenZip.CacheDirectory, recursive: true);
+        }
+
+        var (ExitCode, Output) = RunTool(
+            $"-D \"{fx.Dict("DictOK.txt")}\" -F \"{fx.Archive("Secret.7z")}\"",
+            env: ("APTT_FORCE_EMBEDDED_7Z", "1"));
+
+        Assert.Equal(0, ExitCode);
+        Assert.Contains(TestDataFixture.CorrectPassword, Output);
+
+        // 落地结果必须与内嵌资源同尺寸（证明写出来的是完整 dll 而不是半截文件）
+        using var embedded = typeof(EmbeddedSevenZip).Assembly
+            .GetManifestResourceStream(EmbeddedSevenZip.DllResourceName);
+        Assert.NotNull(embedded);
+
+        string extracted = Path.Combine(EmbeddedSevenZip.CacheDirectory, "7z.dll");
+        Assert.True(File.Exists(extracted), $"内嵌 7z.dll 未落地：{extracted}");
+        Assert.Equal(embedded!.Length, new FileInfo(extracted).Length);
+
+        // 许可证必须与 dll 一起落地（7-Zip 是 LGPL）
+        Assert.True(File.Exists(Path.Combine(EmbeddedSevenZip.CacheDirectory, "7z-License.txt")));
+    }
+
+    /// <summary>
+    /// 显式 -lib 指向不存在的文件时必须直接报错，**不能**静默改用内嵌版——
+    /// 否则用户的配置错误被掩盖，问题在别处才暴露。
+    /// </summary>
+    [Fact]
+    public void MissingExplicitLibFailsInsteadOfFallingBackToEmbedded()
+    {
+        string missing = Path.Combine(Path.GetTempPath(), "definitely-missing-" + Guid.NewGuid().ToString("N") + ".dll");
+
+        var (ExitCode, Output) = RunTool(
+            $"-D \"{fx.Dict("DictOK.txt")}\" -F \"{fx.Archive("Secret.7z")}\" -lib \"{missing}\"",
+            env: ("APTT_FORCE_EMBEDDED_7Z", "1"));
+
+        Assert.NotEqual(0, ExitCode);
+        Assert.DoesNotContain(TestDataFixture.CorrectPassword, Output);
+    }
+
     /// <summary>无参数启动主程序并经 stdin 依次喳入引导答案，返回退出码与全量输出</summary>
     private (int ExitCode, string Output) RunToolWithStdin(params string[] lines)
     {

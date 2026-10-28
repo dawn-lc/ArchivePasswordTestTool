@@ -59,43 +59,19 @@ namespace ArchivePasswordTestTool
         UserDefined = 0x10000
     }
 
-    internal enum ArchivePropId : uint
-    {
-        Name = 0,
-        ClassID,
-        Extension,
-        AddExtension,
-        Update,
-        KeepName,
-        StartSignature,
-        FinishSignature,
-        Associate
-    }
-
-    [StructLayout(LayoutKind.Sequential)]
-    internal struct FILETIME
-    {
-        public uint dwLowDateTime;
-        public uint dwHighDateTime;
-
-        public readonly DateTime ToDateTime()
-        {
-            long filetime = ((long)dwHighDateTime << 32) | dwLowDateTime;
-            return DateTime.FromFileTimeUtc(filetime);
-        }
-    }
-
+    /// <summary>
+    /// PROPVARIANT 的 union 尾部形态（CAUB / SAFEARRAY 等按长度+指针描述的数据）。
+    /// <para>
+    /// 这里**不提供任何解析方法**：保留它只有一个目的——把 <see cref="PropVariant"/> 的
+    /// union 尺寸撑到原生 PROPVARIANT 的大小（x64 = 24 字节，x86 = 16 字节，随 IntPtr 自动伸缩）。
+    /// 少写这个字段，结构体只有 16 字节，7z.dll 回写 24 字节就会越界 8 字节。
+    /// </para>
+    /// </summary>
     [StructLayout(LayoutKind.Sequential)]
     internal struct PropArray
     {
         public uint Length;
         public IntPtr PointerValues;
-
-        public readonly IntPtr GetElementPtr(int index)
-        {
-            int size = IntPtr.Size;
-            return IntPtr.Add(PointerValues, index * size);
-        }
     }
 
     [StructLayout(LayoutKind.Explicit)]
@@ -110,7 +86,6 @@ namespace ArchivePasswordTestTool
         [FieldOffset(8)] public byte byteValue;
         [FieldOffset(8)] public short boolValue;
         [FieldOffset(8)] public long longValue;
-        [FieldOffset(8)] public FILETIME filetime;
         [FieldOffset(8)] public PropArray propArray;
 
         public readonly VarEnum VarType => (VarEnum)vt;
@@ -138,46 +113,6 @@ namespace ArchivePasswordTestTool
                     VarEnum.VT_UI1 => byteValue,
                     _ => 0
                 };
-            }
-        }
-
-        public long Int64
-        {
-            get
-            {
-                return VarType switch
-                {
-                    VarEnum.VT_I8 => longValue,
-                    VarEnum.VT_I4 => (int)longValue,
-                    VarEnum.VT_I2 => (short)longValue,
-                    VarEnum.VT_I1 => (sbyte)byteValue,
-                    _ => 0
-                };
-            }
-        }
-
-        public string? String
-        {
-            get
-            {
-                if (VarType == VarEnum.VT_BSTR && pointerValue != IntPtr.Zero)
-                    return Marshal.PtrToStringBSTR(pointerValue);
-
-                if (VarType == VarEnum.VT_LPWSTR && pointerValue != IntPtr.Zero)
-                    return Marshal.PtrToStringUni(pointerValue);
-
-                return null;
-            }
-        }
-
-        public DateTime? DateTime
-        {
-            get
-            {
-                if (VarType == VarEnum.VT_FILETIME)
-                    return filetime.ToDateTime();
-
-                return null;
             }
         }
 

@@ -351,5 +351,19 @@ healthchecksdb
 TestData/
 *.log
 
+# UPX（可选压缩工具，用于 AOT 产物体积优化）。发行包体积约 1MB，不入库：
+# 把 upx.exe 放到 tools/upx/ 即自动启用，见 docs/DEVELOPMENT.md「Native AOT」
+tools/upx/
+
+# 构建期内嵌的 7-Zip 官方件（7z.dll + License.txt），自动下载，不入库：
+# 7z.dll 约 1.9MB；见 docs/DEVELOPMENT.md「内嵌 7z.dll」
+tools/7zip/
+
+# 对外分发产物（AOT 发布的独立输出目录，与单文件产物分开，避免两个 publish 互相覆盖）。
+# 刻意不用 artifacts/：那个名字在 .NET 8+ 是 SDK 托管输出目录（--artifacts-path /
+# UseArtifactsOutput），而本仓库实测 --artifacts-path 会让 TestPaths.FindRepoRoot()
+# 找不到仓库根、测试全红。dist/ 语义也更准：这里是"要分发出去的东西"，不是中间产物。
+dist/
+
 # Runtime update-check state (created next to the exe), not source
 config.json

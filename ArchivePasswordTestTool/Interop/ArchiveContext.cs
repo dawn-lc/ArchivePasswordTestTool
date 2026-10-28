@@ -9,11 +9,7 @@ namespace ArchivePasswordTestTool
     /// "预期内的密码失败"，不把 OOM、dll 加载失败等真实故障伪装成"未找到密码"。
     /// </summary>
     internal sealed class ArchivePasswordException(int hresult, Exception? innerException = null)
-        : Exception($"Cannot open archive: wrong password or corrupted data (HRESULT 0x{hresult:X8}).", innerException)
-    {
-        /// <summary>7z.dll 返回的原始 HRESULT</summary>
-        public int HResultCode { get; } = hresult;
-    }
+        : Exception($"Cannot open archive: wrong password or corrupted data (HRESULT 0x{hresult:X8}).", innerException);
 
     /// <summary>
     /// 压缩包上下文，管理压缩包的生命周期
@@ -363,17 +359,6 @@ namespace ArchivePasswordTestTool
                 _disposed = true;
             }
         }
-    }
-
-    /// <summary>
-    /// 压缩包中文件信息
-    /// </summary>
-    public class ArchiveFileInfo
-    {
-        public int Index { get; set; }
-        public string? FileName { get; set; }
-        public long Size { get; set; }
-        public bool Encrypted { get; set; }
     }
 
     /// <summary>

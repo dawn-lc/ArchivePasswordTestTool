@@ -1,6 +1,7 @@
 name: Build and verify
 description: >
-  以 Release 配置构建、测试、单文件发布并实测发布产物。
+  以 Release 配置构建、测试，发布单文件与 Native AOT 两种形态，并对两个产物各做一次
+  真实解密的冒烟测试（默认路径 + 强制内嵌 7z.dll 两条 dll 解析路径）。
   CI 与 Release 共用同一套步骤，避免两条流水线对「什么是合格的发布产物」产生分歧。
   项目已无任何条件编译，Release 单配置即可完整覆盖。
 
@@ -13,6 +14,15 @@ inputs:
     description: 版本类型 Release/Preview/Beta 等（不传则为 Dev，更新检查按「未识别类型」保守处理）
     required: false
     default: 'Dev'
+  # 下面两个版本由工作流传入（见 ci.yml / release.yml 的 env），用于：
+  #   ① 保证产物可重现（跟随 latest 时同一 commit 两次构建可能不同）；
+  #   ② 作为 actions/cache 的 key，命中时不必每次重新下载。
+  sevenZipVersion:
+    description: 内嵌 7z.dll 的 7-Zip 版本（'latest' 则跟随上游）
+    required: true
+  upxVersion:
+    description: UPX 版本（'latest' 则跟随上游；仅 AOT 发布用到）
+    required: true
 
 runs:
   using: composite
@@ -21,13 +31,18 @@ runs:
       shell: pwsh
       run: dotnet restore ArchivePasswordTestTool.sln
 
-    # 版本号由 AppVersion/AppVersionType 注入（见主项目 csproj），源码里没有版本常量
+    # 版本号由 AppVersion/AppVersionType 注入（见主项目 csproj），源码里没有版本常量。
+    # RequireEmbeddedSevenZip=true：内嵌 7z.dll 拿不到时直接失败。
+    # 默认行为是只警告，而本地「缺网也能构建」是有意设计；但 CI 上照样降级，
+    # 就会产出不自包含的产物并绿勾发布（smoke test 会走 runner 已安装的 7-Zip）。
     - name: Build
       shell: pwsh
       run: >
         dotnet build ArchivePasswordTestTool.sln -c Release --no-restore
         -p:AppVersion=${{ inputs.appVersion }}
         -p:AppVersionType=${{ inputs.appVersionType }}
+        -p:SevenZipVersion=${{ inputs.sevenZipVersion }}
+        -p:RequireEmbeddedSevenZip=true
 
     - name: Test
       shell: pwsh
@@ -49,7 +64,13 @@ runs:
           -c Release --no-build `
           --logger "trx;LogFileName=test-results.trx"
 
-    # 必须重复传版本参数：publish 会重新构建，漏传就会产出 0.0.0 的包
+    # 形态 A（兼容形态，不对外发布，但必须保持可用）：单文件 + 裁剪 + bundle。
+    # 保留这一步的理由：PublishTrimmed 与内置 COM 互操作的坑只在裁剪路径暴露，
+    # 砍掉它就等于放弃对该形态的回归保护（用户仍可用 -p:PublishProfile 自行构建）。
+    #
+    # 必须重复传版本参数：publish 会重新构建，漏传就会产出 0.0.0 的包。
+    # 不传 --no-restore：RID 特定的 asset 目标（net10.0/win-x64）只有带 RID 的还原才会生成，
+    # 用无 RID 的 restore 结果会报 NETSDK1047。
     - name: Publish single file
       shell: pwsh
       run: >
@@ -58,29 +79,127 @@ runs:
         -p:PublishProfile=Properties\PublishProfiles\win-x64.pubxml
         -p:AppVersion=${{ inputs.appVersion }}
         -p:AppVersionType=${{ inputs.appVersionType }}
+        -p:SevenZipVersion=${{ inputs.sevenZipVersion }}
+        -p:RequireEmbeddedSevenZip=true
 
-    # 裁剪 + 内置 COM 互操作的问题只在 publish 路径暴露，普通 build 与 E2E 都覆盖不到，
-    # 故必须对发布产物本身做一次真实解密（历史上 PublishTrimmed 曾两次打断 COM 初始化）
-    - name: Smoke test published binary
+    # 形态 B（**对外发布形态**）：Native AOT + UPX，约 4.2 MB 单文件原生 PE。
+    # 与单文件形态写的是同一个默认 publish 目录，顺序执行会互相覆盖，
+    # 因此 AOT 强制输出到 dist\aot（release.yml 从这里取产物上传）。
+    #
+    # 目录名刻意用 dist 而不是 artifacts：后者在 .NET 8+ 是 SDK 托管输出目录的名字
+    # （--artifacts-path / UseArtifactsOutput），而本仓库实测 --artifacts-path 会让
+    # TestPaths.FindRepoRoot() 找不到仓库根、测试全红。同名目录会误导后来的人。
+    #
+    # 为什么发 AOT 而不是单文件：
+    #   ① 体积 4.2 MB vs 13.3 MB，启动 108ms vs 335ms；
+    #   ② 单文件 host 需按原始布局从磁盘读自身来解 bundle，旧版 Windows 上
+    #      更容易被 CET/安全软件干扰（见 docs/DEVELOPMENT.md「旧版 Windows 兼容」）；
+    #   ③ AOT 没有 bundle 自解压步骤，也不依赖 .NET 运行时。
+    - name: Publish Native AOT
+      shell: pwsh
+      run: |
+        $out = Join-Path $env:GITHUB_WORKSPACE 'dist\aot'
+        dotnet publish ArchivePasswordTestTool\ArchivePasswordTestTool.csproj `
+          -c Release `
+          -p:PublishProfile=Properties\PublishProfiles\win-x64-aot.pubxml `
+          -p:AppVersion=${{ inputs.appVersion }} `
+          -p:AppVersionType=${{ inputs.appVersionType }} `
+          -p:SevenZipVersion=${{ inputs.sevenZipVersion }} `
+          -p:UpxVersion=${{ inputs.upxVersion }} `
+          -p:RequireEmbeddedSevenZip=true `
+          -o $out
+        if ($LASTEXITCODE -ne 0) { throw "AOT 发布失败（exit $LASTEXITCODE）。" }
+
+    # 两种形态的冒烟测试合并成一步。
+    # 为什么合并：退出码 / 密码 / 版本号 / 内嵌 dll 这四项断言在两种形态上完全一致，
+    # 各写一份就是「改一处漏一处」——版本号断言曾只在单文件那份里，AOT 那份是后来补的。
+    #
+    # 覆盖矩阵 {单文件, AOT} × {默认路径, 强制内嵌}：
+    #   · 默认路径覆盖绝大多数用户（装了 7-Zip）；
+    #   · 强制内嵌覆盖「下载单个 exe 即可用」——runner 上装了 7-Zip，默认路径永远走
+    #     「已安装」分支，内嵌资源在不在产物里根本测不到，所以这条才是回归门禁。
+    #
+    # 裁剪与内置 COM 的问题只在 publish 路径暴露（历史上 PublishTrimmed 曾两次打断
+    # COM 初始化），普通 build 与 E2E 都覆盖不到，故必须对产物本身做真实解密。
+    - name: Smoke test published binaries
       shell: pwsh
       env:
         APTT_NO_UPGRADE_CHECK: '1'
       run: |
-        $exe = 'ArchivePasswordTestTool\bin\Release\net10.0\win-x64\publish\ArchivePasswordTestTool.exe'
-        if (-not (Test-Path $exe)) { throw "发布产物不存在：$exe" }
-
-        # -NoQuery 避免触碰在线服务；判据只用 ASCII 密码，规避控制台编码差异
-        $output = & $exe -F 'TestData\Secret.7z' -D 'TestData\PasswordDictionary.txt' -NoQuery 2>&1 | Out-String
-        if ($LASTEXITCODE -ne 0) { throw "发布产物执行失败（exit $LASTEXITCODE）：`n$output" }
-        if ($output -notmatch 'Correct123!') { throw "发布产物未输出预期密码：`n$output" }
-
-        # 版本号来自程序集元数据的反射读取（Program.ResolveMetadata）。裁剪若把
-        # AssemblyMetadataAttribute 移除，版本会静默回退为 0.0.0 并连带关闭更新检查，
-        # 普通单元测试跑的是未裁剪的 apphost，覆盖不到这一点 —— 只能在这里断言。
         $expected = '${{ inputs.appVersion }}'
-        $expectedType = '${{ inputs.appVersionType }}'
-        if ($output -notmatch [regex]::Escape("v$expected")) {
-          throw "发布产物显示的版本号不是注入值 v$expected（元数据可能在裁剪中丢失）：`n$output"
+        $products = @(
+          @{ Form = '单文件'; Path = 'ArchivePasswordTestTool\bin\Release\net10.0\win-x64\publish\ArchivePasswordTestTool.exe' },
+          @{ Form = 'AOT';    Path = (Join-Path $env:GITHUB_WORKSPACE 'dist\aot\ArchivePasswordTestTool.exe') }
+        )
+
+        foreach ($product in $products) {
+          if (-not (Test-Path $product.Path)) {
+            throw "[$($product.Form)] 发布产物不存在：$($product.Path)"
+          }
+
+          # 两种形态都必须是单文件：语言资源已内嵌进主程序集，
+          # AOT 也不能额外留下 ILCompiler 的 35 MB pdb。
+          $files = @(Get-ChildItem (Split-Path $product.Path) -File)
+          if ($files.Count -ne 1) {
+            throw "[$($product.Form)] 产物目录应为单文件，实际 $($files.Count) 个：`n$($files.Name -join "`n")"
+          }
         }
 
-        Write-Host "发布产物实测通过：成功解出正确密码，版本 v$expected-$expectedType。"
+        # 只有 AOT 能 UPX（单文件 host 按烧录偏移读自身，改写布局即失败，见开发文档）。
+        # 直接问 UPX 本身是唯一确定的判据：体积阈值会随 .NET 版本漂移，
+        # 而未压缩的产物照样能正常运行，只看「跑得通」测不出压缩器没跑。
+        $aotExe = $products[1].Path
+        $upx = 'tools\upx\upx.exe'
+        if (-not (Test-Path $upx)) {
+          throw "未找到 $upx —— UPX 未获取到，AOT 产物是未压缩的（$((Get-Item $aotExe).Length) 字节）。"
+        }
+        $null = & $upx -l $aotExe 2>&1
+        if ($LASTEXITCODE -ne 0) {
+          throw "AOT 产物未经 UPX 压缩（$((Get-Item $aotExe).Length) 字节）：UPX 未识别该文件。"
+        }
+
+        function Test-Product {
+          param([string] $Exe, [string] $Form, [bool] $ForceEmbedded)
+
+          if ($ForceEmbedded) {
+            # 必须先清缓存：否则命中的是上次解压出来的文件，证明不了「资源在产物里」
+            $native = Join-Path $env:LOCALAPPDATA 'ArchivePasswordTestTool\native'
+            Remove-Item $native -Recurse -Force -ErrorAction SilentlyContinue
+            $env:APTT_FORCE_EMBEDDED_7Z = '1'
+          }
+
+          try {
+            # -NoQuery 避免触碰在线服务；判据只用 ASCII 密码，规避控制台编码差异
+            $output = & $Exe -F 'TestData\Secret.7z' -D 'TestData\PasswordDictionary.txt' -NoQuery 2>&1 | Out-String
+            $code = $LASTEXITCODE
+          } finally {
+            if ($ForceEmbedded) { Remove-Item Env:\APTT_FORCE_EMBEDDED_7Z -ErrorAction SilentlyContinue }
+          }
+
+          $pathLabel = if ($ForceEmbedded) { '内嵌 7z.dll' } else { '默认路径' }
+          $label = "$Form / $pathLabel"
+
+          if ($code -ne 0) { throw "[$label] 执行失败（exit $code）：`n$output" }
+          if ($output -notmatch 'Correct123!') { throw "[$label] 未输出预期密码：`n$output" }
+
+          # 版本号来自程序集元数据的反射读取（Program.ResolveMetadata）。裁剪或 AOT 若把
+          # AssemblyMetadataAttribute 移除，版本会静默回退为 0.0.0 并连带关闭更新检查，
+          # 单元测试跑的是未裁剪的 apphost，覆盖不到这一点 —— 只能在这里断言。
+          if ($output -notmatch [regex]::Escape("v$expected")) {
+            throw "[$label] 版本号不是注入值 v$expected（元数据可能在裁剪/AOT 中丢失）：`n$output"
+          }
+
+          if ($ForceEmbedded) {
+            $dll = Join-Path $env:LOCALAPPDATA 'ArchivePasswordTestTool\native\7z.dll'
+            if (-not (Test-Path $dll)) { throw "[$label] 内嵌 7z.dll 未落地：$dll" }
+          }
+
+          Write-Host "[$label] 通过：解出预期密码，版本 v$expected，大小 $((Get-Item $Exe).Length) 字节。"
+        }
+
+        foreach ($product in $products) {
+          Test-Product -Exe $product.Path -Form $product.Form -ForceEmbedded $false
+          Test-Product -Exe $product.Path -Form $product.Form -ForceEmbedded $true
+        }
+
+        Write-Host '两种发布形态全部通过：单文件、内嵌 7z.dll 可用、版本号等于注入值、AOT 已被 UPX 压缩。'
