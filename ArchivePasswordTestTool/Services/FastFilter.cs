@@ -48,7 +48,7 @@ namespace ArchivePasswordTestTool
         /// <param name="parallelism">并行度</param>
         /// <param name="onProgress">进度回调（参数为新增的已测条数）</param>
         public static FastFilterResult Run(
-            Rar4StoreProbe probe,
+            IPasswordProbe probe,
             PasswordDictionary dictionary,
             int parallelism,
             Action<int> onProgress)

@@ -325,7 +325,10 @@
   <data name="UpgradeApplied" xml:space="preserve">
     <value>已更新到 {0}。</value>
   </data>
-  <data name="Rar4FastFilterActive" xml:space="preserve">
-    <value>RAR4 存储模式单文件（{0}）：已启用快速密码筛选，仅派生密钥、不解包数据。命中的候选仍会由 7-Zip 完整测试确认。</value>
+  <data name="FastFilterActive" xml:space="preserve">
+    <value>不压缩加密数据（{0}）：已启用快速密码筛选，仅解密首块、不解包数据。命中的候选仍会由 7-Zip 完整测试确认。</value>
+  </data>
+  <data name="SlowFullDecodeWarning" xml:space="preserve">
+    <value>该压缩包使用了不压缩（store）编码且未加密文件名：每个错误密码都必须完整解出数据（每次 {0}）才能靠文件 CRC 判错。按当前字典预计耗时约 {1}。这是格式自身的限制，增加并行度也无法改善（瓶颈是内存带宽而非密钥派生）。建议改用更小的字典。</value>
   </data>
 </root>

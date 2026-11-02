@@ -819,11 +819,22 @@ namespace ArchivePasswordTestTool.Properties
         /// <summary>
         ///   查找类似 RAR4 stored single file ({0}): fast password filter enabled 的本地化字符串。
         /// </summary>
-        public static string Rar4FastFilterActive
+        public static string FastFilterActive
         {
             get
             {
-                return EmbeddedResourceManager.GetString("Rar4FastFilterActive", resourceCulture);
+                return EmbeddedResourceManager.GetString("FastFilterActive", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   查找类似 This archive is encrypted without compression (store) 的本地化字符串。
+        /// </summary>
+        public static string SlowFullDecodeWarning
+        {
+            get
+            {
+                return EmbeddedResourceManager.GetString("SlowFullDecodeWarning", resourceCulture);
             }
         }
 

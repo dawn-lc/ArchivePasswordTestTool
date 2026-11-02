@@ -325,7 +325,10 @@
   <data name="UpgradeApplied" xml:space="preserve">
     <value>{0} に更新しました。</value>
   </data>
-  <data name="Rar4FastFilterActive" xml:space="preserve">
-    <value>RAR4 無圧縮の単一ファイル（{0}）：高速パスワード絞り込みを有効にしました。鍵導出のみでデータは展開しません。一致した候補は 7-Zip による完全テストで確認します。</value>
+  <data name="FastFilterActive" xml:space="preserve">
+    <value>無圧縮の暗号化データ（{0}）：高速パスワード絞り込みを有効にしました。先頭ブロックのみ復号し、データは展開しません。一致した候補は 7-Zip による完全テストで確認します。</value>
+  </data>
+  <data name="SlowFullDecodeWarning" xml:space="preserve">
+    <value>この書庫は無圧縮（store）で暗号化され、ファイル名も暗号化されていません。そのため誤ったパスワードでは、ファイル CRC で判定できるまで毎回データ全体（1 回あたり {0}）を展開する必要があります。現在の辞書での推定所要時間は約 {1} です。これは形式固有の制限で、並列度を上げても改善しません（ボトルネックは鍵導出ではなくメモリ帯域です）。より小さい辞書の使用をご検討ください。</value>
   </data>
 </root>

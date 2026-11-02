@@ -186,6 +186,40 @@ namespace ArchivePasswordTestTool
             AnsiConsole.MarkupLine($"[yellow]{Escape(message)}[/]");
         }
 
+        /// <summary>
+        /// 完整测密前的慢速预警。
+        /// <para>
+        /// 针对「不压缩编码（7z Copy / zip Store）+ 仅数据加密」：密文没有任何可校验结构，
+        /// 错误密码必须解完整个数据才能靠文件 CRC 判错。实测 200MB 单文件每个候选读满
+        /// 126MB；1.2GB + 250 万字典约 100 小时，且增加并行度无效（瓶颈是内存带宽/IO）。
+        /// </para>
+        /// <para>
+        /// 只在预计耗时超过一小时时提示——正常压缩包（LZMA 等首块即判错）不会被误报。
+        /// 预估刻意取乐观吞吐，宁可少提示也不要把正常场景说成"要跑几小时"。
+        /// </para>
+        /// </summary>
+        public static void WarnSlowFullDecodeIfNeeded(ArchiveInfo info, long passwordCount)
+        {
+            // header 加密在 Open 阶段就验完密码，不存在这个问题
+            if (!info.FailureRequiresFullDecode || info.IsHeaderEncryption || info.FailurePathBytes == 0)
+            {
+                return;
+            }
+
+            TimeSpan estimate = CostEstimate.Estimate(passwordCount, info.FailurePathBytes);
+            if (!CostEstimate.ShouldWarn(estimate))
+            {
+                return;
+            }
+
+            AnsiConsole.WriteLine();
+            WriteWarning(string.Format(
+                Resources.SlowFullDecodeWarning,
+                CostEstimate.FormatBytes(info.FailurePathBytes),
+                CostEstimate.FormatDuration(estimate)));
+            AnsiConsole.WriteLine();
+        }
+
         private static void AddRow(Grid grid, string label, string value)
         {
             grid.AddRow($"[grey]{Escape(label)}[/]", $"[white]{Escape(value)}[/]");

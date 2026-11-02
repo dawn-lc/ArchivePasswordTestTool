@@ -208,6 +208,9 @@ namespace ArchivePasswordTestTool
             ulong minSize = ulong.MaxValue;
             uint minIndex = 0;
             bool foundQuickTarget = false;
+            ulong totalEncryptedPacked = 0;
+            bool allEncryptedStored = true;
+            bool quickTargetStored = false;
 
             for (uint i = 0; i < fileCount; i++)
             {
@@ -225,16 +228,27 @@ namespace ArchivePasswordTestTool
                         {
                             archive.GetProperty(i, ItemPropId.PackedSize, ref size);
                             ulong s = size.UInt64;
+                            totalEncryptedPacked += s;
+
                             if (s > 32 && s < minSize)
                             {
                                 minSize = s;
                                 minIndex = i;
                                 foundQuickTarget = true;
+
+                                // 只对"最终会被测的那个文件"关心编码：
+                                // Copy(不压缩) 编码在密文上没有任何可校验结构
+                                quickTargetStored = IsStoredOnly(archive, i);
                             }
                         }
                         finally
                         {
                             size.Clear();
+                        }
+
+                        if (allEncryptedStored && !IsStoredOnly(archive, i))
+                        {
+                            allEncryptedStored = false;
                         }
                     }
                     else
@@ -277,6 +291,43 @@ namespace ArchivePasswordTestTool
                 info.QuickTestFileIndices = [minIndex];
             }
             info.SupportsQuickTest = !allEncrypted && foundQuickTarget;
+
+            // 判错代价诊断（仅用于预警，不参与判定逻辑）：
+            // 实际会解码的数据量 = 快速测试目标的大小，或（无合格目标时）全部加密数据之和
+            info.FailurePathBytes = foundQuickTarget ? minSize : totalEncryptedPacked;
+
+            // "每个错误密码都必须解完整个数据"只发生在编码器无法自校验时：
+            // 7z 的 Copy(store) 编码不产生任何结构，错误密钥解出的垃圾数据与正常数据
+            // 无法区分，只能解到文件尾靠 CRC 判错。反之 LZMA/LZMA2/BZip2/PPMd 的压缩流
+            // 有内部结构（range coder 首字节、块头校验），首块即失败（实测：200MB 随机
+            // 数据用 LZMA2 只读 1MB 就判错，Copy 则读满 126MB）。
+            info.FailureRequiresFullDecode = foundQuickTarget ? quickTargetStored : allEncryptedStored;
+        }
+
+        /// <summary>
+        /// 该条目是否使用"不压缩"编码（7z 的 Copy / zip 的 Store）。
+        /// 读取失败时返回 false —— 拿不到编码就不要声称它慢，宁可漏报也不误报。
+        /// </summary>
+        private static bool IsStoredOnly(IInArchive archive, uint index)
+        {
+            PropVariant method = new();
+            try
+            {
+                if (archive.GetProperty(index, ItemPropId.Method, ref method) != 0)
+                {
+                    return false;
+                }
+
+                string? name = method.Bstr;
+                return name is not null
+                    && (name.StartsWith("Copy", StringComparison.Ordinal)
+                        || name.StartsWith("Store", StringComparison.Ordinal));
+            }
+            finally
+            {
+                // BSTR 已在上面的 Bstr 属性里复制成托管字符串，此处释放原生内存
+                method.Clear();
+            }
         }
 
         /// <summary>
@@ -397,6 +448,29 @@ namespace ArchivePasswordTestTool
         /// 是否加密头部
         /// </summary>
         public bool IsHeaderEncryption { get; set; }
+
+        /// <summary>
+        /// 测试一个错误密码时，实际会被解码的数据量（字节）。
+        /// <para>
+        /// 有快速测试目标时等于该文件的大小，否则等于全部加密数据之和。
+        /// 只在 <see cref="FailureRequiresFullDecode"/> 为 true 时代表真实代价。
+        /// </para>
+        /// </summary>
+        public ulong FailurePathBytes { get; set; }
+
+        /// <summary>
+        /// 错误密码是否必须解完整个数据才能判错。
+        /// <para>
+        /// 为 true 表示参与测试的数据使用了「不压缩」编码（7z Copy / zip Store），
+        /// 密文没有任何可作为判据的内部结构，只能解到文件尾靠 CRC 判错——
+        /// 代价与文件大小成正比，增加并行度也不会改善（瓶颈是内存带宽/IO）。
+        /// </para>
+        /// <para>
+        /// 压缩编码（LZMA/LZMA2/BZip2/PPMd）不受影响：错误密钥解出的首块就是非法
+        /// 压缩流，几 KB 内即可判错。
+        /// </para>
+        /// </summary>
+        public bool FailureRequiresFullDecode { get; set; }
 
         /// <summary>
         /// 快速测试目标文件索引（最小的、压缩后大于 32 字节的加密文件）。

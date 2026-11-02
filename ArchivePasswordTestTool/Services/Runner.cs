@@ -179,8 +179,8 @@ namespace ArchivePasswordTestTool
 
                 // 快速判错能力探测放在规划之前：走快速路径时不必预建上下文池
                 // （预建要为每个并行度打开一次归档，而确认阶段只用一次上下文）
-                Rar4StoreProbe? fastProbe = FastFilter.IsEnabled
-                    ? Rar4StoreProbe.TryCreate(archivePath, archiveInfo)
+                IPasswordProbe? fastProbe = FastFilter.IsEnabled
+                    ? PasswordProbeFactory.TryCreate(archivePath, archiveInfo)
                     : null;
 
                 var (Mode, WorkerCount, ThreadParallelism, DisplayParallelism) = planner.Plan(
@@ -206,16 +206,24 @@ namespace ArchivePasswordTestTool
                 {
                     // 明确告知走的是"只派生密钥、不解包"的路径：此时"未找到"的语义
                     // 依赖文件格式签名，用户需要知道这个前提
-                    Ui.WriteWarning(string.Format(Resources.Rar4FastFilterActive, fastProbe.ContentFormat));
+                    Ui.WriteWarning(string.Format(Resources.FastFilterActive, fastProbe.ContentFormat));
                     RunFastFilter(options.SevenZipDllPath, archiveInfo, dictionary, fastProbe, fastParallelism);
-                }
-                else if (Mode == ExecutionMode.MultiProcess)
-                {
-                    RunMultiProcess(options.SevenZipDllPath, dictionary, WorkerCount);
                 }
                 else
                 {
-                    RunThreaded(options.SevenZipDllPath, archiveInfo, dictionary, ThreadParallelism);
+                    // 完整测密前先按格式特征预警：Copy/Store 编码在密文上没有任何可校验结构，
+                    // 每个错误密码都要解完整个数据才能靠 CRC 判错，多进程也救不了。
+                    // 放在这里而不是 Planner 里，是因为需要字典条数才能估算总耗时
+                    Ui.WarnSlowFullDecodeIfNeeded(archiveInfo, dictionaryCount);
+
+                    if (Mode == ExecutionMode.MultiProcess)
+                    {
+                        RunMultiProcess(options.SevenZipDllPath, dictionary, WorkerCount);
+                    }
+                    else
+                    {
+                        RunThreaded(options.SevenZipDllPath, archiveInfo, dictionary, ThreadParallelism);
+                    }
                 }
 
                 Ui.WriteOutcome(
@@ -354,7 +362,7 @@ namespace ArchivePasswordTestTool
             string dllPath,
             ArchiveInfo archiveInfo,
             PasswordDictionary dictionary,
-            Rar4StoreProbe probe,
+            IPasswordProbe probe,
             int parallelism)
         {
             stopwatch.Restart();

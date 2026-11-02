@@ -325,7 +325,10 @@ You can also download it manually from the releases page.</value>
   <data name="UpgradeApplied" xml:space="preserve">
     <value>Updated to {0}.</value>
   </data>
-  <data name="Rar4FastFilterActive" xml:space="preserve">
-    <value>RAR4 stored single file ({0}): fast password filter enabled — only the key is derived, archive data is not decrypted. Candidates matching the file signature are still verified by a full 7-Zip test.</value>
+  <data name="FastFilterActive" xml:space="preserve">
+    <value>Uncompressed encrypted data ({0}): fast password filter enabled — only the first block is decrypted, archive data is not unpacked. Candidates matching the file signature are still verified by a full 7-Zip test.</value>
+  </data>
+  <data name="SlowFullDecodeWarning" xml:space="preserve">
+    <value>This archive is encrypted without compression (store) and its file names are not encrypted, so every wrong password must be fully decoded ({0} per attempt) before the file CRC can reject it. Estimated time for the current dictionary: {1}. This is a limitation of the format — more parallelism will not help (the bottleneck is memory bandwidth, not the key derivation). Consider using a smaller dictionary.</value>
   </data>
 </root>

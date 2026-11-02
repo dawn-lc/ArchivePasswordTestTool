@@ -116,6 +116,18 @@ namespace ArchivePasswordTestTool
             }
         }
 
+        /// <summary>
+        /// 读取 VT_BSTR 字符串（<see cref="ItemPropId.Method"/> 等属性）。
+        /// <para>
+        /// 必须在调用 <see cref="Clear"/> **之前**读取——Clear 会释放 BSTR，
+        /// 之后指针即为悬空引用。返回 null 表示该属性不是字符串。
+        /// </para>
+        /// </summary>
+        public string? Bstr =>
+            VarType == VarEnum.VT_BSTR && pointerValue != IntPtr.Zero
+                ? Marshal.PtrToStringBSTR(pointerValue)
+                : null;
+
         public void Clear()
         {
             switch (VarType)

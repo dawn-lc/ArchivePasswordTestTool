@@ -4,19 +4,6 @@ using System.Text;
 
 namespace ArchivePasswordTestTool
 {
-    /// <summary>单条候选密码的快速判定结果</summary>
-    internal enum PasswordProbeResult
-    {
-        /// <summary>解密首块与预期文件格式不符 → 密码错误</summary>
-        NoMatch,
-
-        /// <summary>解密首块与预期文件格式相符 → 交给 7-Zip 做权威确认</summary>
-        Match,
-
-        /// <summary>超出快速路径的适用范围（密码过长）→ 必须走完整测密</summary>
-        Unsupported,
-    }
-
     /// <summary>
     /// RAR4（WinRAR -ma4）「存储模式 + 单文件 + 仅数据加密」压缩包的快速判错器。
     /// <para>
@@ -36,7 +23,7 @@ namespace ArchivePasswordTestTool
     /// 且文件扩展名对应已知的容器签名。
     /// </para>
     /// </summary>
-    internal sealed class Rar4StoreProbe
+    internal sealed class Rar4StoreProbe : IPasswordProbe
     {
         // RAR4 头部类型（单字节字段，不能按 2 字节读取——紧随其后就是 HEAD_FLAGS）
         private const byte MainHeadType = 0x73;

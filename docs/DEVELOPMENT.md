@@ -66,11 +66,11 @@ batchSize = clamp(ceil(count / (workers × 4)), 8, 64)
 
 ### 实测吞吐（i7-12700F，字典全错误密码）
 
-| 字典 | 20 进程 | 10 进程 | 5 进程 | 1 进程 |
-|------|---------|---------|--------|--------|
-| 300 | 625ms | 636ms | 814ms | 2482ms |
-| 1200 | 1245ms | 1489ms | 2349ms | 9571ms |
-| 5000 | 3825ms | 5393ms | 9245ms | 41320ms |
+| 字典 | 20 进程 | 10 进程 | 5 进程 | 1 进程  |
+| ---- | ------- | ------- | ------ | ------- |
+| 300  | 625ms   | 636ms   | 814ms  | 2482ms  |
+| 1200 | 1245ms  | 1489ms  | 2349ms | 9571ms  |
+| 5000 | 3825ms  | 5393ms  | 9245ms | 41320ms |
 
 ## 全量解密路径的并行度：按物理核数
 
@@ -79,12 +79,12 @@ batchSize = clamp(ceil(count / (workers × 4)), 8, 64)
 全量解密（RAR / Zip / 小字典 7z）是内存带宽与 AES 吞吐密集型，把 SMT 逻辑核算成物理核会超订。
 同一 1.2GB RAR5 样本、同一台 8 核 16 线程机器实测（200 密码，字典全错）：
 
-| 并行度 | 吞吐 | 说明 |
-|--------|------|------|
-| 1 | 1.9 /秒 | |
-| 4 | 6.7 /秒 | |
-| **8（物理核）** | **10.5 /秒** | 最优 |
-| 15（`ProcessorCount-1`） | 7.2 /秒 | 超订，比 8 线程慢约 30% |
+| 并行度                   | 吞吐         | 说明                    |
+| ------------------------ | ------------ | ----------------------- |
+| 1                        | 1.9 /秒      |                         |
+| 4                        | 6.7 /秒      |                         |
+| **8（物理核）**          | **10.5 /秒** | 最优                    |
+| 15（`ProcessorCount-1`） | 7.2 /秒      | 超订，比 8 线程慢约 30% |
 
 7z 多进程路径**不受此影响**（那边瓶颈是 dll 内全局锁，进程越多越好），仍用逻辑核数。
 
@@ -93,11 +93,11 @@ batchSize = clamp(ceil(count / (workers × 4)), 8, 64)
 `GetLogicalProcessorInformationEx` 和 `Environment.ProcessorCount` **都不看进程亲和性**。
 实测（8C16T，把进程限制到 `0x3` = 2 个逻辑核）：
 
-| 口径 | 默认 | 亲和性=0x3 |
-|------|------|-----------|
-| `Environment.ProcessorCount` | 16 | **16（不变）** |
-| `GetLogicalProcessorInformationEx(RelationProcessorCore)` | 8 | **8（不变）** |
-| `GetProcessAffinityMask` 位数 | 16 | **2** |
+| 口径                                                      | 默认 | 亲和性=0x3     |
+| --------------------------------------------------------- | ---- | -------------- |
+| `Environment.ProcessorCount`                              | 16   | **16（不变）** |
+| `GetLogicalProcessorInformationEx(RelationProcessorCore)` | 8    | **8（不变）**  |
+| `GetProcessAffinityMask` 位数                             | 16   | **2**          |
 
 因此探测结果是 `min(物理核, 亲和性掩码位数)`：任务管理器的「设置相关性」、
 Job object 的 `JOB_OBJECT_LIMIT_AFFINITY`（Windows 容器限制 CPU 也走这个）都能被正确尊重。
@@ -111,14 +111,14 @@ Job object 的 `JOB_OBJECT_LIMIT_AFFINITY`（Windows 容器限制 CPU 也走这�
 `GetLogicalProcessorInformationEx(RelationProcessorCore)` 就是微软文档给出的「数物理核」标准做法，
 其余路径在耗时或可用性上都不成立（本机 8C16T 实测）：
 
-| 方式 | 是否给物理核 | 实测耗时 | Native AOT | 备注 |
-|------|-------------|---------|-----------|------|
-| **`GetLogicalProcessorInformationEx`** | ✅ | **0.002 ms** | ✅ | 当前实现 |
-| `GetSystemInfo` / `GetNativeSystemInfo` | ❌ 逻辑核 | ~0.001 ms | ✅ | `dwNumberOfProcessors` 只覆盖当前处理器组 |
-| `GetActiveProcessorCount(ALL)` | ❌ 逻辑核 | ~0.001 ms | ✅ | 跨组总数，仍不区分 SMT |
-| WMI `Win32_Processor.NumberOfCores` | ✅ | **首次 116.3 ms / 后续 4.5 ms** | ❌ **抛 `TypeInitializationException`** | 要拉起 WMI 服务与提供程序 |
-| 注册表 `HKLM\HARDWARE\DESCRIPTION\System\CentralProcessor\0\NumberOfCores` | 不一定 | 0.34 ms | ✅ | 本机该值**不存在**，不可靠 |
-| `__cpuid`（leaf 0x1F + 0x4 / AMD 0x80000008） | ✅ | ns 级 | ✅ | 需自己处理厂商差异与 SMT 位数，易错 |
+| 方式                                                                       | 是否给物理核 | 实测耗时                        | Native AOT                              | 备注                                      |
+| -------------------------------------------------------------------------- | ------------ | ------------------------------- | --------------------------------------- | ----------------------------------------- |
+| **`GetLogicalProcessorInformationEx`**                                     | ✅           | **0.002 ms**                    | ✅                                      | 当前实现                                  |
+| `GetSystemInfo` / `GetNativeSystemInfo`                                    | ❌ 逻辑核    | ~0.001 ms                       | ✅                                      | `dwNumberOfProcessors` 只覆盖当前处理器组 |
+| `GetActiveProcessorCount(ALL)`                                             | ❌ 逻辑核    | ~0.001 ms                       | ✅                                      | 跨组总数，仍不区分 SMT                    |
+| WMI `Win32_Processor.NumberOfCores`                                        | ✅           | **首次 116.3 ms / 后续 4.5 ms** | ❌ **抛 `TypeInitializationException`** | 要拉起 WMI 服务与提供程序                 |
+| 注册表 `HKLM\HARDWARE\DESCRIPTION\System\CentralProcessor\0\NumberOfCores` | 不一定       | 0.34 ms                         | ✅                                      | 本机该值**不存在**，不可靠                |
+| `__cpuid`（leaf 0x1F + 0x4 / AMD 0x80000008）                              | ✅           | ns 级                           | ✅                                      | 需自己处理厂商差异与 SMT 位数，易错       |
 
 WMI 那行是决定性的：本项目对外只发 Native AOT 单文件，`System.Management` 依赖内置 COM，
 AOT 编译期就报 `IL3053`（AOT 分析警告）+ 三个方法「will always throw because: Invalid IL」，
@@ -136,7 +136,6 @@ AOT 编译期就报 `IL3053`（AOT 分析警告）+ 三个方法「will always t
   若只是「CPU 速率限制」（`JOBOBJECT_CPU_RATE_CONTROL_INFORMATION`）而非核数限制，
   拓扑仍报宿主机核数，此时按宿主机并行度开线程是正确的（速率限制由调度器执行）。
 - **Hyper-V 隔离容器 / VM**：看到的是虚拟机的拓扑，结果正确。
-
 
 ## RAR4 存储模式快速判错
 
@@ -173,11 +172,11 @@ RAR5（WinRAR 5.21+）在压缩记录里带 `PswCheck`，密码错时 7-Zip 在 
 
 同一台机器（Ryzen 7 7840HS，8C16T，硬件 SHA1）：
 
-| 方案 | 吞吐 | 250 万字典 |
-|------|------|-----------|
-| 完整解密，15 线程 | 7 /秒 | ≈100 小时 |
-| 完整解密，8 线程（改后默认） | 10.5 /秒 | ≈66 小时 |
-| **快速判错，16 线程** | **1020 /秒** | **≈41 分钟** |
+| 方案                         | 吞吐         | 250 万字典   |
+| ---------------------------- | ------------ | ------------ |
+| 完整解密，15 线程            | 7 /秒        | ≈100 小时    |
+| 完整解密，8 线程（改后默认） | 10.5 /秒     | ≈66 小时     |
+| **快速判错，16 线程**        | **1020 /秒** | **≈41 分钟** |
 
 快速筛选用**逻辑核数**（16），与全量解密相反：KDF 是纯 CPU 且 SMT 有效
 （实测 16 线程 650/秒 vs 8 线程 499/秒，另有 1000+ 的更高实测值随机器负载浮动）。
@@ -195,6 +194,89 @@ RAR5（WinRAR 5.21+）在压缩记录里带 `PswCheck`，密码错时 7-Zip 在 
 
 测试用 `Rar4ArchiveWriter` 合成已知密码的 RAR4 存档：它用生产代码的 KDF 加密，
 再由 7-Zip 解密校验——若 KDF 与真实 RAR3 有偏差，7-Zip 就解不开，测试立即失败。
+
+## ZipCrypto 快速判错
+
+### 问题：1 字节校验带来 1/256 假阳性
+
+传统 zip 加密（ZipCrypto）的 12 字节加密头末尾只有 **1 个字节**是校验值
+（通用标志位 bit 3 未设置时取 CRC 的高字节，设置时取修改时间的高字节）。
+错误密码通过校验的概率是 1/256，之后必须完整解压才能被文件 CRC32 否决。
+
+200MB 单文件实测（20000 条全错误密码）：
+
+| 加密方式       | 校验值     | 吞吐         |
+| -------------- | ---------- | ------------ |
+| WinZip AES-256 | 2 字节     | 3754 /秒     |
+| **ZipCrypto**  | **1 字节** | **1215 /秒** |
+
+### 方案：加密头 + 首块双校验
+
+ZipCrypto 是流密码（逐字节异或），Store 模式下加密头之后就是明文。因此：
+
+1. 用候选密码初始化密钥流（`ZipCryptoCipher`），解 12 字节加密头
+2. 校验最后一字节 → 1/256 通过
+3. 继续解 16 字节数据首块，比对文件格式签名 → 误判率降到约 2⁻³²
+4. 命中的候选交给 7-Zip 完整解包确认
+
+实测 20000 条全错误密码：**1215 → 45892 个/秒**（wall clock，含进程启动；测密本身约 40 万/秒）。
+
+启用条件：zip、加密、非 AES（method ≠ 99）、某条目 method == 0（Store）、
+该条目未使用 data descriptor、扩展名在签名表内。
+
+### 必须守住的实现细节
+
+1. **密码按 ASCII 字节直接使用**——实测与 7-Zip 一致（纯 ASCII 密码）。
+   但非 ASCII 密码的字节编码取决于 7-Zip 的转换（UTF-8 / 系统代码页），
+   本实现不做猜测：`Probe` 直接返回 `Unsupported`，由调用方退回完整测密。
+   猜错编码会**静默漏掉正确答案**，这是不可接受的失败模式。
+2. **data descriptor（bit 3）必须排除**：此时本地头里的压缩后大小为 0，
+   既无法可靠定位下一条目，也无法判断加密头是否完整。
+3. 校验值取 `CRC >> 24` 的前提是 bit 3 未设置——设置时应改用修改时间高字节，
+   本实现通过排除 bit 3 回避了这个分支。
+
+## 慢速完整解码的预警
+
+### 问题：7z Copy 编码没有可校验结构
+
+7z 的加密头里只有 `NumCyclesPower / Salt / IV`，**没有密码校验值**。能否快速判错
+完全取决于压缩编码能否从垃圾数据里察觉异常。200MB 单文件实测：
+
+| 场景                                     | 工具吞吐   | 判错依据                |
+| ---------------------------------------- | ---------- | ----------------------- |
+| **7z Copy(store) + AES，无 header 加密** | **36 /秒** | 文件 CRC → 解完整个文件 |
+| 7z LZMA2 + AES                           | 835 /秒    | 压缩流结构 → 首块即失败 |
+| 7z Copy + AES + `-mhe=on`                | 861 /秒    | Open 阶段验头部 CRC     |
+| zip Store + AES256                       | 3754 /秒   | 2 字节校验值            |
+
+关键点：**多进程救不了 Copy**（瓶颈不是 dll 内的 KDF 锁，而是内存带宽/IO）：
+
+```
+7z Copy+AES, 16 进程 → 36 个/秒
+7z Copy+AES,  1 进程 → 34 个/秒
+```
+
+外推到 1.2GB：约 6 个/秒 → 250 万字典约 116 小时。
+
+### 方案：开始前估算并提示
+
+`ArchiveInfo.FailureRequiresFullDecode` 在打开归档时判定（读取每个加密条目的
+`ItemPropId.Method`，全部为 `Copy`/`Store` 时才为 true），`FailurePathBytes` 记录
+实际会解码的数据量（有快速测试目标时取该文件大小，否则取全部加密数据之和）。
+
+`CostEstimate` 按 **2 GB/s 的乐观吞吐**估算总耗时（本机实测下限），
+超过 **1 小时**才提示。乐观取值是刻意的：宁可少提示，也不要把正常场景说成"要跑几小时"。
+
+实测验证：
+
+| 场景                  | 字典   | 估算                 | 是否提示 |
+| --------------------- | ------ | -------------------- | -------- |
+| 7z Copy+AES 200MB     | 2000   | 3.3 分钟             | 否       |
+| 7z Copy+AES 200MB     | 200000 | 5.4 小时             | **是**   |
+| 7z LZMA2+AES 200MB    | 200000 | —（不标记）          | 否       |
+| 7z Copy+AES+mhe 200MB | 200000 | —（header 加密豁免） | 否       |
+
+提示只是一条黄色警告，不阻塞、不询问——用户仍可继续；目的是避免静默等待上百小时。
 
 ## 版本号与更新检查
 
@@ -222,10 +304,10 @@ RAR5（WinRAR 5.21+）在压缩记录里带 `PswCheck`，密码错时 7-Zip 在 
 
 ### 两个独立状态，各管一件事
 
-| 字段 | 职责 |
-|------|------|
-| `lastCheckUpgrade` | **请求节流**，1 小时一次。GitHub 未认证配额 60 次/小时，1 小时远在限额内 |
-| `lastNotifiedVersion` | **每个版本只提示（并下载）一次**，是缩短节流的必要配套 |
+| 字段                  | 职责                                                                     |
+| --------------------- | ------------------------------------------------------------------------ |
+| `lastCheckUpgrade`    | **请求节流**，1 小时一次。GitHub 未认证配额 60 次/小时，1 小时远在限额内 |
+| `lastNotifiedVersion` | **每个版本只提示（并下载）一次**，是缩短节流的必要配套                   |
 
 早期实现只有「24 小时节流」一个状态，于是「发布紧跟在上次检查之后」的用户要整整一天
 才可能看到提示（实测撞到过）。缩短节流会带来重复骚扰，因此必须配合 per-version 去重。
@@ -275,10 +357,10 @@ RAR5（WinRAR 5.21+）在压缩记录里带 `PswCheck`，密码错时 7-Zip 在 
 
 下载走「候选地址 × TLS 模式」的兜底矩阵，任一成功即返回：
 
-| 顺序 | 地址 | 说明 |
-|------|------|------|
-| 1 | `assets[].url`（**API 形式**） | `api.github.com/.../releases/assets/{id}` + `Accept: application/octet-stream`，302 到下载 CDN |
-| 2 | `assets[].browser_download_url` | `github.com/.../releases/download/...` |
+| 顺序 | 地址                            | 说明                                                                                           |
+| ---- | ------------------------------- | ---------------------------------------------------------------------------------------------- |
+| 1    | `assets[].url`（**API 形式**）  | `api.github.com/.../releases/assets/{id}` + `Accept: application/octet-stream`，302 到下载 CDN |
+| 2    | `assets[].browser_download_url` | `github.com/.../releases/download/...`                                                         |
 
 每个地址都先试**空 SNI**、失败再试**标准 TLS**（与 `FetchLatestRelease` 对称）。
 
@@ -298,10 +380,10 @@ RAR5（WinRAR 5.21+）在压缩记录里带 `PswCheck`，密码错时 7-Zip 在 
 `HttpTransport` 是**唯一**的 `HttpClient` 构造点，统一装配 User-Agent
 （`ArchivePasswordTestTool x.y.z-Type`）。两种客户端：
 
-| 工厂 | TLS 行为 | 用途 |
-|------|----------|------|
-| `CreateClient` | 空 SNI，仅豁免证书域名不匹配（链与有效期仍校验） | 更新检查与下载的首选——部分网络环境按 SNI 域名嗅探并阻断 `github.com` |
-| `CreateStandardClient` | 标准 SNI + 完整校验 | 在线服务、更新检查与下载的回退路径 |
+| 工厂                   | TLS 行为                                         | 用途                                                                 |
+| ---------------------- | ------------------------------------------------ | -------------------------------------------------------------------- |
+| `CreateClient`         | 空 SNI，仅豁免证书域名不匹配（链与有效期仍校验） | 更新检查与下载的首选——部分网络环境按 SNI 域名嗅探并阻断 `github.com` |
+| `CreateStandardClient` | 标准 SNI + 完整校验                              | 在线服务、更新检查与下载的回退路径                                   |
 
 两者都接受可选的 `connectTimeout`：大文件下载需要「短建连（30s）+ 长传输（10min）」，
 避免静默丢包的候选地址把退出卡住。
@@ -349,18 +431,18 @@ dotnet test ArchivePasswordTestTool.Tests\ArchivePasswordTestTool.Tests.csproj
 
 ### 关键守护测试
 
-| 测试 | 守护的内容 |
-|------|-----------|
-| `LocalizationTests` | 五套 resx 键集一致、占位符一致、无空值、`ResourceManager` 能解析每种语言、`Designer` 属性覆盖所有键 |
-| `CetCompatTests` | apphost 的 `IMAGE_DEBUG_TYPE_EX_DLLCHARACTERISTICS(20)` 不含 CET 位 |
-| `VersionMetadataTests` | 版本号恰好三段、元数据注入生效、`Version` 确实来自元数据 |
-| `SourceEncodingTests` | 全仓源码文件为 UTF-8 无 BOM |
-| `ConsoleInitializationTests` | 控制台初始化早于其它启动动作；备用缓冲区进入后重新修正字体；退出还原字体与代码页；字体写入有读回校验 |
-| `MultiProcessBatchSizeTests` | 每个工作进程至少分到一批活 |
-| `DictionaryEncodingTests` | 字典编码探测（GBK/UTF-8/BOM/截断尾字符）与真实密码可读性 |
-| `ResultsWriterTests` | 结果文件密码行三态；保存询问按"已探测"而非"已加密"守卫 |
-| `EmbeddedSevenZipTests` | 内嵌 `7z.dll` / 许可证存在性、提取落地尺寸、缓存复用、并发提取不互相踩踏 |
-| `EndToEndTests.EmbeddedSevenZipWorksWhenNoInstalledSevenZip` | 强制走内嵌 dll 时真的能解包破密（语言无关判据：exit 0 + ASCII 密码命中） |
+| 测试                                                         | 守护的内容                                                                                           |
+| ------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------- |
+| `LocalizationTests`                                          | 五套 resx 键集一致、占位符一致、无空值、`ResourceManager` 能解析每种语言、`Designer` 属性覆盖所有键  |
+| `CetCompatTests`                                             | apphost 的 `IMAGE_DEBUG_TYPE_EX_DLLCHARACTERISTICS(20)` 不含 CET 位                                  |
+| `VersionMetadataTests`                                       | 版本号恰好三段、元数据注入生效、`Version` 确实来自元数据                                             |
+| `SourceEncodingTests`                                        | 全仓源码文件为 UTF-8 无 BOM                                                                          |
+| `ConsoleInitializationTests`                                 | 控制台初始化早于其它启动动作；备用缓冲区进入后重新修正字体；退出还原字体与代码页；字体写入有读回校验 |
+| `MultiProcessBatchSizeTests`                                 | 每个工作进程至少分到一批活                                                                           |
+| `DictionaryEncodingTests`                                    | 字典编码探测（GBK/UTF-8/BOM/截断尾字符）与真实密码可读性                                             |
+| `ResultsWriterTests`                                         | 结果文件密码行三态；保存询问按"已探测"而非"已加密"守卫                                               |
+| `EmbeddedSevenZipTests`                                      | 内嵌 `7z.dll` / 许可证存在性、提取落地尺寸、缓存复用、并发提取不互相踩踏                             |
+| `EndToEndTests.EmbeddedSevenZipWorksWhenNoInstalledSevenZip` | 强制走内嵌 dll 时真的能解包破密（语言无关判据：exit 0 + ASCII 密码命中）                             |
 
 ## 字典编码
 
@@ -401,13 +483,13 @@ dotnet test ArchivePasswordTestTool.Tests\ArchivePasswordTestTool.Tests.csproj
 Width 计算列宽。Windows 控制台有若干不归程序管的宿主属性，却会直接破坏布局，启动时必须处理
 （见 `Program.InitializeConsole`）：
 
-| 处理 | 位置 | 为什么必须做 |
-|------|------|--------------|
-| 代码页切 UTF-8 | `WindowsNativeMethods.TryEnableUtf8Console` + `Console.OutputEncoding/InputEncoding` | 控制台代码页跟随系统语言（中文 Windows = 936/GBK）。界面有 5 种语言，法语重音与俄语西里尔字母在 GBK 下被编成 `?`（数据损坏，不是显示问题） |
-| `Capabilities.Unicode = true` | `Program.InitializeConsole` | 代码页已是 UTF-8，直接启用 Unicode 边框；不依赖 Spectre 对旧代码页的探测 |
-| 歧义宽度字体修正 | `WindowsNativeMethods.EnsureNarrowAmbiguousWidth` | 中文 Windows 默认字体（新宋体 8x16）把 `± → … · °` 画成两格，Spectre 按一格计算 → 面板/进度条折行、备用缓冲区逐帧错位 |
-| 进入备用缓冲区后再修正一次 | `Ui.RunInAlternateScreenWhenSupported` | conhost 的备用缓冲区有独立的一份字体：先设 Consolas 再进缓冲区，字体又变回新宋体 |
-| **退出时还原字体与代码页** | `Program.Main` 的 `finally` + `ProcessExit` → `WindowsNativeMethods.RestoreConsole` | 从终端启动时窗口是 shell 的，用户只借给我们用；不还原的话退出后终端一直停在程序换的字体（实测：新宋体被换成 Courier New，后续 shell 输出字体全变） |
+| 处理                          | 位置                                                                                 | 为什么必须做                                                                                                                                       |
+| ----------------------------- | ------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 代码页切 UTF-8                | `WindowsNativeMethods.TryEnableUtf8Console` + `Console.OutputEncoding/InputEncoding` | 控制台代码页跟随系统语言（中文 Windows = 936/GBK）。界面有 5 种语言，法语重音与俄语西里尔字母在 GBK 下被编成 `?`（数据损坏，不是显示问题）         |
+| `Capabilities.Unicode = true` | `Program.InitializeConsole`                                                          | 代码页已是 UTF-8，直接启用 Unicode 边框；不依赖 Spectre 对旧代码页的探测                                                                           |
+| 歧义宽度字体修正              | `WindowsNativeMethods.EnsureNarrowAmbiguousWidth`                                    | 中文 Windows 默认字体（新宋体 8x16）把 `± → … · °` 画成两格，Spectre 按一格计算 → 面板/进度条折行、备用缓冲区逐帧错位                              |
+| 进入备用缓冲区后再修正一次    | `Ui.RunInAlternateScreenWhenSupported`                                               | conhost 的备用缓冲区有独立的一份字体：先设 Consolas 再进缓冲区，字体又变回新宋体                                                                   |
+| **退出时还原字体与代码页**    | `Program.Main` 的 `finally` + `ProcessExit` → `WindowsNativeMethods.RestoreConsole`  | 从终端启动时窗口是 shell 的，用户只借给我们用；不还原的话退出后终端一直停在程序换的字体（实测：新宋体被换成 Courier New，后续 shell 输出字体全变） |
 
 字体修正是「写一个 `±` 看光标前进几格」实测，已经是一格就不动，不覆盖用户调好的字体。
 候选只取各国 Windows 都预装的等宽字体（Consolas → Lucida Console → Courier New）；
@@ -454,11 +536,11 @@ dotnet publish ArchivePasswordTestTool\ArchivePasswordTestTool.csproj -c Release
 
 **为什么叫 `dist` 而不是 `artifacts`**：`artifacts/` 在 .NET 8+ 是 SDK 托管输出目录的名字（`--artifacts-path` / `UseArtifactsOutput`），而本仓库实测 `--artifacts-path` 会让 `TestPaths.FindRepoRoot()` 找不到仓库根、大量测试假失败。用同名目录会误导后来的人以为是那个东西；`dist`（distribution）语义也更准确——这里是最终分发产物，不是中间产物。
 
-| 形态 | 体积 | 启动（热，交替 10 次） |
-|------|------|------------------------|
-| 单文件 + 裁剪 + bundle | 13.31 MB | 335 ms |
-| Native AOT | 11.30 MB | 130 ms |
-| AOT + UPX | 4.17 MB | 108 ms |
+| 形态                   | 体积     | 启动（热，交替 10 次） |
+| ---------------------- | -------- | ---------------------- |
+| 单文件 + 裁剪 + bundle | 13.31 MB | 335 ms                 |
+| Native AOT             | 11.30 MB | 130 ms                 |
+| AOT + UPX              | 4.17 MB  | 108 ms                 |
 
 均含内嵌的 `7z.dll`（+1.92 MB 未压缩；内嵌前后逐形态增量见「内嵌 7z.dll → 体积代价」）。
 
@@ -498,7 +580,7 @@ csproj 里的 `EnsureResvgToolTask` / `EnsureUpxToolTask` / `EnsureSevenZipDllTa
 
 两点注意：
 
-- `build/` 在仓库根，**不在任何项目的 `**/*.cs` 通配范围内**，不会被编进程序集（`dotnet msbuild -getItem:Compile` 可验证）。因为这些文件被多个 `UsingTask` 引用，所以没有 namespace —— `RoslynCodeTaskFactory` 按 `TaskName` 全名匹配类型。
+- `build/` 在仓库根，**不在任何项目的 `**/\*.cs` 通配范围内**，不会被编进程序集（`dotnet msbuild -getItem:Compile`可验证）。因为这些文件被多个`UsingTask`引用，所以没有 namespace ——`RoslynCodeTaskFactory`按`TaskName` 全名匹配类型。
 - `RoslynCodeTaskFactory` 的编译参考集较旧：没有 `ProcessStartInfo.ArgumentList`（只能手工拼 `Arguments` 并自行加引号，见 `BuildTaskHelpers.Quote`），也缺部分 .NET Core 后才有的 API。
 
 ### Native AOT
@@ -552,12 +634,12 @@ AOT 产物没有 apphost / bundle 概念，COM 与资源两条链路都需要专
 60 次/小时，本地反复构建很容易耗尽（实测撞过 403）。下载失败只警告不失败：
 没有内嵌时程序退回「需自行安装 7-Zip」的原行为。
 
-| 参数 | 作用 |
-|------|------|
-| `-p:SevenZipVersion=26.05` | 固定版本（产物可重现，CI 推荐） |
-| `-p:SevenZipForceUpdate=true` | 忽略缓存重新探测最新版 |
-| `-p:EnableEmbeddedSevenZip=false` | 不内嵌 |
-| `-p:SevenZipAutoDownload=false` | 禁止下载（本地已有 `tools\7zip\7z.dll` 时仍会内嵌） |
+| 参数                              | 作用                                                |
+| --------------------------------- | --------------------------------------------------- |
+| `-p:SevenZipVersion=26.05`        | 固定版本（产物可重现，CI 推荐）                     |
+| `-p:SevenZipForceUpdate=true`     | 忽略缓存重新探测最新版                              |
+| `-p:EnableEmbeddedSevenZip=false` | 不内嵌                                              |
+| `-p:SevenZipAutoDownload=false`   | 禁止下载（本地已有 `tools\7zip\7z.dll` 时仍会内嵌） |
 
 ### 运行期：解压到用户缓存再加载
 
@@ -577,12 +659,12 @@ PE 映射和导入修复，风险远高于收益。落地成文件还带来两�
 
 ### 解析优先级
 
-| 顺序 | 来源 | 说明 |
-|------|------|------|
-| ① | 系统已安装的 7-Zip | 不写盘；用户自己更新过就跟着用新版 |
-| ② | `-lib` 指定 / 程序目录 `7z.dll` | 便携场景；`-lib` 指向的文件不存在时**直接报错**，不静默改用内嵌版——否则会掩盖用户的配置错误 |
-| ③ | 内嵌版 | 「没装 7-Zip」的兜底 |
-| ④ | 都没有 | 报错 + 官方下载引导 + 等待确认退出 |
+| 顺序 | 来源                            | 说明                                                                                        |
+| ---- | ------------------------------- | ------------------------------------------------------------------------------------------- |
+| ①    | 系统已安装的 7-Zip              | 不写盘；用户自己更新过就跟着用新版                                                          |
+| ②    | `-lib` 指定 / 程序目录 `7z.dll` | 便携场景；`-lib` 指向的文件不存在时**直接报错**，不静默改用内嵌版——否则会掩盖用户的配置错误 |
+| ③    | 内嵌版                          | 「没装 7-Zip」的兜底                                                                        |
+| ④    | 都没有                          | 报错 + 官方下载引导 + 等待确认退出                                                          |
 
 诊断开关 `APTT_FORCE_EMBEDDED_7Z=1` 跳过 ①，强制走内嵌版：既可验证内置 dll 本身可用，
 也供「系统那份 7-Zip 版本过旧/损坏」的用户临时绕开。
@@ -598,11 +680,11 @@ PE 映射和导入修复，风险远高于收益。落地成文件还带来两�
 
 ### 体积代价（实测）
 
-| 形态 | 内嵌前 | 内嵌后 | 增量 |
-|------|--------|--------|------|
-| 单文件 + 裁剪 + bundle | 12.46 MB | 13.31 MB | +0.81 MB |
-| Native AOT（未压缩） | 9.38 MB | 11.30 MB | +1.92 MB（正好等于 dll 大小） |
-| AOT + UPX | 3.59 MB | 4.17 MB | +0.55 MB |
+| 形态                   | 内嵌前   | 内嵌后   | 增量                          |
+| ---------------------- | -------- | -------- | ----------------------------- |
+| 单文件 + 裁剪 + bundle | 12.46 MB | 13.31 MB | +0.81 MB                      |
+| Native AOT（未压缩）   | 9.38 MB  | 11.30 MB | +1.92 MB（正好等于 dll 大小） |
+| AOT + UPX              | 3.59 MB  | 4.17 MB  | +0.55 MB                      |
 
 ### 已知不足
 
@@ -629,9 +711,9 @@ CET 位**不在** `OptionalHeader.DllCharacteristics`，而在调试目录
 两个工作流都在 `windows-latest` 上运行（项目 Windows-only：COM 互操作 + Win32 API），
 共用 `.github/actions/build-verify`：Restore → Build → Test → Publish 单文件 → Publish AOT → 冒烟测试（两种形态共用一份断言）。
 
-| 工作流 | 触发 | 内容 |
-|--------|------|------|
-| `CI` | 推送 `master`、PR、手动 | 上述全部，两种形态各留一份 artifact |
+| 工作流    | 触发                                    | 内容                                            |
+| --------- | --------------------------------------- | ----------------------------------------------- |
+| `CI`      | 推送 `master`、PR、手动                 | 上述全部，两种形态各留一份 artifact             |
 | `Release` | 推送 `v*` 或 `[0-9]*` tag、手动指定 tag | 上述全部 + 把 **AOT 产物**上传到 GitHub Release |
 
 发布新版本只需打 tag（版本号由 tag 注入，不需要改源码）：
@@ -654,10 +736,10 @@ git push origin 2.1.0-Release
 
 ### 为什么发布 AOT 而不是单文件
 
-| 形态 | 体积 | 启动（热） | 是否发布 |
-|------|------|-----------|---------|
-| AOT + UPX | 4.17 MB | 108 ms | ✅ Release 资产 |
-| 单文件 + 裁剪 | 13.31 MB | 335 ms | 仅在 CI 构建验证 |
+| 形态          | 体积     | 启动（热） | 是否发布         |
+| ------------- | -------- | ---------- | ---------------- |
+| AOT + UPX     | 4.17 MB  | 108 ms     | ✅ Release 资产  |
+| 单文件 + 裁剪 | 13.31 MB | 335 ms     | 仅在 CI 构建验证 |
 
 - **只能挂一个 exe**：`Upgrade.MainAsset` 取「第一个 `.exe` 资产」，两个 exe 会让自更新在
   两种形态间不确定地切换（用户装的是 13 MB 版，更新后变成 4 MB 版，或反之）
@@ -684,10 +766,10 @@ git push origin 2.1.0-Release
 
 `Smoke test published binaries` 一步跑完 **{单文件, AOT} × {默认路径, 强制内嵌}** 四次真实解密：
 
-| | 默认路径 | 强制内嵌 |
-|---|---|---|
-| 单文件 | ✅ | ✅ |
-| AOT | ✅ | ✅ |
+|        | 默认路径 | 强制内嵌 |
+| ------ | -------- | -------- |
+| 单文件 | ✅       | ✅       |
+| AOT    | ✅       | ✅       |
 
 - **两种形态共用同一份断言**（退出码 / 密码 / 版本号 / 内嵌 dll 落地）。原先各写一份，
   结果是版本号断言只加在了单文件那份里，AOT 那份漏了——典型“改一处漏一处”。
