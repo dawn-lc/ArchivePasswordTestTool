@@ -225,22 +225,30 @@ public sealed class FallbackFullDecodeTests
     }
 
     /// <summary>
-    /// 输出里有 ANSI 序列与面板边框；只保留字母与数字便于跨边框做包含判断
-    /// （与 EndToEndTests.LongPasswordIsReportedInFull 同一手法）。
+    /// 带 ANSI 颜色的面板行必须照样解析得出计数。
+    /// <para>
+    /// 这是 CI 上实际失败的形态：Spectre 在 runner 上输出颜色，转义序列里的字母
+    /// （<c>x</c>/<c>b</c>/<c>m</c>）会夹在标签与数字之间，把 <c>Tested␣␣␣3</c> 变成
+    /// <c>Testedm m3</c> 之类，正则随即失配。本地重定向不带 ANSI，所以只在本机测不出来。
+    /// </para>
     /// </summary>
-    internal static string KeepProse(string text)
+    [Fact]
+    public void TestedCountSurvivesAnsiColoring()
     {
-        var builder = new StringBuilder(text.Length);
-        foreach (char c in text)
-        {
-            if (char.IsLetterOrDigit(c) || c == ' ')
-            {
-                _ = builder.Append(c);
-            }
-        }
+        string label = ArchivePasswordTestTool.Properties.EmbeddedResourceManager.GetString(
+            "ResultTested", System.Globalization.CultureInfo.InvariantCulture)!;
 
-        return builder.ToString();
+        // 模拟 Ui.WriteOutcome 的行：标签一段颜色、数值另一段颜色，中间还有边框
+        string colored = $"\x1b[38;5;51m│\x1b[0m \x1b[38;5;8m{label}\x1b[0m     \x1b[38;5;15m3\x1b[0m  \x1b[38;5;51m│\x1b[0m";
+
+        Assert.Equal(3, FindTestedCount(colored));
     }
+
+    /// <summary>
+    /// 输出里有 ANSI 转义序列与面板边框；净化规则见 <see cref="OutputText.LettersDigitsAndSpaces"/>
+    /// （必须先剥 ANSI，否则转义里的字母会掺进文本中间）。
+    /// </summary>
+    internal static string KeepProse(string text) => OutputText.LettersDigitsAndSpaces(text);
 
     private static string WriteDictionary(string archivePath)
     {

@@ -149,8 +149,8 @@ public sealed class EndToEndTests(TestDataFixture fx, ITestOutputHelper output)
     /// 用户看到的却是「找到解压密码:…」。修法是把密码移到 Grid 内容行——单元格会折行，不截断。
     /// </para>
     /// <para>
-    /// 断言方式：折行会在密码中间插入边框字符（│）与缩进，所以先把输出里所有非字母数字
-    /// 字符滤掉，连续密码段就会重新接上。密码取纯字母，避免过滤把密码自身的字符也吃掉。
+    /// 断言方式见 <see cref="OutputText.LettersAndDigits"/>：剥 ANSI + 只留字母数字后，
+    /// 折行插入的边框与缩进被去掉，密码片段会重新接上。
     /// </para>
     /// </summary>
     [Theory]
@@ -170,29 +170,13 @@ public sealed class EndToEndTests(TestDataFixture fx, ITestOutputHelper output)
             var (ExitCode, Output) = RunTool($"-D \"{dictPath}\" -F \"{archivePath}\"");
 
             Assert.Equal(0, ExitCode);
-            string visible = FilterLettersAndDigits(Output);
-            Assert.Contains(password, visible);
+            Assert.Contains(password, OutputText.LettersAndDigits(Output));
         }
         finally
         {
             File.Delete(archivePath);
             File.Delete(dictPath);
         }
-    }
-
-    /// <summary>只保留字母与数字，用于跨折行拼接被边框/缩进打断的长密码</summary>
-    private static string FilterLettersAndDigits(string text)
-    {
-        var builder = new StringBuilder(text.Length);
-        foreach (char c in text)
-        {
-            if (char.IsLetterOrDigit(c))
-            {
-                _ = builder.Append(c);
-            }
-        }
-
-        return builder.ToString();
     }
 
     /// <summary>用 7-Zip CLI 现场创建一个指定密码的压缩包（密码通过 ArgumentList 传递，不经 shell）</summary>
