@@ -15,14 +15,14 @@ namespace ArchivePasswordTestTool
     /// </summary>
     public sealed class PasswordDictionary : IDisposable
     {
-        private readonly Lock SyncRoot = new();
+        private readonly Lock _syncRoot = new();
 
-        // 去重后的密码（文件序），消费时按 Cursor 推进并把已服务槽位置 null
-        private readonly List<string?> Pending;
-        private int Cursor;
+        // 去重后的密码（文件序），消费时按游标推进并把已服务槽位置 null
+        private readonly List<string?> _pending;
+        private int _cursor;
 
         /// <summary>唯一密码数（构造期顺序扫描去重后的行数，含在线密码并入的新密码）</summary>
-        public int Count { get; init; }
+        public int Count => _pending.Count;
 
         public string DictionaryPath { get; init; }
 
@@ -60,8 +60,7 @@ namespace ArchivePasswordTestTool
                 }
             }
 
-            Pending = ordered;
-            Count = ordered.Count;
+            _pending = ordered;
         }
 
         /// <summary>
@@ -69,21 +68,21 @@ namespace ArchivePasswordTestTool
         /// </summary>
         public string? Pop()
         {
-            lock (SyncRoot)
+            lock (_syncRoot)
             {
-                while (Cursor < Pending.Count)
+                while (_cursor < _pending.Count)
                 {
-                    string? password = Pending[Cursor];
+                    string? password = _pending[_cursor];
                     if (password is null)
                     {
                         // 已被并发取走（正常路径下不会发生：游标保证每个槽只读一次）
-                        Cursor++;
+                        _cursor++;
                         continue;
                     }
 
                     // 取走即释放引用，让已测试的密码可被 GC 回收
-                    Pending[Cursor] = null;
-                    Cursor++;
+                    _pending[_cursor] = null;
+                    _cursor++;
                     return password;
                 }
 
@@ -93,14 +92,14 @@ namespace ArchivePasswordTestTool
 
         public void Dispose()
         {
-            lock (SyncRoot)
+            lock (_syncRoot)
             {
-                for (int i = 0; i < Pending.Count; i++)
+                for (int i = 0; i < _pending.Count; i++)
                 {
-                    Pending[i] = null;
+                    _pending[i] = null;
                 }
 
-                Cursor = Pending.Count;
+                _cursor = _pending.Count;
             }
         }
     }

@@ -26,6 +26,16 @@ namespace ArchivePasswordTestTool
         /// <summary>找到密码后是否回传（默认开启，-NoReport 关闭）</summary>
         public bool ReportOnline { get; init; }
 
+        /// <summary>
+        /// 快速筛选按签名否决全部候选后，是否无条件改用完整解密复核（-FallbackFullDecode）。
+        /// <para>
+        /// 默认关闭：多数场景下「签名不符」就是正确答案不在字典里，完整复核要付
+        /// 整个字典的解密代价（1.2GB 包 250 万条约 100 小时）。
+        /// 不关闭而需要复核时，程序会在那一刻询问用户（见 Runner.TryFallbackToFullDecode）。
+        /// </para>
+        /// </summary>
+        public bool FallbackFullDecode { get; init; }
+
         /// <summary>大小写不敏感的开关检测</summary>
         private static bool HasFlag(string[] args, string name)
         {
@@ -59,14 +69,15 @@ namespace ArchivePasswordTestTool
                     throw new FileNotFoundException(Resources.DictionaryFileNotFound);
                 }
 
-                dictionaryPath = Arguments.GetParameter(args, "D", "PasswordDictionary.txt").Replace("\"", "");
+                dictionaryPath = Arguments.Unquote(
+                    Arguments.GetParameter(args, "D", "PasswordDictionary.txt"));
 
                 if (!Arguments.StartupParametersCheck(args, "F"))
                 {
                     throw new FileNotFoundException(Resources.ArchiveFileNotFound);
                 }
 
-                archivePath = Arguments.GetParameter(args, "F", "").Replace("\"", "");
+                archivePath = Arguments.Unquote(Arguments.GetParameter(args, "F", ""));
             }
 
             return new Options
@@ -74,9 +85,11 @@ namespace ArchivePasswordTestTool
                 SevenZipDllPath = dllPath,
                 DictionaryPath = dictionaryPath,
                 ArchivePath = archivePath,
-                OnlineServiceUrl = Arguments.GetParameter(args, "Api", OnlineService.DefaultServiceUrl).Replace("\"", "").Trim().TrimEnd('/'),
+                OnlineServiceUrl = Arguments.Unquote(
+                    Arguments.GetParameter(args, "Api", OnlineService.DefaultServiceUrl)).TrimEnd('/'),
                 QueryOnline = !HasFlag(args, "NoQuery"),
                 ReportOnline = !HasFlag(args, "NoReport"),
+                FallbackFullDecode = HasFlag(args, "FallbackFullDecode"),
             };
         }
 
@@ -111,7 +124,7 @@ namespace ArchivePasswordTestTool
             // ② 显式 -lib，或程序目录下的 7z.dll（便携场景）
             string defaultPath = Path.Combine(Environment.CurrentDirectory, "7z.dll");
             bool libSpecified = Arguments.StartupParametersCheck(args, "lib");
-            string explicitPath = Arguments.GetParameter(args, "lib", defaultPath).Replace("\"", "");
+            string explicitPath = Arguments.Unquote(Arguments.GetParameter(args, "lib", defaultPath));
 
             if (File.Exists(explicitPath))
             {

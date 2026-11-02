@@ -103,10 +103,10 @@ public sealed class ZipStoreProbeTests
 
         try
         {
-            var fast = RunTool(dictPath, sample.Path);
-            Assert.Equal(0, fast.ExitCode);
-            Assert.Contains(CorrectPassword, fast.Output);
-            Assert.Contains("快速密码筛选", fast.Output);
+            var (ExitCode, Output) = RunTool(dictPath, sample.Path);
+            Assert.Equal(0, ExitCode);
+            Assert.Contains(CorrectPassword, Output);
+            Assert.Contains("快速密码筛选", Output);
 
             var slow = RunTool(dictPath, sample.Path, ("APTT_NO_FAST_FILTER", "1"));
             Assert.Equal(0, slow.ExitCode);
@@ -129,10 +129,10 @@ public sealed class ZipStoreProbeTests
 
         try
         {
-            var result = RunTool(dictPath, sample.Path);
+            var (ExitCode, Output) = RunTool(dictPath, sample.Path);
 
-            Assert.Equal(0, result.ExitCode);
-            Assert.DoesNotContain(CorrectPassword, result.Output);
+            Assert.Equal(0, ExitCode);
+            Assert.DoesNotContain(CorrectPassword, Output);
         }
         finally
         {

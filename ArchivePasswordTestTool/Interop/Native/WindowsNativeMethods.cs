@@ -37,7 +37,7 @@ namespace ArchivePasswordTestTool
         private const int StdOutputHandle = -11;
 
         /// <summary>串行化控制台设置的读取/切换/还原（备用缓冲区回调与退出收尾可能在不同时机）</summary>
-        private static readonly object Gate = new();
+        private static readonly Lock Gate = new();
 
         /// <summary>
         /// 写入字体用的结构体：FaceName 用内联定长缓冲。
@@ -272,15 +272,15 @@ namespace ArchivePasswordTestTool
                             // 字宽固定传 0（由系统按字体自身比例计算）：读回来的是 8 这类具体值，
                             // 原样写回会让 conhost 认为「字体 + 该字宽」不合法而只应用字号
                             // （实测：名字不生效，终端仍停在程序换的字体上）。
-                            TrySetConsoleFont(name, originalFontHeight, originalFontFamily, originalFontWeight, width: 0);
+                            _ = TrySetConsoleFont(name, originalFontHeight, originalFontFamily, originalFontWeight, width: 0);
                         }
                     }
 
                     if (codePageCaptured)
                     {
                         codePageCaptured = false;
-                        SetConsoleOutputCP(originalOutputCodePage);
-                        SetConsoleCP(originalInputCodePage);
+                        _ = SetConsoleOutputCP(originalOutputCodePage);
+                        _ = SetConsoleCP(originalInputCodePage);
                     }
                 }
             }
@@ -337,12 +337,6 @@ namespace ArchivePasswordTestTool
             {
                 return false;
             }
-        }
-
-        /// <summary>设置控制台字体（SetCurrentConsoleFontEx）。宿主不允许时返回 false。</summary>
-        private static bool TrySetConsoleFont(string fontName, short fontSizeY)
-        {
-            return TrySetConsoleFont(fontName, fontSizeY, family: 54, weight: 400, width: 0);
         }
 
         /// <summary>

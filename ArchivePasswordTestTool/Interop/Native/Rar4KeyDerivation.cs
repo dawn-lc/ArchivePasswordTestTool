@@ -3,13 +3,18 @@ using System.Runtime.InteropServices;
 namespace ArchivePasswordTestTool
 {
     /// <summary>
-    /// RAR3 / RAR4（WinRAR -ma4，UNP_VER ≥ 29）密码派生，等价 7-Zip
+    /// RAR4 密码派生（WinRAR <c>-ma4</c>，UNP_VER ≥ 29），等价 7-Zip
     /// <c>Crypto/RarAes.cpp</c> 的 <c>CDecoder::CalcKey</c>：
     /// <list type="number">
     /// <item>一条连续的 SHA1 流，共 2^18 轮；每轮追加「密码字节 + 8 字节盐 + 3 字节小端计数器」</item>
     /// <item>第 i 轮（i 为 16384 的整数倍）取当前摘要的最后一个字节（digest[19]）作为 IV 的第 i/16384 个字节</item>
     /// <item>结束时把摘要按 4 字节分组逆序，得到 128 位 AES 密钥</item>
     /// </list>
+    /// <para>
+    /// <b>命名说明</b>：这套 KDF 由 RAR 3.x 引入并被 RAR 4 沿用（7-Zip 的源码文件名仍是
+    /// <c>RarAes.cpp</c>，对应它称为 RAR3 的格式）。本项目统一按「用户手上那个包的格式版本」
+    /// 称呼，即 RAR4；RAR5 是完全不同的另一套（<c>Rar5Aes.cpp</c>），此处不支持。
+    /// </para>
     /// <para>
     /// 密码字节在 UNP_VER ≥ 29 时是 <b>UTF-16LE</b>（7-Zip RarHandler.cpp 逐 wchar 取低/高字节），
     /// 不是 UTF-8——写错这个细节会导致派生的密钥全错。
@@ -20,7 +25,7 @@ namespace ArchivePasswordTestTool
     /// 且 CNG 的 SHA1 走硬件指令，实测比手写托管实现快约 2 倍（10.9ms vs 22.4ms/候选）。
     /// </para>
     /// </summary>
-    internal static unsafe class Rar3KeyDerivation
+    internal static unsafe class Rar4KeyDerivation
     {
         public const int SaltSize = 8;
 
@@ -45,7 +50,7 @@ namespace ArchivePasswordTestTool
 
         private const string AlgorithmId = "SHA1";
 
-        private static readonly object ProviderLock = new();
+        private static readonly Lock ProviderLock = new();
         private static IntPtr _provider;
         private static bool _providerUnavailable;
 
@@ -147,7 +152,7 @@ namespace ArchivePasswordTestTool
             }
             finally
             {
-                BCryptDestroyHash(hash);
+                _ = BCryptDestroyHash(hash);
             }
 
             // 7-Zip：_key[i * 4 + j] = digest[i * 4 + 3 - j]
@@ -223,7 +228,7 @@ namespace ArchivePasswordTestTool
             }
             finally
             {
-                BCryptDestroyHash(duplicate);
+                _ = BCryptDestroyHash(duplicate);
             }
         }
 

@@ -22,10 +22,9 @@ namespace ArchivePasswordTestTool
             }
 
             // 目录内存在 GUI 启动器时转发给它（保持旧行为）
-            if (Environment.OSVersion.Platform.ToString().Contains("win", StringComparison.InvariantCultureIgnoreCase)
-                && File.Exists("ArchivePasswordTestToolGUI.exe"))
+            if (OperatingSystem.IsWindows() && File.Exists("ArchivePasswordTestToolGUI.exe"))
             {
-                Process.Start("ArchivePasswordTestToolGUI.exe");
+                _ = Process.Start("ArchivePasswordTestToolGUI.exe");
                 return 0;
             }
 

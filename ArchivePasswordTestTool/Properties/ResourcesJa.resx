@@ -173,7 +173,7 @@
     <value>パスワード未検出</value>
   </data>
   <data name="PasswordFoundSuccess" xml:space="preserve">
-    <value>解凍パスワードが見つかりました: {0}</value>
+    <value>解凍パスワードが見つかりました</value>
   </data>
   <data name="PasswordNotFound" xml:space="preserve">
     <value>正しい解凍パスワードが見つかりませんでした！</value>
@@ -229,8 +229,26 @@
   <data name="InfoEncryption" xml:space="preserve">
     <value>暗号化状態</value>
   </data>
-  <data name="InfoQuickTest" xml:space="preserve">
-    <value>クイックテスト</value>
+  <data name="InfoUnpackedSize" xml:space="preserve">
+    <value>サイズ</value>
+  </data>
+  <data name="InfoMethod" xml:space="preserve">
+    <value>圧縮方式</value>
+  </data>
+  <data name="InfoSolid" xml:space="preserve">
+    <value>ソリッド圧縮</value>
+  </data>
+  <data name="InfoTestTarget" xml:space="preserve">
+    <value>検証対象</value>
+  </data>
+  <data name="InfoVolumes" xml:space="preserve">
+    <value>分割</value>
+  </data>
+  <data name="InfoDiskSize" xml:space="preserve">
+    <value>ディスク使用量</value>
+  </data>
+  <data name="InfoSfxOffset" xml:space="preserve">
+    <value>データ位置</value>
   </data>
   <data name="InfoHash" xml:space="preserve">
     <value>ハッシュ</value>
@@ -241,17 +259,38 @@
   <data name="InfoPasswords" xml:space="preserve">
     <value>パスワード数</value>
   </data>
+  <data name="InfoPassword" xml:space="preserve">
+    <value>パスワード</value>
+  </data>
   <data name="InfoParallelism" xml:space="preserve">
     <value>並列度</value>
   </data>
   <data name="ValueYes" xml:space="preserve">
     <value>はい</value>
   </data>
-  <data name="ValueNo" xml:space="preserve">
-    <value>いいえ</value>
+  <data name="ValueEncryptionHeader" xml:space="preserve">
+    <value>データ + ファイル名（ヘッダー暗号化）</value>
   </data>
-  <data name="ValueHeaderEncryption" xml:space="preserve">
-    <value>ヘッダー暗号化（完全暗号化）</value>
+  <data name="ValueEncryptionDataOnly" xml:space="preserve">
+    <value>データのみ（ファイル名は平文）</value>
+  </data>
+  <data name="ValueEncryptionNone" xml:space="preserve">
+    <value>なし</value>
+  </data>
+  <data name="ValueTestTargetHeader" xml:space="preserve">
+    <value>書庫ヘッダー（展開前に検証）</value>
+  </data>
+  <data name="ValueTestTargetQuickFile" xml:space="preserve">
+    <value>最小の暗号化ファイル {0}（{1}）</value>
+  </data>
+  <data name="ValueTestTargetAll" xml:space="preserve">
+    <value>暗号化データ全体（{0}）</value>
+  </data>
+  <data name="ValueSizeWithRatio" xml:space="preserve">
+    <value>{0}（圧縮後 {1}、{2}%）</value>
+  </data>
+  <data name="ValueVolumeCount" xml:space="preserve">
+    <value>{0} 分割（合計 {1}）</value>
   </data>
   <data name="ResultElapsed" xml:space="preserve">
     <value>所要時間</value>
@@ -327,6 +366,12 @@
   </data>
   <data name="FastFilterActive" xml:space="preserve">
     <value>無圧縮の暗号化データ（{0}）：高速パスワード絞り込みを有効にしました。先頭ブロックのみ復号し、データは展開しません。一致した候補は 7-Zip による完全テストで確認します。</value>
+  </data>
+  <data name="FallbackFullDecodePrompt" xml:space="preserve">
+    <value>高速絞り込みはファイル署名により {0} 件すべてのパスワードを除外しました。7-Zip による完全復号で再確認しますか？推定所要時間は {1} です。</value>
+  </data>
+  <data name="FallbackFullDecodeStarted" xml:space="preserve">
+    <value>完全復号による再確認を開始しました（高速絞り込みは署名により {0} 件すべてを除外していました）。</value>
   </data>
   <data name="SlowFullDecodeWarning" xml:space="preserve">
     <value>この書庫は無圧縮（store）で暗号化され、ファイル名も暗号化されていません。そのため誤ったパスワードでは、ファイル CRC で判定できるまで毎回データ全体（1 回あたり {0}）を展開する必要があります。現在の辞書での推定所要時間は約 {1} です。これは形式固有の制限で、並列度を上げても改善しません（ボトルネックは鍵導出ではなくメモリ帯域です）。より小さい辞書の使用をご検討ください。</value>

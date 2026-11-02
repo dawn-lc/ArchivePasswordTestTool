@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
@@ -14,7 +15,7 @@ namespace ArchivePasswordTestTool
     /// 独立全局锁），KDF 不再互相排队，吞吐随进程数近似线性。
     /// RAR5/zip 等无此全局锁的格式仍走进程内线程路径。
     /// </summary>
-    internal static partial class MultiProcess
+    internal static class MultiProcess
     {
         public const string WorkerFlag = "-Worker";
 
@@ -38,7 +39,6 @@ namespace ArchivePasswordTestTool
         private const string StopMarker = "STOP";
         private const string QuitMarker = "QUIT";
         private const string WorkersEnvVar = "APTT_WORKERS";
-        private const string ParallelismEnvVar = "APTT_PARALLELISM";
 
         /// <summary>
         /// 按字典规模推算单批大小，使每个工作进程都能分到活且负载大致均匀。
@@ -71,13 +71,7 @@ namespace ArchivePasswordTestTool
                 return explicitWorkers;
             }
 
-            int workers = Environment.ProcessorCount;
-            if (int.TryParse(Environment.GetEnvironmentVariable(ParallelismEnvVar), out var parallelism) && parallelism > 0)
-            {
-                workers = Math.Min(workers, parallelism);
-            }
-
-            return workers;
+            return ParallelismLimit.Apply(Environment.ProcessorCount);
         }
 
         /// <summary>
@@ -131,14 +125,14 @@ namespace ArchivePasswordTestTool
         {
             try
             {
-                string archivePath = Arguments.GetParameter(args, "F", "").Replace("\"", "");
+                string archivePath = Arguments.Unquote(Arguments.GetParameter(args, "F", ""));
                 if (string.IsNullOrEmpty(archivePath))
                 {
                     return FailStartup("Archive file not found.");
                 }
 
                 string? dllPath = SevenZip.LocateInstalledLibrary();
-                string lib = Arguments.GetParameter(args, "lib", "").Replace("\"", "");
+                string lib = Arguments.Unquote(Arguments.GetParameter(args, "lib", ""));
                 if (!string.IsNullOrEmpty(lib))
                 {
                     dllPath = lib;
@@ -151,7 +145,7 @@ namespace ArchivePasswordTestTool
 
                 try
                 {
-                    SevenZipLibrary.GetShared(dllPath);
+                    _ = SevenZipLibrary.GetShared(dllPath);
                 }
                 catch (Exception ex)
                 {
@@ -164,16 +158,16 @@ namespace ArchivePasswordTestTool
                 ArchiveContext? sharedContext;
                 try
                 {
-                    var probe = new ArchiveContext(dllPath, archivePath, null);
-                    info = probe.Info;
+                    var context = new ArchiveContext(dllPath, archivePath, null);
+                    info = context.Info;
                     if (info.IsHeaderEncryption)
                     {
-                        probe.Dispose();
+                        context.Dispose();
                         sharedContext = null;
                     }
                     else
                     {
-                        sharedContext = probe; // 非 header 加密：单上下文复用测密
+                        sharedContext = context; // 非 header 加密：单上下文复用测密
                     }
                 }
                 catch (Exception ex)
@@ -284,8 +278,8 @@ namespace ArchivePasswordTestTool
                 WorkingDirectory = Environment.CurrentDirectory,
                 // worker 的输出被重定向，Program.Main 会把它的 stdout/stderr 设为 UTF-8；
                 // 读取端必须用同一编码，否则中文密码/中文诊断消息都会读成乱码
-                StandardOutputEncoding = System.Text.Encoding.UTF8,
-                StandardErrorEncoding = System.Text.Encoding.UTF8,
+                StandardOutputEncoding = Encoding.UTF8,
+                StandardErrorEncoding = Encoding.UTF8,
             };
             // 剥离诊断开关：工作进程 stderr 无人读取，ComTrace 输出可能填满管道缓冲导致死锁
             startInfo.EnvironmentVariables.Remove("APTT_TRACE");
@@ -456,8 +450,8 @@ namespace ArchivePasswordTestTool
         {
             private const int MaxLines = 20;
 
-            private readonly Lock gate = new();
-            private readonly Queue<string> lines = new();
+            private readonly Lock _gate = new();
+            private readonly Queue<string> _lines = new();
 
             public void Append(string? line)
             {
@@ -466,12 +460,12 @@ namespace ArchivePasswordTestTool
                     return;
                 }
 
-                lock (gate)
+                lock (_gate)
                 {
-                    lines.Enqueue(line);
-                    while (lines.Count > MaxLines)
+                    _lines.Enqueue(line);
+                    while (_lines.Count > MaxLines)
                     {
-                        lines.Dequeue();
+                        _ = _lines.Dequeue();
                     }
                 }
             }
@@ -479,11 +473,11 @@ namespace ArchivePasswordTestTool
             /// <summary>拼成可直接展示的诊断文本；无内容时返回空串</summary>
             public string Describe()
             {
-                lock (gate)
+                lock (_gate)
                 {
-                    return lines.Count == 0
+                    return _lines.Count == 0
                         ? string.Empty
-                        : string.Join(Environment.NewLine, lines);
+                        : string.Join(Environment.NewLine, _lines);
                 }
             }
         }
@@ -506,6 +500,7 @@ namespace ArchivePasswordTestTool
             }
             catch (JsonException)
             {
+                // 不是协议 JSON：原样当作错误文本展示
             }
 
             return line;

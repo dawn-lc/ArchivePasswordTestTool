@@ -100,10 +100,10 @@ public sealed class EndToEndTests(TestDataFixture fx, ITestOutputHelper output)
     [Fact]
     public void BigDictionaryFullSweepFindsPassword()
     {
-        var result = RunTool($"-D \"{fx.Dict("BigDictionary.txt")}\" -F \"{fx.Archive("Secret.7z")}\"", timeoutMs: 300_000);
+        var (ExitCode, Output) = RunTool($"-D \"{fx.Dict("BigDictionary.txt")}\" -F \"{fx.Archive("Secret.7z")}\"", timeoutMs: 300_000);
 
-        Assert.Equal(0, result.ExitCode);
-        Assert.Contains(TestDataFixture.CorrectPassword, result.Output);
+        Assert.Equal(0, ExitCode);
+        Assert.Contains(TestDataFixture.CorrectPassword, Output);
     }
 
     /// <summary>
@@ -128,17 +128,71 @@ public sealed class EndToEndTests(TestDataFixture fx, ITestOutputHelper output)
             CreateArchiveWithPassword(archivePath, password);
             File.WriteAllLines(dictPath, ["DefinitelyWrong", password]);
 
-            var result = RunTool($"-D \"{dictPath}\" -F \"{archivePath}\"");
+            var (ExitCode, Output) = RunTool($"-D \"{dictPath}\" -F \"{archivePath}\"");
 
-            Assert.Equal(0, result.ExitCode);
+            Assert.Equal(0, ExitCode);
             // 原样出现既是「找到了密码」的证明，也证明它没被格式化或标记解析吞掉
-            Assert.Contains(password, result.Output);
+            Assert.Contains(password, Output);
         }
         finally
         {
             File.Delete(archivePath);
             File.Delete(dictPath);
         }
+    }
+
+    /// <summary>
+    /// 超长密码必须完整可见，不能被结果面板截断。
+    /// <para>
+    /// 缺陷背景：找到的密码曾拼进 Spectre 的 <c>Panel.Header</c>。Header 可用宽度不足时
+    /// 会把整段内容替换成省略号（实测 52 字符以上必然触发），于是密码明明已经找到，
+    /// 用户看到的却是「找到解压密码:…」。修法是把密码移到 Grid 内容行——单元格会折行，不截断。
+    /// </para>
+    /// <para>
+    /// 断言方式：折行会在密码中间插入边框字符（│）与缩进，所以先把输出里所有非字母数字
+    /// 字符滤掉，连续密码段就会重新接上。密码取纯字母，避免过滤把密码自身的字符也吃掉。
+    /// </para>
+    /// </summary>
+    [Theory]
+    [InlineData(52)]   // Header 截断的实测起点
+    [InlineData(150)]  // 远超一行宽度，强制 Grid 折行
+    public void LongPasswordIsReportedInFull(int length)
+    {
+        string password = new('K', length);
+        string archivePath = Path.Combine(Path.GetTempPath(), $"ApttLongPw{Guid.NewGuid():N}.7z");
+        string dictPath = Path.ChangeExtension(archivePath, ".txt");
+
+        try
+        {
+            CreateArchiveWithPassword(archivePath, password);
+            File.WriteAllLines(dictPath, ["DefinitelyWrong", password]);
+
+            var (ExitCode, Output) = RunTool($"-D \"{dictPath}\" -F \"{archivePath}\"");
+
+            Assert.Equal(0, ExitCode);
+            string visible = FilterLettersAndDigits(Output);
+            Assert.Contains(password, visible);
+        }
+        finally
+        {
+            File.Delete(archivePath);
+            File.Delete(dictPath);
+        }
+    }
+
+    /// <summary>只保留字母与数字，用于跨折行拼接被边框/缩进打断的长密码</summary>
+    private static string FilterLettersAndDigits(string text)
+    {
+        var builder = new StringBuilder(text.Length);
+        foreach (char c in text)
+        {
+            if (char.IsLetterOrDigit(c))
+            {
+                _ = builder.Append(c);
+            }
+        }
+
+        return builder.ToString();
     }
 
     /// <summary>用 7-Zip CLI 现场创建一个指定密码的压缩包（密码通过 ArgumentList 传递，不经 shell）</summary>
@@ -192,10 +246,10 @@ public sealed class EndToEndTests(TestDataFixture fx, ITestOutputHelper output)
             byte[] gbkContent = Encoding.GetEncoding(936).GetBytes($"WrongPassword\r\n{Password}\r\n");
             File.WriteAllBytes(dictPath, gbkContent);
 
-            var result = RunTool($"-D \"{dictPath}\" -F \"{archivePath}\"");
+            var (ExitCode, Output) = RunTool($"-D \"{dictPath}\" -F \"{archivePath}\"");
 
-            Assert.Equal(0, result.ExitCode);
-            Assert.Contains(Password, result.Output);
+            Assert.Equal(0, ExitCode);
+            Assert.Contains(Password, Output);
         }
         finally
         {
@@ -211,12 +265,12 @@ public sealed class EndToEndTests(TestDataFixture fx, ITestOutputHelper output)
     [Fact]
     public void MultiProcessFindsPasswordInBigDictionary()
     {
-        var result = RunTool(
+        var (ExitCode, Output) = RunTool(
             $"-D \"{fx.Dict("BigDictionary.txt")}\" -F \"{fx.Archive("Secret.7z")}\"",
             timeoutMs: 300_000, ("APTT_WORKERS", "4"));
 
-        Assert.Equal(0, result.ExitCode);
-        Assert.Contains(TestDataFixture.CorrectPassword, result.Output);
+        Assert.Equal(0, ExitCode);
+        Assert.Contains(TestDataFixture.CorrectPassword, Output);
     }
 
     /// <summary>
@@ -238,12 +292,12 @@ public sealed class EndToEndTests(TestDataFixture fx, ITestOutputHelper output)
             lines.Add(TestDataFixture.CorrectPassword);
             File.WriteAllLines(dictPath, lines);
 
-            var result = RunTool(
+            var (ExitCode, Output) = RunTool(
                 $"-D \"{dictPath}\" -F \"{fx.Archive("SecretHeader.7z")}\"",
                 timeoutMs: 300_000, ("APTT_WORKERS", "2"));
 
-            Assert.Equal(0, result.ExitCode);
-            Assert.Contains(TestDataFixture.CorrectPassword, result.Output);
+            Assert.Equal(0, ExitCode);
+            Assert.Contains(TestDataFixture.CorrectPassword, Output);
         }
         finally
         {

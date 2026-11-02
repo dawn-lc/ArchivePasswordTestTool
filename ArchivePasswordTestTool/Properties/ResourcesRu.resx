@@ -173,7 +173,7 @@
     <value>Пароль не найден</value>
   </data>
   <data name="PasswordFoundSuccess" xml:space="preserve">
-    <value>Найден пароль для распаковки: {0}</value>
+    <value>Найден пароль для распаковки</value>
   </data>
   <data name="PasswordNotFound" xml:space="preserve">
     <value>Правильный пароль для распаковки не найден!</value>
@@ -229,8 +229,26 @@
   <data name="InfoEncryption" xml:space="preserve">
     <value>Шифрование</value>
   </data>
-  <data name="InfoQuickTest" xml:space="preserve">
-    <value>Быстрый тест</value>
+  <data name="InfoUnpackedSize" xml:space="preserve">
+    <value>Размер</value>
+  </data>
+  <data name="InfoMethod" xml:space="preserve">
+    <value>Метод</value>
+  </data>
+  <data name="InfoSolid" xml:space="preserve">
+    <value>Сплошной</value>
+  </data>
+  <data name="InfoTestTarget" xml:space="preserve">
+    <value>Цель проверки</value>
+  </data>
+  <data name="InfoVolumes" xml:space="preserve">
+    <value>Тома</value>
+  </data>
+  <data name="InfoDiskSize" xml:space="preserve">
+    <value>На диске</value>
+  </data>
+  <data name="InfoSfxOffset" xml:space="preserve">
+    <value>Смещение данных</value>
   </data>
   <data name="InfoHash" xml:space="preserve">
     <value>Хеш</value>
@@ -241,17 +259,38 @@
   <data name="InfoPasswords" xml:space="preserve">
     <value>Количество паролей</value>
   </data>
+  <data name="InfoPassword" xml:space="preserve">
+    <value>Пароль</value>
+  </data>
   <data name="InfoParallelism" xml:space="preserve">
     <value>Параллелизм</value>
   </data>
   <data name="ValueYes" xml:space="preserve">
     <value>Да</value>
   </data>
-  <data name="ValueNo" xml:space="preserve">
+  <data name="ValueEncryptionHeader" xml:space="preserve">
+    <value>Данные + имена файлов (заголовок шифрован)</value>
+  </data>
+  <data name="ValueEncryptionDataOnly" xml:space="preserve">
+    <value>Только данные (имена видны)</value>
+  </data>
+  <data name="ValueEncryptionNone" xml:space="preserve">
     <value>Нет</value>
   </data>
-  <data name="ValueHeaderEncryption" xml:space="preserve">
-    <value>Шифрование заголовка (полное шифрование)</value>
+  <data name="ValueTestTargetHeader" xml:space="preserve">
+    <value>Заголовок архива (проверяется при открытии)</value>
+  </data>
+  <data name="ValueTestTargetQuickFile" xml:space="preserve">
+    <value>Наименьший зашифрованный файл {0} ({1})</value>
+  </data>
+  <data name="ValueTestTargetAll" xml:space="preserve">
+    <value>Все зашифрованные данные ({0})</value>
+  </data>
+  <data name="ValueSizeWithRatio" xml:space="preserve">
+    <value>{0} (сжато до {1}, {2} %)</value>
+  </data>
+  <data name="ValueVolumeCount" xml:space="preserve">
+    <value>Томов: {0} (всего {1})</value>
   </data>
   <data name="ResultElapsed" xml:space="preserve">
     <value>Затрачено времени</value>
@@ -327,6 +366,12 @@
   </data>
   <data name="FastFilterActive" xml:space="preserve">
     <value>Несжатые зашифрованные данные ({0}): включён быстрый отбор паролей — расшифровывается только первый блок, данные не распаковываются. Совпавшие кандидаты всё равно проверяются полным тестом 7-Zip.</value>
+  </data>
+  <data name="FallbackFullDecodePrompt" xml:space="preserve">
+    <value>Быстрый отбор отклонил все {0} паролей по подписи файла. Проверить их полной расшифровкой 7-Zip? Ожидаемое время: {1}.</value>
+  </data>
+  <data name="FallbackFullDecodeStarted" xml:space="preserve">
+    <value>Начата проверка полной расшифровкой (быстрый отбор ранее отклонил все {0} паролей по подписи).</value>
   </data>
   <data name="SlowFullDecodeWarning" xml:space="preserve">
     <value>Архив зашифрован без сжатия (store), имена файлов не зашифрованы: поэтому каждый неверный пароль требует полной расшифровки данных ({0} на попытку), и только CRC файла может его отклонить. Ожидаемое время для текущего словаря: примерно {1}. Это ограничение формата — увеличение параллелизма не поможет (узкое место — пропускная способность памяти, а не вывод ключа). Рассмотрите использование меньшего словаря.</value>

@@ -48,110 +48,81 @@ namespace ArchivePasswordTestTool
         /// </summary>
         internal static string? TryExtractDll()
         {
-            string target = Path.Combine(CacheDirectory, DllFileName);
-
             try
             {
-                using var resource = FindResource(DllResourceName);
-                if (resource is null)
+                if (!ExtractResource(DllResourceName, DllFileName))
                 {
                     return null;
                 }
-
-                long expectedLength = resource.Length;
-
-                // 已落地且大小一致：直接复用（旧版本残留会被下面的替换流程纠正）
-                var existing = new FileInfo(target);
-                if (existing.Exists && existing.Length == expectedLength)
-                {
-                    EnsureLicenseExtracted();
-                    return target;
-                }
-
-                Directory.CreateDirectory(CacheDirectory);
-
-                string temporary = target + "." + Environment.ProcessId + ".tmp";
-                using (var output = new FileStream(temporary, FileMode.Create, FileAccess.Write, FileShare.None))
-                {
-                    resource.CopyTo(output);
-                }
-
-                try
-                {
-                    File.Move(temporary, target, overwrite: true);
-                }
-                catch (IOException)
-                {
-                    // 另一进程刚写完并占住了目标文件：只要落地结果正确就视为成功
-                    TryDelete(temporary);
-                    var settled = new FileInfo(target);
-                    if (!settled.Exists || settled.Length != expectedLength)
-                    {
-                        return null;
-                    }
-                }
-                catch (UnauthorizedAccessException)
-                {
-                    TryDelete(temporary);
-                    var settled = new FileInfo(target);
-                    if (!settled.Exists || settled.Length != expectedLength)
-                    {
-                        return null;
-                    }
-                }
-
-                EnsureLicenseExtracted();
-                return target;
             }
             catch (Exception)
             {
                 // 缓存目录只读、磁盘满、杀软拦截等：退回"需自行安装 7-Zip"
                 return null;
             }
-        }
 
-        /// <summary>
-        /// 许可证随 dll 一起落地：7-Zip 是 LGPL，官方 license.txt 要求二进制再分发时
-        /// 必须附带许可证信息。失败不影响功能，因此静默忽略。
-        /// </summary>
-        private static void EnsureLicenseExtracted()
-        {
+            // 许可证失败不阻断：LGPL 要求二进制再分发附带许可证，但缺失时的降级
+            // 优于整个内嵌引擎不可用
             try
             {
-                using var resource = FindResource(LicenseResourceName);
-                if (resource is null)
-                {
-                    return;
-                }
-
-                string target = Path.Combine(CacheDirectory, LicenseFileName);
-                var existing = new FileInfo(target);
-                if (existing.Exists && existing.Length == resource.Length)
-                {
-                    return;
-                }
-
-                Directory.CreateDirectory(CacheDirectory);
-
-                string temporary = target + "." + Environment.ProcessId + ".tmp";
-                using (var output = new FileStream(temporary, FileMode.Create, FileAccess.Write, FileShare.None))
-                {
-                    resource.CopyTo(output);
-                }
-
-                try
-                {
-                    File.Move(temporary, target, overwrite: true);
-                }
-                catch (Exception)
-                {
-                    TryDelete(temporary);
-                }
+                _ = ExtractResource(LicenseResourceName, LicenseFileName);
             }
             catch (Exception)
             {
-                // 许可证落地失败不阻断启动
+                // 同上，忽略
             }
+
+            return Path.Combine(CacheDirectory, DllFileName);
+        }
+
+        /// <summary>
+        /// 把一个内嵌资源落地到缓存目录。已存在且大小一致时直接复用；
+        /// 否则先写唯一临时名再原子改名，并接受并发写入时"别人已经写好"的结果。
+        /// </summary>
+        /// <returns>目标文件是否已就位且大小正确</returns>
+        private static bool ExtractResource(string resourceName, string fileName)
+        {
+            using var resource = FindResource(resourceName);
+            if (resource is null)
+            {
+                return false;
+            }
+
+            long expectedLength = resource.Length;
+            string target = Path.Combine(CacheDirectory, fileName);
+            var existing = new FileInfo(target);
+            if (existing.Exists && existing.Length == expectedLength)
+            {
+                return true;
+            }
+
+            _ = Directory.CreateDirectory(CacheDirectory);
+
+            // 临时名带随机后缀：多进程/多线程同时落地时各自写自己的文件，
+            // 不会因 FileShare.None 互相撞车（撞车会表现为随机返回 null）
+            string temporary = $"{target}.{Environment.ProcessId}.{Guid.NewGuid():N}.tmp";
+            using (var output = new FileStream(temporary, FileMode.Create, FileAccess.Write, FileShare.None))
+            {
+                resource.CopyTo(output);
+            }
+
+            try
+            {
+                File.Move(temporary, target, overwrite: true);
+                return true;
+            }
+            catch (IOException)
+            {
+                // 另一进程刚写完并占住了目标文件：只要落地结果正确就视为成功
+            }
+            catch (UnauthorizedAccessException)
+            {
+                // 索引器/杀软可能短暂占住目标文件，同上
+            }
+
+            TryDelete(temporary);
+            var settled = new FileInfo(target);
+            return settled.Exists && settled.Length == expectedLength;
         }
 
         private static Stream? FindResource(string name)

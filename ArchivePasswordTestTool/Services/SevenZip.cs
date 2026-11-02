@@ -69,7 +69,7 @@ namespace ArchivePasswordTestTool
         {
             try
             {
-                SevenZipLibrary.GetShared(dllPath);
+                _ = SevenZipLibrary.GetShared(dllPath);
             }
             catch (Exception ex)
             {
@@ -112,7 +112,7 @@ namespace ArchivePasswordTestTool
         {
             try
             {
-                Process.Start(new ProcessStartInfo(DownloadUrl) { UseShellExecute = true });
+                _ = Process.Start(new ProcessStartInfo(DownloadUrl) { UseShellExecute = true });
             }
             catch (Exception ex)
             {

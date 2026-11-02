@@ -12,7 +12,7 @@ namespace ArchivePasswordTestTool
     /// 要解 1.2GB，250 万字典约 100 小时。
     /// </para>
     /// <para>
-    /// 存储模式（method 0x30）下密文就是明文（CBC 补零），因此只要派生 RAR3 密钥、
+    /// 存储模式（method 0x30）下密文就是明文（CBC 补零），因此只要派生 RAR4 密钥、
     /// 解密首块并校验文件格式签名就能排除错误密码：错误密码解出的首块是随机字节，
     /// 命中 MP4 等容器魔数的概率约 2^-32。命中者再交给 7-Zip 完整确认。
     /// </para>
@@ -60,6 +60,9 @@ namespace ArchivePasswordTestTool
 
         [ThreadStatic]
         private static byte[]? _plainBuffer;
+
+        [ThreadStatic]
+        private static byte[]? _passwordBuffer;
 
         private readonly byte[] _salt;
         private readonly byte[] _cipherFirstBlock;
@@ -116,7 +119,7 @@ namespace ArchivePasswordTestTool
                 }
 
                 byte[] head = new byte[window];
-                stream.Seek(signatureOffset, SeekOrigin.Begin);
+                _ = stream.Seek(signatureOffset, SeekOrigin.Begin);
                 stream.ReadExactly(head);
 
                 int p = SignatureSize;
@@ -196,7 +199,7 @@ namespace ArchivePasswordTestTool
 
                 // 盐紧跟在文件名之后，必须落在头部范围内
                 int saltOffset = nameOffset + nameSize;
-                if (saltOffset + Rar3KeyDerivation.SaltSize > p + fileSize)
+                if (saltOffset + Rar4KeyDerivation.SaltSize > p + fileSize)
                 {
                     return null;
                 }
@@ -207,9 +210,9 @@ namespace ArchivePasswordTestTool
                     return null;
                 }
 
-                byte[] salt = head.AsSpan(saltOffset, Rar3KeyDerivation.SaltSize).ToArray();
+                byte[] salt = head.AsSpan(saltOffset, Rar4KeyDerivation.SaltSize).ToArray();
                 byte[] cipherFirstBlock = new byte[BlockSize];
-                stream.Seek(dataOffset, SeekOrigin.Begin);
+                _ = stream.Seek(dataOffset, SeekOrigin.Begin);
                 stream.ReadExactly(cipherFirstBlock);
 
                 return new Rar4StoreProbe(fileName, salt, cipherFirstBlock, signature);
@@ -222,30 +225,36 @@ namespace ArchivePasswordTestTool
         }
 
         /// <summary>
-        /// 快速判定：派生 RAR3 密钥 → 解密首块 → 比对文件格式签名。
+        /// 快速判定：派生 RAR4 密钥 → 解密首块 → 比对文件格式签名。
         /// 不修改任何共享状态，可被多线程并发调用。
         /// </summary>
         public PasswordProbeResult Probe(string password)
         {
             // 密码超过 28 个字符时记录超过 64 字节，会触发 7-Zip 的 RAR 3.5 兼容分支，本实现不支持
-            if (password.Length > Rar3KeyDerivation.MaxPasswordChars)
+            if (password.Length > Rar4KeyDerivation.MaxPasswordChars)
             {
                 return PasswordProbeResult.Unsupported;
             }
 
-            byte[] passwordBytes = Encoding.Unicode.GetBytes(password);
+            // 密码字节是 UTF-16LE（UNP_VER ≥ 29，7-Zip 逐 wchar 取低/高字节）。
+            // 缓冲按线程复用：这是每候选都要执行的热路径，避免逐次分配
+            byte[] passwordBuffer = _passwordBuffer ??= new byte[Rar4KeyDerivation.MaxPasswordChars * 2];
+            int passwordByteCount = Encoding.Unicode.GetBytes(password, passwordBuffer);
 
             byte[] key = _keyBuffer ??= new byte[BlockSize];
             byte[] iv = _ivBuffer ??= new byte[BlockSize];
             byte[] plain = _plainBuffer ??= new byte[BlockSize];
 
-            Rar3KeyDerivation.DeriveKey(passwordBytes, _salt, key, iv);
+            Rar4KeyDerivation.DeriveKey(passwordBuffer.AsSpan(0, passwordByteCount), _salt, key, iv);
 
             Aes aes = _aes ??= CreateAes();
             aes.Key = key;
-            aes.DecryptCbc(_cipherFirstBlock, iv, plain, PaddingMode.None);
+            _ = aes.DecryptCbc(_cipherFirstBlock, iv, plain, PaddingMode.None);
 
-            return _signature.Matches(plain) ? PasswordProbeResult.Match : PasswordProbeResult.NoMatch;
+            // 扩展名推断的签名优先，但不以其为限：归档内文件名可能被改名或伪装
+            return _signature.MatchesFileOrAnyKnownContainer(plain)
+                ? PasswordProbeResult.Match
+                : PasswordProbeResult.NoMatch;
         }
 
         private static Aes CreateAes()

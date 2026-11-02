@@ -32,7 +32,7 @@ namespace ArchivePasswordTestTool
 
         private const int GbkCodePage = 936;
 
-        private static readonly object RegisterLock = new();
+        private static readonly Lock RegisterLock = new();
         private static bool providerRegistered;
 
         /// <summary>
@@ -116,7 +116,7 @@ namespace ArchivePasswordTestTool
                 }
 
                 ReadOnlySpan<byte> body = sample[..(sample.Length - trim)];
-                strict.GetCharCount(body);
+                _ = strict.GetCharCount(body);
                 return true;
             }
             catch (DecoderFallbackException)

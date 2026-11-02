@@ -1,5 +1,4 @@
 using ArchivePasswordTestTool.Properties;
-using Spectre.Console;
 using System.Diagnostics;
 using System.Security.Cryptography;
 using System.Text.Json;
@@ -223,7 +222,7 @@ namespace ArchivePasswordTestTool
                     startInfo.ArgumentList.Add(arg);
                 }
 
-                Process.Start(startInfo);
+                _ = Process.Start(startInfo);
                 return true;
             }
             catch
@@ -295,6 +294,12 @@ namespace ArchivePasswordTestTool
         /// </summary>
         private static readonly TimeSpan DownloadConnectTimeout = TimeSpan.FromSeconds(30);
 
+        /// <summary>检查请求的超时（API 只返回一个小 JSON）</summary>
+        private static readonly TimeSpan CheckTimeout = TimeSpan.FromSeconds(10);
+
+        /// <summary>下载兜底矩阵的 TLS 模式顺序（空 SNI 优先，失败回退标准握手）</summary>
+        private static readonly bool[] TlsModes = [true, false];
+
         /// <summary>
         /// 后台任务：一次做完「检查 + 下载」。
         /// <para>
@@ -347,6 +352,7 @@ namespace ArchivePasswordTestTool
             /// <summary>下载失败原因（<see cref="HasAsset"/> 为 true 且 <see cref="Ready"/> 为 false 时有效）</summary>
             public string? Error { get; init; }
         }
+
         /// <summary>
         /// 配置文件放在用户本地应用数据目录：原先用相对路径写在当前工作目录，
         /// 从不同目录启动就会到处生成 config.json。
@@ -595,7 +601,7 @@ namespace ArchivePasswordTestTool
                 Ui.WriteWarning(string.Format(Resources.UpgradeAvailable, tag));
             }
 
-            AnsiConsole.MarkupLine($"[grey]{Markup.Escape(Resources.UpgradeDownloading)}[/]");
+            Ui.WriteMuted(Resources.UpgradeDownloading);
         }
 
         /// <summary>
@@ -717,8 +723,8 @@ namespace ArchivePasswordTestTool
         private static UpgradeReleasesInfo? FetchLatestRelease(bool useEmptySni)
         {
             using var http = useEmptySni
-                ? HttpTransport.CreateClient(TimeSpan.FromSeconds(10))
-                : HttpTransport.CreateStandardClient(TimeSpan.FromSeconds(10));
+                ? HttpTransport.CreateClient(CheckTimeout)
+                : HttpTransport.CreateStandardClient(CheckTimeout);
 
             using var response = http.GetAsync(RepoUrl).GetAwaiter().GetResult();
             if (!response.IsSuccessStatusCode)
@@ -751,7 +757,7 @@ namespace ArchivePasswordTestTool
 
             foreach ((string? Url, bool AcceptOctetStream) candidate in DownloadCandidates(asset))
             {
-                foreach (bool useEmptySni in new[] { true, false })
+                foreach (bool useEmptySni in TlsModes)
                 {
                     try
                     {
@@ -799,7 +805,7 @@ namespace ArchivePasswordTestTool
             }
 
             using var response = http.Send(request, HttpCompletionOption.ResponseHeadersRead);
-            response.EnsureSuccessStatusCode();
+            _ = response.EnsureSuccessStatusCode();
 
             using var source = response.Content.ReadAsStream();
             using var target = File.Create(destination);
@@ -811,7 +817,7 @@ namespace ArchivePasswordTestTool
         {
             try
             {
-                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(url) { UseShellExecute = true });
+                _ = Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
             }
             catch (Exception ex)
             {
@@ -846,7 +852,7 @@ namespace ArchivePasswordTestTool
             try
             {
                 string path = ConfigFilePath;
-                Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+                _ = Directory.CreateDirectory(Path.GetDirectoryName(path)!);
                 File.WriteAllText(path, JsonSerializer.Serialize(config, UpgradeJsonContext.Default.UpgradeConfig));
             }
             catch
@@ -922,7 +928,7 @@ namespace ArchivePasswordTestTool
             ["alpha"],
             ["beta"],
             ["preview"],
-            ["release", "release", "candidate", "rc"],
+            ["release", "candidate", "rc"],
             ["final", "full", "version", "enhance", "standard"],
             ["fixpush"],                    // 最高（热修）
         ];

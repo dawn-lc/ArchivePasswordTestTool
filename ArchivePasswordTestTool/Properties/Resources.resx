@@ -173,7 +173,7 @@ Please download and install 7-Zip first.</value>
     <value>Password not found</value>
   </data>
   <data name="PasswordFoundSuccess" xml:space="preserve">
-    <value>Found decompression password: {0}</value>
+    <value>Found decompression password</value>
   </data>
   <data name="PasswordNotFound" xml:space="preserve">
     <value>Correct decompression password not found!</value>
@@ -229,8 +229,26 @@ Please download and install 7-Zip first.</value>
   <data name="InfoEncryption" xml:space="preserve">
     <value>Encryption</value>
   </data>
-  <data name="InfoQuickTest" xml:space="preserve">
-    <value>Quick Test</value>
+  <data name="InfoUnpackedSize" xml:space="preserve">
+    <value>Size</value>
+  </data>
+  <data name="InfoMethod" xml:space="preserve">
+    <value>Method</value>
+  </data>
+  <data name="InfoSolid" xml:space="preserve">
+    <value>Solid</value>
+  </data>
+  <data name="InfoTestTarget" xml:space="preserve">
+    <value>Test Target</value>
+  </data>
+  <data name="InfoVolumes" xml:space="preserve">
+    <value>Volumes</value>
+  </data>
+  <data name="InfoDiskSize" xml:space="preserve">
+    <value>On Disk</value>
+  </data>
+  <data name="InfoSfxOffset" xml:space="preserve">
+    <value>Data Offset</value>
   </data>
   <data name="InfoHash" xml:space="preserve">
     <value>Hash</value>
@@ -241,17 +259,38 @@ Please download and install 7-Zip first.</value>
   <data name="InfoPasswords" xml:space="preserve">
     <value>Password Count</value>
   </data>
+  <data name="InfoPassword" xml:space="preserve">
+    <value>Password</value>
+  </data>
   <data name="InfoParallelism" xml:space="preserve">
     <value>Parallelism</value>
   </data>
   <data name="ValueYes" xml:space="preserve">
     <value>Yes</value>
   </data>
-  <data name="ValueNo" xml:space="preserve">
-    <value>No</value>
+  <data name="ValueEncryptionHeader" xml:space="preserve">
+    <value>Data + file names (header encrypted)</value>
   </data>
-  <data name="ValueHeaderEncryption" xml:space="preserve">
-    <value>Header encrypted (fully encrypted)</value>
+  <data name="ValueEncryptionDataOnly" xml:space="preserve">
+    <value>Data only (file names visible)</value>
+  </data>
+  <data name="ValueEncryptionNone" xml:space="preserve">
+    <value>None</value>
+  </data>
+  <data name="ValueTestTargetHeader" xml:space="preserve">
+    <value>Archive header (verified while opening)</value>
+  </data>
+  <data name="ValueTestTargetQuickFile" xml:space="preserve">
+    <value>Smallest encrypted file {0} ({1})</value>
+  </data>
+  <data name="ValueTestTargetAll" xml:space="preserve">
+    <value>All encrypted data ({0})</value>
+  </data>
+  <data name="ValueSizeWithRatio" xml:space="preserve">
+    <value>{0} (packed {1}, {2}%)</value>
+  </data>
+  <data name="ValueVolumeCount" xml:space="preserve">
+    <value>{0} parts ({1} total)</value>
   </data>
   <data name="ResultElapsed" xml:space="preserve">
     <value>Elapsed</value>
@@ -327,6 +366,12 @@ You can also download it manually from the releases page.</value>
   </data>
   <data name="FastFilterActive" xml:space="preserve">
     <value>Uncompressed encrypted data ({0}): fast password filter enabled — only the first block is decrypted, archive data is not unpacked. Candidates matching the file signature are still verified by a full 7-Zip test.</value>
+  </data>
+  <data name="FallbackFullDecodePrompt" xml:space="preserve">
+    <value>The fast filter rejected all {0} passwords based on the file signature. Re-check them with a full 7-Zip decode? Estimated {1}.</value>
+  </data>
+  <data name="FallbackFullDecodeStarted" xml:space="preserve">
+    <value>Full-decode verification started (the fast filter had rejected all {0} passwords by signature).</value>
   </data>
   <data name="SlowFullDecodeWarning" xml:space="preserve">
     <value>This archive is encrypted without compression (store) and its file names are not encrypted, so every wrong password must be fully decoded ({0} per attempt) before the file CRC can reject it. Estimated time for the current dictionary: {1}. This is a limitation of the format — more parallelism will not help (the bottleneck is memory bandwidth, not the key derivation). Consider using a smaller dictionary.</value>

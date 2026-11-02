@@ -7,7 +7,7 @@ namespace ArchivePasswordTestTool.Tests;
 /// 原因：内置 COM 依赖运行时的动态封送 stub，Native AOT 下直接抛
 /// "COM Interop requires ComWrapper instance registered for marshalling"，
 /// 程序在第一次接触 7z.dll 时就崩。源生成版本由编译期产出 stub，AOT 可用，
-/// 且实测功能完全等价（147 项测试 + 13 场景 AOT 全矩阵均通过）。
+/// 且实测功能完全等价（全量测试 + 13 场景 AOT 全矩阵均通过）。
 /// </para>
 /// <para>
 /// 这条测试是为了防止后来者"顺手"把某个接口改回 `[ComImport]`——
@@ -85,8 +85,9 @@ public class InteropAotCompatibilityTests
     {
         string interopDir = Path.Combine(TestPaths.RepoRoot, "ArchivePasswordTestTool", "Interop");
 
+        // 递归扫描：Interop/Native 子目录同样是原生边界，漏掉它等于给这条防线开了个后门
         var offenders = Directory
-            .EnumerateFiles(interopDir, "*.cs", SearchOption.TopDirectoryOnly)
+            .EnumerateFiles(interopDir, "*.cs", SearchOption.AllDirectories)
             .Where(file => CodeLines(File.ReadAllText(file))
                 .Any(line => line.Contains(forbiddenApi, StringComparison.Ordinal)))
             .Select(Path.GetFileName)

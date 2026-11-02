@@ -36,12 +36,7 @@ namespace ArchivePasswordTestTool
             // 全量解密路径按**物理核数**并行：该路径是内存/AES 吞吐密集型，
             // ProcessorCount-1 会把 SMT 逻辑核算进来。实测 8 核 16 线程机器上
             // 15 线程只有 6.4–7.3 密码/秒，8 线程反而 9.6–11.2（超订导致缓存与带宽争用）
-            int threadParallelism = Math.Max(1, CpuTopology.PhysicalCoreCount);
-
-            if (int.TryParse(Environment.GetEnvironmentVariable("APTT_PARALLELISM"), out int envParallelism) && envParallelism > 0)
-            {
-                threadParallelism = Math.Min(envParallelism, threadParallelism);
-            }
+            int threadParallelism = ParallelismLimit.Apply(Math.Max(1, CpuTopology.PhysicalCoreCount));
 
             int workerProcessCount = MultiProcess.ResolveWorkerCount();
             bool useMultiProcess = archiveInfo.Type == SevenZipGuids.CLSID_CFormat7z

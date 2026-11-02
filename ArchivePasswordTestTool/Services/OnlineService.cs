@@ -1,4 +1,4 @@
-using System.Net.Http;
+using System.Net;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -46,12 +46,12 @@ namespace ArchivePasswordTestTool
             var queryUrl = $"{url.TrimEnd('/')}?hash={Uri.EscapeDataString(hashHex)}";
             using var response = Http.GetAsync(queryUrl).GetAwaiter().GetResult();
 
-            if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
+            if (response.StatusCode == HttpStatusCode.NotFound)
             {
                 return null;
             }
 
-            response.EnsureSuccessStatusCode();
+            _ = response.EnsureSuccessStatusCode();
 
             var body = response.Content.ReadAsStringAsync().GetAwaiter().GetResult();
             var reply = JsonSerializer.Deserialize(body, OnlineJsonContext.Default.OnlinePasswordReply);
@@ -67,7 +67,7 @@ namespace ArchivePasswordTestTool
 
             using var content = new StringContent(json, Encoding.UTF8, "application/json");
             using var response = Http.PostAsync(url, content).GetAwaiter().GetResult();
-            response.EnsureSuccessStatusCode();
+            _ = response.EnsureSuccessStatusCode();
         }
     }
 

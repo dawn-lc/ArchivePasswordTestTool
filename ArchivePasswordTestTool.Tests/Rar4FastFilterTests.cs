@@ -7,12 +7,12 @@ namespace ArchivePasswordTestTool.Tests;
 /// <summary>
 /// RAR4 快速判错：RAR4 没有密码校验字段，7-Zip 遇到错误密码必须解完整个文件
 /// 才能靠文件尾 CRC 判错（1.2GB 单文件 → 每候选 0.5s，250 万字典约 100 小时）。
-/// 存储模式下密文即明文，只要派生 RAR3 密钥、解首块并校验文件格式签名即可排除错误密码。
+/// 存储模式下密文即明文，只要派生 RAR4 密钥、解首块并校验文件格式签名即可排除错误密码。
 /// <para>
 /// 本文件的断言分两层：<br/>
 /// ① 单元层：合成的 RAR4 存档能被探测器正确识别、正确密码命中、错误密码不命中；<br/>
 /// ② 端到端层：真实启动主程序，快速筛选找到的密码仍必须由 7-Zip 完整确认；
-///    且关闭快速筛选后同一存档也能被破解——这一条反向验证了 KDF 实现与真实 RAR3 一致
+///    且关闭快速筛选后同一存档也能被破解——这一条反向验证了 KDF 实现与真实 RAR4 一致
 ///    （合成的密文由生产代码的 KDF 生成，7-Zip 只有算出同样的密钥才解得开）。
 /// </para>
 /// </summary>
@@ -87,7 +87,7 @@ public sealed class Rar4FastFilterTests
         var probe = Rar4StoreProbe.TryCreate(sample.Path, sample.Info);
 
         Assert.NotNull(probe);
-        Assert.Equal(PasswordProbeResult.Unsupported, probe!.Probe(new string('a', Rar3KeyDerivation.MaxPasswordChars + 1)));
+        Assert.Equal(PasswordProbeResult.Unsupported, probe!.Probe(new string('a', Rar4KeyDerivation.MaxPasswordChars + 1)));
     }
 
     /// <summary>压缩模式（method != 0x30）的 RAR4 不在快速判错范围内</summary>
@@ -124,12 +124,12 @@ public sealed class Rar4FastFilterTests
 
         try
         {
-            var fast = RunTool(dictPath, sample.Path);
-            Assert.Equal(0, fast.ExitCode);
-            Assert.Contains(CorrectPassword, fast.Output);
-            Assert.Contains("快速", fast.Output); // 中文界面的快速筛选提示
+            var (ExitCode, Output) = RunTool(dictPath, sample.Path);
+            Assert.Equal(0, ExitCode);
+            Assert.Contains(CorrectPassword, Output);
+            Assert.Contains("快速", Output); // 中文界面的快速筛选提示
 
-            // 关闭快速筛选：走 7-Zip 完整测密。若 KDF/加密实现与真实 RAR3 有偏差，
+            // 关闭快速筛选：走 7-Zip 完整测密。若 KDF/加密实现与真实 RAR4 有偏差，
             // 这里会解不开存档 → 找不到密码
             var slow = RunTool(dictPath, sample.Path, ("APTT_NO_FAST_FILTER", "1"));
             Assert.Equal(0, slow.ExitCode);
@@ -154,10 +154,10 @@ public sealed class Rar4FastFilterTests
 
         try
         {
-            var result = RunTool(dictPath, sample.Path);
+            var (ExitCode, Output) = RunTool(dictPath, sample.Path);
 
-            Assert.Equal(0, result.ExitCode);
-            Assert.DoesNotContain(CorrectPassword, result.Output);
+            Assert.Equal(0, ExitCode);
+            Assert.DoesNotContain(CorrectPassword, Output);
         }
         finally
         {

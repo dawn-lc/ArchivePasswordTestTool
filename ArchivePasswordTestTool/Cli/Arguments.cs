@@ -7,84 +7,33 @@ namespace ArchivePasswordTestTool
     internal static class Arguments
     {
         /// <summary>
-        /// 检查 Flag 是否存在且具有非空值；取值过程的异常转为统一的启动参数错误
+        /// 剥离资源管理器拖放带上的引号并去掉首尾空白。
+        /// 拖入窗口或粘贴的路径常带双引号（含空格路径的默认形式），
+        /// 所有接收路径的入口（-D/-F/-lib/-Api、交互引导、工作进程参数）都走这一处。
         /// </summary>
-        public static bool StartupParametersCheck(List<string> Parameters, string Flag)
+        public static string Unquote(string value) => value.Replace("\"", "").Trim();
+
+        /// <summary>Flag 是否存在且具有非空值</summary>
+        public static bool StartupParametersCheck(string[] args, string flag) =>
+            !string.IsNullOrEmpty(GetParameter(args, flag, string.Empty));
+
+        /// <summary>读取 Flag 的值；缺 Flag/缺值/转换失败时返回 <paramref name="defaultValue" /></summary>
+        public static T GetParameter<T>(string[] args, string flag, T defaultValue)
         {
-            if (Parameters.Contains($"-{Flag}"))
+            int index = Array.IndexOf(args, "-" + flag);
+            if (index < 0 || index + 1 >= args.Length || args[index + 1].Length == 0)
             {
-                try
-                {
-                    return !string.IsNullOrEmpty(GetParameter(Parameters, Flag, ""));
-                }
-                catch (Exception)
-                {
-                    throw new Exception($"Startup parameters error. Please check: {Flag}");
-                }
+                return defaultValue;
             }
 
-            return false;
-        }
-
-        public static bool StartupParametersCheck(string[] Parameters, string Flag)
-        {
-            return StartupParametersCheck(new List<string>(Parameters), Flag);
-        }
-
-        /// <summary>读取 Flag 的值；缺 Flag/缺值/转换失败时返回默认值</summary>
-        public static T GetParameter<T>(List<string> Parameters, string Flag, T DefaultParameter)
-        {
             try
             {
-                if (!Parameters.Contains($"-{Flag}"))
-                {
-                    throw new ArgumentException(Flag);
-                }
-
-                if (Parameters.IndexOf($"-{Flag}") == Parameters.Count - 1)
-                {
-                    throw new ArgumentException(Flag);
-                }
-
-                return (T)Convert.ChangeType(Parameters[Parameters.IndexOf($"-{Flag}") + 1], typeof(T));
+                return (T)Convert.ChangeType(args[index + 1], typeof(T));
             }
             catch (Exception)
             {
-                return DefaultParameter;
+                return defaultValue;
             }
-        }
-
-        public static T GetParameter<T>(string[] Parameters, string Flag, T DefaultParameter)
-        {
-            return GetParameter(new List<string>(Parameters), Flag, DefaultParameter);
-        }
-
-        /// <summary>读取 Flag 的值；缺 Flag/缺值/转换失败时返回类型默认值</summary>
-        public static T? GetParameter<T>(List<string> Parameters, string Flag)
-        {
-            try
-            {
-                if (!Parameters.Contains($"-{Flag}"))
-                {
-                    throw new ArgumentException(Flag);
-                }
-
-                if (Parameters.IndexOf($"-{Flag}") == Parameters.Count - 1)
-                {
-                    throw new ArgumentException(Flag);
-                }
-
-                return (T)Convert.ChangeType(Parameters[Parameters.IndexOf($"-{Flag}") + 1], typeof(T));
-            }
-            catch (Exception)
-            {
-                return default;
-            }
-        }
-
-        public static T? GetParameter<T>(string[] Parameters, string Flag)
-        {
-            return GetParameter<T>(new List<string>(Parameters), Flag);
         }
     }
 }

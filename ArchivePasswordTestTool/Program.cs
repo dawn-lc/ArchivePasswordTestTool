@@ -135,7 +135,7 @@ namespace ArchivePasswordTestTool
 
                     // 编码属性不一定同步原生控制台代码页（尤其输入侧），再显式设一次。
                     // 宿主不允许时返回 false，不是错误。
-                    WindowsNativeMethods.TryEnableUtf8Console();
+                    _ = WindowsNativeMethods.TryEnableUtf8Console();
                 }
                 catch (Exception)
                 {
@@ -153,7 +153,7 @@ namespace ArchivePasswordTestTool
             // 不改字宽的话，中文 Windows 默认字体（新宋体）会把 Spectre 算作一格的
             // ± · × 画成两格，面板与进度条逐帧错位（见 EnsureNarrowAmbiguousWidth）。
             // 非 Windows / 输出被重定向时该方法内部直接返回。
-            WindowsNativeMethods.EnsureNarrowAmbiguousWidth();
+            _ = WindowsNativeMethods.EnsureNarrowAmbiguousWidth();
         }
 
         /// <summary>
@@ -167,7 +167,7 @@ namespace ArchivePasswordTestTool
 
             for (int i = 0; i < version.Length && i < parts.Length; i++)
             {
-                int.TryParse(parts[i], out version[i]);
+                _ = int.TryParse(parts[i], out version[i]);
             }
 
             return version;

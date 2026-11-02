@@ -173,7 +173,7 @@ Veuillez d'abord télécharger et installer 7-Zip.</value>
     <value>Mot de passe introuvable</value>
   </data>
   <data name="PasswordFoundSuccess" xml:space="preserve">
-    <value>Mot de passe de décompression trouvé : {0}</value>
+    <value>Mot de passe de décompression trouvé</value>
   </data>
   <data name="PasswordNotFound" xml:space="preserve">
     <value>Mot de passe de décompression correct introuvable !</value>
@@ -229,8 +229,26 @@ Veuillez d'abord télécharger et installer 7-Zip.</value>
   <data name="InfoEncryption" xml:space="preserve">
     <value>Chiffrement</value>
   </data>
-  <data name="InfoQuickTest" xml:space="preserve">
-    <value>Test rapide</value>
+  <data name="InfoUnpackedSize" xml:space="preserve">
+    <value>Taille</value>
+  </data>
+  <data name="InfoMethod" xml:space="preserve">
+    <value>Méthode</value>
+  </data>
+  <data name="InfoSolid" xml:space="preserve">
+    <value>Solide</value>
+  </data>
+  <data name="InfoTestTarget" xml:space="preserve">
+    <value>Cible du test</value>
+  </data>
+  <data name="InfoVolumes" xml:space="preserve">
+    <value>Volumes</value>
+  </data>
+  <data name="InfoDiskSize" xml:space="preserve">
+    <value>Sur disque</value>
+  </data>
+  <data name="InfoSfxOffset" xml:space="preserve">
+    <value>Décalage des données</value>
   </data>
   <data name="InfoHash" xml:space="preserve">
     <value>Hachage</value>
@@ -241,17 +259,38 @@ Veuillez d'abord télécharger et installer 7-Zip.</value>
   <data name="InfoPasswords" xml:space="preserve">
     <value>Nombre de mots de passe</value>
   </data>
+  <data name="InfoPassword" xml:space="preserve">
+    <value>Mot de passe</value>
+  </data>
   <data name="InfoParallelism" xml:space="preserve">
     <value>Parallélisme</value>
   </data>
   <data name="ValueYes" xml:space="preserve">
     <value>Oui</value>
   </data>
-  <data name="ValueNo" xml:space="preserve">
-    <value>Non</value>
+  <data name="ValueEncryptionHeader" xml:space="preserve">
+    <value>Données + noms de fichiers (en-tête chiffré)</value>
   </data>
-  <data name="ValueHeaderEncryption" xml:space="preserve">
-    <value>En-tête chiffré (chiffrement complet)</value>
+  <data name="ValueEncryptionDataOnly" xml:space="preserve">
+    <value>Données seules (noms visibles)</value>
+  </data>
+  <data name="ValueEncryptionNone" xml:space="preserve">
+    <value>Aucun</value>
+  </data>
+  <data name="ValueTestTargetHeader" xml:space="preserve">
+    <value>En-tête de l'archive (vérifié à l'ouverture)</value>
+  </data>
+  <data name="ValueTestTargetQuickFile" xml:space="preserve">
+    <value>Plus petit fichier chiffré {0} ({1})</value>
+  </data>
+  <data name="ValueTestTargetAll" xml:space="preserve">
+    <value>Toutes les données chiffrées ({0})</value>
+  </data>
+  <data name="ValueSizeWithRatio" xml:space="preserve">
+    <value>{0} (compressé {1}, {2} %)</value>
+  </data>
+  <data name="ValueVolumeCount" xml:space="preserve">
+    <value>{0} volumes ({1} au total)</value>
   </data>
   <data name="ResultElapsed" xml:space="preserve">
     <value>Temps écoulé</value>
@@ -327,6 +366,12 @@ Vous pouvez aussi le télécharger manuellement depuis la page des versions.</va
   </data>
   <data name="FastFilterActive" xml:space="preserve">
     <value>Données chiffrées non compressées ({0}) : filtrage rapide activé — seul le premier bloc est déchiffré, les données ne sont pas décompressées. Les candidats retenus sont tout de même vérifiés par un test 7-Zip complet.</value>
+  </data>
+  <data name="FallbackFullDecodePrompt" xml:space="preserve">
+    <value>Le filtrage rapide a rejeté les {0} mots de passe sur la base de la signature du fichier. Vérifier à nouveau par un déchiffrement complet avec 7-Zip ? Durée estimée : {1}.</value>
+  </data>
+  <data name="FallbackFullDecodeStarted" xml:space="preserve">
+    <value>Vérification par déchiffrement complet démarrée (le filtrage rapide avait rejeté les {0} mots de passe sur la signature).</value>
   </data>
   <data name="SlowFullDecodeWarning" xml:space="preserve">
     <value>Cette archive est chiffrée sans compression (store) et ses noms de fichiers ne sont pas chiffrés : chaque mot de passe erroné doit donc être entièrement déchiffré ({0} par tentative) avant que le CRC du fichier puisse le rejeter. Durée estimée pour le dictionnaire actuel : {1}. Il s'agit d'une limite du format — augmenter le parallélisme n'y changera rien (le goulot d'étranglement est la bande passante mémoire, pas la dérivation de clé). Envisagez un dictionnaire plus petit.</value>

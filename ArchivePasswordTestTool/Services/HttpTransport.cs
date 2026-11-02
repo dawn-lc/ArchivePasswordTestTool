@@ -50,7 +50,7 @@ namespace ArchivePasswordTestTool
                 },
             };
 
-            return CreateClient(handler, timeout);
+            return CreateHttpClient(handler, timeout);
         }
 
         /// <summary>创建标准 TLS 客户端（带 SNI，完整证书校验），作为空 SNI 失败时的回退</summary>
@@ -63,11 +63,11 @@ namespace ArchivePasswordTestTool
                 ConnectTimeout = connectTimeout ?? timeout,
             };
 
-            return CreateClient(handler, timeout);
+            return CreateHttpClient(handler, timeout);
         }
 
         /// <summary>统一装配：所有出站客户端都必须带版本标识，避免各调用点各写一份（漏写即丢失版本信息）</summary>
-        private static HttpClient CreateClient(SocketsHttpHandler handler, TimeSpan timeout)
+        private static HttpClient CreateHttpClient(SocketsHttpHandler handler, TimeSpan timeout)
         {
             var client = new HttpClient(handler) { Timeout = timeout };
             client.DefaultRequestHeaders.UserAgent.ParseAdd(UserAgent);

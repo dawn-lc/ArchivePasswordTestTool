@@ -38,13 +38,14 @@ namespace ArchivePasswordTestTool
         // 12 字节加密头 + 16 字节明文首块
         private const int ProbeBufferSize = ZipCryptoCipher.HeaderLength + ProbeBlockSize;
 
-        private readonly byte[] _cipherProbe = new byte[ProbeBufferSize];
+        private readonly byte[] _cipherProbe;
         private readonly byte _checkByte;
         private readonly ContentSignature _signature;
 
-        private ZipStoreProbe(string fileName, byte checkByte, ContentSignature signature)
+        private ZipStoreProbe(string fileName, byte[] cipherProbe, byte checkByte, ContentSignature signature)
         {
             FileName = fileName;
+            _cipherProbe = cipherProbe;
             _checkByte = checkByte;
             _signature = signature;
         }
@@ -166,14 +167,14 @@ namespace ArchivePasswordTestTool
                 return null;
             }
 
-            var probe = new ZipStoreProbe(fileName, checkByte, signature);
+            byte[] cipherProbe = new byte[ProbeBufferSize];
             stream.Position = dataOffset;
-            if (!ReadExactly(stream, probe._cipherProbe))
+            if (!ReadExactly(stream, cipherProbe))
             {
                 return null;
             }
 
-            return probe;
+            return new ZipStoreProbe(fileName, cipherProbe, checkByte, signature);
         }
 
         /// <summary>
@@ -206,26 +207,14 @@ namespace ArchivePasswordTestTool
                 return PasswordProbeResult.NoMatch;
             }
 
-            return _signature.Matches(buffer[ZipCryptoCipher.HeaderLength..])
+            // 扩展名推断的签名优先，但不以其为限：归档内文件名可能被改名或伪装
+            return _signature.MatchesFileOrAnyKnownContainer(buffer[ZipCryptoCipher.HeaderLength..])
                 ? PasswordProbeResult.Match
                 : PasswordProbeResult.NoMatch;
         }
 
-        private static bool ReadExactly(Stream stream, byte[] buffer)
-        {
-            int read = 0;
-            while (read < buffer.Length)
-            {
-                int n = stream.Read(buffer, read, buffer.Length - read);
-                if (n <= 0)
-                {
-                    return false;
-                }
-
-                read += n;
-            }
-
-            return true;
-        }
+        /// <summary>读满缓冲；遇到流末尾（不足长度）返回 false</summary>
+        private static bool ReadExactly(Stream stream, byte[] buffer) =>
+            stream.ReadAtLeast(buffer, buffer.Length, throwOnEndOfStream: false) == buffer.Length;
     }
 }

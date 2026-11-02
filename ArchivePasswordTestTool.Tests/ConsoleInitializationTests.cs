@@ -58,7 +58,7 @@ public sealed class ConsoleInitializationTests
         Assert.Contains("AppDomain.CurrentDomain.ProcessExit", code, StringComparison.Ordinal);
         Assert.Contains("WindowsNativeMethods.RestoreConsole();", code, StringComparison.Ordinal);
 
-        string interop = ReadSource("ArchivePasswordTestTool", "Interop", "WindowsNativeMethods.cs");
+        string interop = ReadSource("ArchivePasswordTestTool", "Interop", "Native", "WindowsNativeMethods.cs");
         Assert.Contains("public static void RestoreConsole()", interop, StringComparison.Ordinal);
         Assert.Contains("SetConsoleOutputCP(originalOutputCodePage)", interop, StringComparison.Ordinal);
 
@@ -86,7 +86,7 @@ public sealed class ConsoleInitializationTests
     [Fact]
     public void FontWriteIsVerifiedByReadBack()
     {
-        string interop = ReadSource("ArchivePasswordTestTool", "Interop", "WindowsNativeMethods.cs");
+        string interop = ReadSource("ArchivePasswordTestTool", "Interop", "Native", "WindowsNativeMethods.cs");
 
         // conhost 的 SetCurrentConsoleFontEx 会返回 true 却只应用字号，
         // 不读回校验就会以为切换成功（实测：恢复时字体名不变，终端停在程序字体上）。
@@ -97,7 +97,7 @@ public sealed class ConsoleInitializationTests
     [Fact]
     public void BothFontStructDeclarationsAreKept()
     {
-        var code = CodeLines(ReadSource("ArchivePasswordTestTool", "Interop", "WindowsNativeMethods.cs"));
+        var code = CodeLines(ReadSource("ArchivePasswordTestTool", "Interop", "Native", "WindowsNativeMethods.cs"));
 
         // 内联 fixed char[32] 负责「新宋体 → Courier New」这类切换，
         // 定长字符串（ByValTStr）负责读到完整名字与另一方向的切换；少一个就有还原不了的情况。

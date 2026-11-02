@@ -28,7 +28,7 @@ namespace ArchivePasswordTestTool
             if (!IsConfigured(url))
             {
                 // 默认地址是占位：明确提示未配置并跳过，避免对占位地址做无谓的网络等待
-                AnsiConsole.MarkupLine($"[grey]{Resources.OnlineNotConfigured}[/]");
+                Ui.WriteMuted(Resources.OnlineNotConfigured);
                 return null;
             }
 
@@ -40,10 +40,9 @@ namespace ArchivePasswordTestTool
 
                 if (string.IsNullOrEmpty(password))
                 {
-                    AnsiConsole.MarkupLine($"[grey]{Resources.OnlineQueryEmpty}[/]");
+                    Ui.WriteMuted(Resources.OnlineQueryEmpty);
                     return null;
                 }
-
                 AnsiConsole.MarkupLine(Resources.OnlineQueryReceived);
                 return password;
             }

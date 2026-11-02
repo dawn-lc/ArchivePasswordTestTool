@@ -14,7 +14,6 @@ namespace ArchivePasswordTestTool
     /// </summary>
     internal sealed class Runner(string[] args)
     {
-        private static readonly SHA256 HashAlgorithm = SHA256.Create();
         private readonly Stopwatch stopwatch = new();
         private readonly Planner planner = new();
 
@@ -80,7 +79,7 @@ namespace ArchivePasswordTestTool
             // 而且自动化场景也不需要“立刻生效”。
             if (!Console.IsOutputRedirected)
             {
-                PendingUpdate.TryApplyAndRestart(args);
+                _ = PendingUpdate.TryApplyAndRestart(args);
             }
 
             return exitCode;
@@ -192,12 +191,9 @@ namespace ArchivePasswordTestTool
                 int fastParallelism = fastProbe is null ? 0 : ResolveFastParallelism();
 
                 Ui.WriteArchiveInfo(
+                    archiveInfo,
                     archivePath,
                     hashComputed ? archiveHash : null,
-                    archiveInfo.Format,
-                    archiveInfo.FileCount,
-                    archiveInfo.IsHeaderEncryption,
-                    archiveInfo.SupportsQuickTest,
                     dictionaryPath,
                     dictionaryCount,
                     fastProbe is null ? DisplayParallelism : fastParallelism);
@@ -208,6 +204,13 @@ namespace ArchivePasswordTestTool
                     // 依赖文件格式签名，用户需要知道这个前提
                     Ui.WriteWarning(string.Format(Resources.FastFilterActive, fastProbe.ContentFormat));
                     RunFastFilter(options.SevenZipDllPath, archiveInfo, dictionary, fastProbe, fastParallelism);
+
+                    // 快筛按签名否决了全部候选：结论依赖「正确密码解出的首块必然匹配已知格式」，
+                    // 扩展名撒谎或载荷被剥头时会漏。这里给用户一次用完整解密复核的机会
+                    if (string.IsNullOrEmpty(foundPassword))
+                    {
+                        TryFallbackToFullDecode(options, archiveInfo, onlinePassword);
+                    }
                 }
                 else
                 {
@@ -305,7 +308,7 @@ namespace ArchivePasswordTestTool
             }
 
             using var file = File.OpenRead(archivePath);
-            HashAlgorithm.Initialize();
+            using SHA256 hashAlgorithm = SHA256.Create();
             long fileLength = Math.Max(1, file.Length);
 
             CreateProgress()
@@ -317,13 +320,13 @@ namespace ArchivePasswordTestTool
                     int read;
                     while ((read = file.Read(buffer, 0, buffer.Length)) > 0)
                     {
-                        HashAlgorithm.TransformBlock(buffer, 0, read, null, 0);
+                        _ = hashAlgorithm.TransformBlock(buffer, 0, read, null, 0);
                         hashTask.Increment(read);
                         ConsoleTitle.ShowProgress(Resources.TitleAnalyzing, hashTask.Value, hashTask.MaxValue);
                     }
 
-                    HashAlgorithm.TransformFinalBlock([], 0, 0);
-                    var hashBytes = HashAlgorithm.Hash!;
+                    _ = hashAlgorithm.TransformFinalBlock([], 0, 0);
+                    var hashBytes = hashAlgorithm.Hash!;
                     archiveHash = Convert.ToBase64String(hashBytes);
                     archiveHashHex = Convert.ToHexString(hashBytes).ToLowerInvariant();
 
@@ -336,22 +339,13 @@ namespace ArchivePasswordTestTool
 
         /// <summary>
         /// 快速筛选的并行度：逻辑核数（KDF 是纯 CPU、SMT 有效），
-        /// 再受 APTT_PARALLELISM 总并发上限约束
+        /// 再受 APTT_PARALLELISM 总并发上限约束（与全量解密、多进程共用同一解释）
         /// </summary>
-        private static int ResolveFastParallelism()
-        {
-            int parallelism = Math.Max(1, Environment.ProcessorCount);
-
-            if (int.TryParse(Environment.GetEnvironmentVariable("APTT_PARALLELISM"), out int cap) && cap > 0)
-            {
-                parallelism = Math.Min(parallelism, cap);
-            }
-
-            return parallelism;
-        }
+        private static int ResolveFastParallelism() =>
+            ParallelismLimit.Apply(Math.Max(1, Environment.ProcessorCount));
 
         /// <summary>
-        /// 快速筛选模式：每个候选只派生 RAR3 密钥 + 解密首块（约 10ms），
+        /// 快速筛选模式：每个候选只派生 RAR4 密钥 + 解密首块（约 10ms），
         /// 通过格式签名的极少数候选再由 7-Zip 完整解包确认。
         /// <para>
         /// 关键约束：筛选结果**绝不**直接作为"找到密码"。签名匹配只是强提示，
@@ -367,50 +361,136 @@ namespace ArchivePasswordTestTool
         {
             stopwatch.Restart();
 
-            CreateProgress()
+            CreateProgress(showRate: true)
                 .Start(ctx =>
                 {
                     var testProgressBar = ctx.AddTask(Resources.TestingPasswordProgress, maxValue: dictionaryCount);
 
-                    var result = FastFilter.Run(
-                        probe,
-                        dictionary,
-                        parallelism,
-                        delta =>
+                    ArchiveContext? context = null;
+                    try
+                    {
+                        // 候选上限会让扫描提前停止（命中候选即停）。若这些候选全被 7-Zip 否决，
+                        // 剩余密码**根本没被测试过**，不能就此报「未找到」——必须继续扫完。
+                        // 这是一个循环而不是一次扫描：每轮最多收集一批候选，确认失败就接着扫。
+                        while (true)
                         {
-                            Interlocked.Add(ref testedCount, delta);
-                            testProgressBar.Increment(delta);
-                            ConsoleTitle.ShowProgress(Resources.TestingPasswordProgress, testProgressBar.Value, testProgressBar.MaxValue);
-                        });
+                            var result = FastFilter.Run(
+                                probe,
+                                dictionary,
+                                parallelism,
+                                delta =>
+                                {
+                                    _ = Interlocked.Add(ref testedCount, delta);
+                                    testProgressBar.Increment(delta);
+                                    ConsoleTitle.ShowProgress(Resources.TestingPasswordProgress, testProgressBar.Value, testProgressBar.MaxValue);
+                                });
 
-                    if (result.Completed)
-                    {
-                        // 字典确实扫完了：拉满进度（提前停止时剩余密码并未测试）
-                        testProgressBar.Value = testProgressBar.MaxValue;
-                    }
+                            // 超长密码无法走快速路径，与命中候选一起交给 7-Zip 权威确认
+                            var toConfirm = result.Candidates
+                                .Concat(result.Unsupported)
+                                .Distinct(StringComparer.Ordinal)
+                                .ToList();
 
-                    // 超长密码无法走快速路径，与命中候选一起交给 7-Zip 权威确认
-                    var toConfirm = result.Candidates
-                        .Concat(result.Unsupported)
-                        .Distinct(StringComparer.Ordinal)
-                        .ToList();
+                            if (toConfirm.Count > 0)
+                            {
+                                context ??= new ArchiveContext(dllPath, archivePath, password: null, archiveInfo);
+                                foreach (string candidate in toConfirm)
+                                {
+                                    if (context.TestPassword(candidate))
+                                    {
+                                        foundPassword = candidate;
+                                        stopwatch.Stop();
+                                        break;
+                                    }
+                                }
 
-                    if (toConfirm.Count == 0)
-                    {
-                        return;
-                    }
+                                if (foundPassword is not null)
+                                {
+                                    return;
+                                }
+                            }
 
-                    using var context = new ArchiveContext(dllPath, archivePath, password: null, archiveInfo);
-                    foreach (string candidate in toConfirm)
-                    {
-                        if (context.TestPassword(candidate))
-                        {
-                            foundPassword = candidate;
-                            stopwatch.Stop();
-                            break;
+                            if (result.Completed)
+                            {
+                                // 字典确实扫完了：拉满进度（此时剩余密码确实不存在）
+                                testProgressBar.Value = testProgressBar.MaxValue;
+                                return;
+                            }
                         }
                     }
+                    finally
+                    {
+                        context?.Dispose();
+                    }
                 });
+        }
+
+        /// <summary>
+        /// 快速筛选按签名否决全部候选后的「完整解密复核」。
+        /// <para>
+        /// 存在理由：快筛只承认「正确密码解出的首块匹配已知文件格式」这一前提。
+        /// 当归档内扩展名与实际内容不符（400 错误页存成 <c>movie.mp4</c>）、或载荷被剥掉容器头
+        /// （裸 PCM 存成 <c>.wav</c>）时，正确密码解出的首块不带任何已知魔数，会被当作错误密码丢弃，
+        /// 用户得到「未找到」——实测三种格式各复现一例。
+        /// </para>
+        /// <para>
+        /// 代价与是否值得由用户决定：即便签名不符，绝大多数情况下正确答案确实不在字典里，
+        /// 而完整复核要付整个字典的解密代价（1.2GB 包 250 万条约 100 小时）。
+        /// 因此默认不自动执行：
+        /// <list type="bullet">
+        /// <item>带 <c>-FallbackFullDecode</c> → 无条件复核（无人值守场景）</item>
+        /// <item>否则在真实终端里询问一次（默认 N）</item>
+        /// <item>输入或输出被重定向（<c>&gt; log.txt</c>、CI、管道）→ 静默跳过，行为与引入本功能前一致</item>
+        /// </list>
+        /// </para>
+        /// </summary>
+        private void TryFallbackToFullDecode(Options options, ArchiveInfo archiveInfo, string? onlinePassword)
+        {
+            TimeSpan estimate = CostEstimate.Estimate(dictionaryCount, archiveInfo.FailurePathBytes);
+            string prompt = string.Format(
+                Resources.FallbackFullDecodePrompt,
+                dictionaryCount.ToString("N0"),
+                CostEstimate.FormatDuration(estimate));
+
+            // 只在真实交互终端里询问。输出被重定向（`> log.txt`、CI）时用户看不到提示，
+            // 而 ReadKey 会一直等下去——那会把自动化任务挂死。判据与
+            // InteractivePrompts.NeedConfirmBeforeExit 保持一致
+            bool interactive = !Console.IsInputRedirected && !Console.IsOutputRedirected;
+
+            bool proceed = options.FallbackFullDecode
+                || (interactive && InteractivePrompts.ConfirmSingleKey($"[yellow]{Ui.Escape(prompt)}[/]", defaultYes: false));
+
+            if (!proceed)
+            {
+                return;
+            }
+
+            AnsiConsole.WriteLine();
+            Ui.WriteWarning(string.Format(
+                Resources.FallbackFullDecodeStarted, dictionaryCount.ToString("N0")));
+            Ui.WarnSlowFullDecodeIfNeeded(archiveInfo, dictionaryCount);
+
+            // 快筛是消费式的（Pop 即释放引用），原字典已空。重新读一遍文件：
+            // 编码探测与去重一并重做，保证复核的密码集合与快筛看到的完全一致
+            using var fallbackDictionary = new PasswordDictionary(
+                dictionaryPath, onlinePassword: onlinePassword);
+
+            // 快筛路径跳过了上下文池预建（skipContextPool），复核要用它
+            var (Mode, WorkerCount, ThreadParallelism, _) = planner.Plan(
+                options.SevenZipDllPath, archiveInfo, archivePath, fallbackDictionary.Count);
+
+            // 计数与耗时归零：把两个阶段的数字混在一起会让「速度」失去意义，
+            // 而用户此刻关心的是完整复核本身的吞吐
+            _ = Interlocked.Exchange(ref testedCount, 0);
+
+            if (Mode == ExecutionMode.MultiProcess)
+            {
+                RunMultiProcess(options.SevenZipDllPath, fallbackDictionary, WorkerCount);
+            }
+            else
+            {
+                RunThreaded(options.SevenZipDllPath, archiveInfo, fallbackDictionary, ThreadParallelism);
+            }
         }
 
         /// <summary>
@@ -422,7 +502,7 @@ namespace ArchivePasswordTestTool
         {
             stopwatch.Restart();
 
-            CreateProgress()
+            CreateProgress(showRate: true)
                 .Start(ctx =>
                 {
                     var testProgressBar = ctx.AddTask(Resources.TestingPasswordProgress, maxValue: dictionaryCount);
@@ -435,7 +515,7 @@ namespace ArchivePasswordTestTool
                         workerCount,
                         onTested: acked =>
                         {
-                            Interlocked.Add(ref testedCount, acked);
+                            _ = Interlocked.Add(ref testedCount, acked);
                             testProgressBar.Increment(acked);
                             ConsoleTitle.ShowProgress(Resources.TestingPasswordProgress, testProgressBar.Value, testProgressBar.MaxValue);
                         },
@@ -464,12 +544,12 @@ namespace ArchivePasswordTestTool
 
             stopwatch.Restart();
 
-            CreateProgress()
+            CreateProgress(showRate: true)
                 .Start(ctx =>
                 {
                     var testProgressBar = ctx.AddTask(Resources.TestingPasswordProgress, maxValue: dictionaryCount);
 
-                    Parallel.For(0, dictionaryCount, new ParallelOptions() { MaxDegreeOfParallelism = parallelism }, (i, state) =>
+                    _ = Parallel.For(0, dictionaryCount, new ParallelOptions { MaxDegreeOfParallelism = parallelism }, (i, state) =>
                     {
                         ArchiveContext? context = null;
                         try
@@ -481,14 +561,9 @@ namespace ArchivePasswordTestTool
                                 return;
                             }
 
-                            if (!isFullyEncrypted)
-                            {
-                                context = planner.RentOrCreate(dllPath, archivePath, archiveInfo);
-                            }
-                            else
-                            {
-                                context = new ArchiveContext(dllPath, archivePath, password, archiveInfo);
-                            }
+                            context = isFullyEncrypted
+                                ? new ArchiveContext(dllPath, archivePath, password, archiveInfo)
+                                : planner.RentOrCreate(dllPath, archivePath, archiveInfo);
 
                             // 快速测试目标（最小加密文件索引）由 ArchiveContext 打开归档时算好并缓存，
                             // 这里不再逐密码新建索引数组
@@ -516,7 +591,7 @@ namespace ArchivePasswordTestTool
                                 context?.Dispose();
                             }
 
-                            Interlocked.Increment(ref testedCount);
+                            _ = Interlocked.Increment(ref testedCount);
                             testProgressBar.Increment(1);
                             ConsoleTitle.ShowProgress(Resources.TestingPasswordProgress, testProgressBar.Value, testProgressBar.MaxValue);
                         }
@@ -534,20 +609,35 @@ namespace ArchivePasswordTestTool
         }
 
         /// <summary>
-        /// 进度条统一样式（哈希计算与两处测密的列配置此前各写一份，且缩进都跑偏了）。
+        /// 进度条统一样式（哈希计算与三处测密共用）。
+        /// <para>
+        /// <paramref name="showRate" /> 只对测密有意义：哈希进度是按字节推进的，「个/秒」没有语义，
+        /// 测密才需要让用户实时看到当前速度。速度列紧跟在进度条+百分比之后。
+        /// </para>
         /// 重定向/非终端环境下 Spectre 自动退化，测试安全。
         /// </summary>
-        private static Progress CreateProgress() =>
-            AnsiConsole.Progress()
+        private static Progress CreateProgress(bool showRate = false)
+        {
+            List<ProgressColumn> columns =
+            [
+                new TaskDescriptionColumn(),
+                new ProgressBarColumn(),
+                new PercentageColumn()
+            ];
+
+            if (showRate)
+            {
+                columns.Add(new RateColumn());
+            }
+
+            columns.Add(new ElapsedTimeColumn());
+            columns.Add(new RemainingTimeColumn());
+            columns.Add(new SpinnerColumn());
+
+            return AnsiConsole.Progress()
                 .AutoClear(true)
                 .HideCompleted(true)
-                .Columns([
-                    new TaskDescriptionColumn(),
-                    new ProgressBarColumn(),
-                    new PercentageColumn(),
-                    new ElapsedTimeColumn(),
-                    new RemainingTimeColumn(),
-                    new SpinnerColumn()
-                ]);
+                .Columns([.. columns]);
+        }
     }
 }

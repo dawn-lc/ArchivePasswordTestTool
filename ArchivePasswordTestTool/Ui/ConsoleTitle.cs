@@ -32,7 +32,7 @@ namespace ArchivePasswordTestTool
         private static readonly string Product = "ArchivePasswordTestTool v" + Program.VersionText;
 
         /// <summary>进度回调来自 Parallel.For 的多个线程，串行化后才能安全读写下面几个字段</summary>
-        private static readonly object Gate = new();
+        private static readonly Lock Gate = new();
 
         private static string? applied;
         private static long lastAppliedTicks;

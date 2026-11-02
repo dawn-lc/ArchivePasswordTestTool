@@ -50,7 +50,7 @@ namespace ArchivePasswordTestTool
 
             if (InteractivePrompts.ConfirmSingleKey(Resources.ViewTestReportPrompt, true))
             {
-                Process.Start("explorer.exe", $"/select, \"{resultPath}\"");
+                _ = Process.Start("explorer.exe", $"/select, \"{resultPath}\"");
             }
         }
 

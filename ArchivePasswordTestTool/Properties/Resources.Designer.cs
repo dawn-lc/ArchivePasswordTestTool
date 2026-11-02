@@ -445,11 +445,77 @@ namespace ArchivePasswordTestTool.Properties
         /// <summary>
         ///   查找类似 Quick Test 的本地化字符串。
         /// </summary>
-        public static string InfoQuickTest
+        public static string InfoUnpackedSize
         {
             get
             {
-                return EmbeddedResourceManager.GetString("InfoQuickTest", resourceCulture);
+                return EmbeddedResourceManager.GetString("InfoUnpackedSize", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   查找类似 Method 的本地化字符串。
+        /// </summary>
+        public static string InfoMethod
+        {
+            get
+            {
+                return EmbeddedResourceManager.GetString("InfoMethod", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   查找类似 Solid 的本地化字符串。
+        /// </summary>
+        public static string InfoSolid
+        {
+            get
+            {
+                return EmbeddedResourceManager.GetString("InfoSolid", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   查找类似 Test Target 的本地化字符串。
+        /// </summary>
+        public static string InfoTestTarget
+        {
+            get
+            {
+                return EmbeddedResourceManager.GetString("InfoTestTarget", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   查找类似 Volumes 的本地化字符串。
+        /// </summary>
+        public static string InfoVolumes
+        {
+            get
+            {
+                return EmbeddedResourceManager.GetString("InfoVolumes", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   查找类似 On Disk 的本地化字符串。
+        /// </summary>
+        public static string InfoDiskSize
+        {
+            get
+            {
+                return EmbeddedResourceManager.GetString("InfoDiskSize", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   查找类似 Data Offset 的本地化字符串。
+        /// </summary>
+        public static string InfoSfxOffset
+        {
+            get
+            {
+                return EmbeddedResourceManager.GetString("InfoSfxOffset", resourceCulture);
             }
         }
 
@@ -487,6 +553,21 @@ namespace ArchivePasswordTestTool.Properties
         }
 
         /// <summary>
+        ///   查找类似 Password 的本地化字符串。
+        /// <para>
+        /// 注意与 <see cref="InfoPasswords"/>（密码**数量**）只差一个 s：
+        /// 这一项是结果面板里「找到的密码」的行标签。
+        /// </para>
+        /// </summary>
+        public static string InfoPassword
+        {
+            get
+            {
+                return EmbeddedResourceManager.GetString("InfoPassword", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   查找类似 Parallelism 的本地化字符串。
         /// </summary>
         public static string InfoParallelism
@@ -509,24 +590,90 @@ namespace ArchivePasswordTestTool.Properties
         }
 
         /// <summary>
-        ///   查找类似 No 的本地化字符串。
+        ///   查找类似 Header encrypted (fully encrypted) 的本地化字符串。
         /// </summary>
-        public static string ValueNo
+        public static string ValueEncryptionHeader
         {
             get
             {
-                return EmbeddedResourceManager.GetString("ValueNo", resourceCulture);
+                return EmbeddedResourceManager.GetString("ValueEncryptionHeader", resourceCulture);
             }
         }
 
         /// <summary>
-        ///   查找类似 Header encrypted (fully encrypted) 的本地化字符串。
+        ///   查找类似 Data only (file names visible) 的本地化字符串。
         /// </summary>
-        public static string ValueHeaderEncryption
+        public static string ValueEncryptionDataOnly
         {
             get
             {
-                return EmbeddedResourceManager.GetString("ValueHeaderEncryption", resourceCulture);
+                return EmbeddedResourceManager.GetString("ValueEncryptionDataOnly", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   查找类似 None 的本地化字符串。
+        /// </summary>
+        public static string ValueEncryptionNone
+        {
+            get
+            {
+                return EmbeddedResourceManager.GetString("ValueEncryptionNone", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   查找类似 Archive header (verified while opening) 的本地化字符串。
+        /// </summary>
+        public static string ValueTestTargetHeader
+        {
+            get
+            {
+                return EmbeddedResourceManager.GetString("ValueTestTargetHeader", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   查找类似 Smallest encrypted file {0} ({1}) 的本地化字符串。
+        /// </summary>
+        public static string ValueTestTargetQuickFile
+        {
+            get
+            {
+                return EmbeddedResourceManager.GetString("ValueTestTargetQuickFile", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   查找类似 All encrypted data ({0}) 的本地化字符串。
+        /// </summary>
+        public static string ValueTestTargetAll
+        {
+            get
+            {
+                return EmbeddedResourceManager.GetString("ValueTestTargetAll", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   查找类似 {0} (packed {1}, {2}%) 的本地化字符串。
+        /// </summary>
+        public static string ValueSizeWithRatio
+        {
+            get
+            {
+                return EmbeddedResourceManager.GetString("ValueSizeWithRatio", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   查找类似 {0} parts ({1} total) 的本地化字符串。
+        /// </summary>
+        public static string ValueVolumeCount
+        {
+            get
+            {
+                return EmbeddedResourceManager.GetString("ValueVolumeCount", resourceCulture);
             }
         }
 
@@ -824,6 +971,31 @@ namespace ArchivePasswordTestTool.Properties
             get
             {
                 return EmbeddedResourceManager.GetString("FastFilterActive", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   查找类似 The fast filter rejected all {0} passwords 的本地化字符串。
+        /// <para>
+        /// 快速筛选按签名否决了全部候选后的复核询问。两个占位符：已排除的密码条数、预估耗时。
+        /// </para>
+        /// </summary>
+        public static string FallbackFullDecodePrompt
+        {
+            get
+            {
+                return EmbeddedResourceManager.GetString("FallbackFullDecodePrompt", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   查找类似 Full-decode verification started 的本地化字符串。
+        /// </summary>
+        public static string FallbackFullDecodeStarted
+        {
+            get
+            {
+                return EmbeddedResourceManager.GetString("FallbackFullDecodeStarted", resourceCulture);
             }
         }
 

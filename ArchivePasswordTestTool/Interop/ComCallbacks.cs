@@ -4,9 +4,8 @@ using System.Runtime.InteropServices.Marshalling;
 namespace ArchivePasswordTestTool
 {
     /// <summary>
-    /// 压缩包源流标记：同时具备 IInStream(COM) 与 IDisposable 能力。
-    /// 受 ComImport 接口派生限制无法用单个托管接口同时继承两者，
-    /// 调用需要 IInStream 参数处需显式转型。
+    /// 压缩包源流标记：同时具备 IInStream（源生成 COM 接口）与 IDisposable 能力。
+    /// 托管接口不能同时继承两者，调用需要 IInStream 参数处需显式转型。
     /// </summary>
     internal interface IArchiveSourceStream : IDisposable
     {
@@ -26,17 +25,6 @@ namespace ArchivePasswordTestTool
     [GeneratedComClass]
     internal sealed unsafe partial class FileInStream : IInStream, IArchiveSourceStream
     {
-        // APTT_TRACE=1 时输出 COM 回调跟踪到 stderr（仅诊断用）
-        internal static readonly bool TraceEnabled = Environment.GetEnvironmentVariable("APTT_TRACE") == "1";
-
-        internal static void ComTrace(string message)
-        {
-            if (TraceEnabled)
-            {
-                Console.Error.WriteLine($"[TRACE:{Environment.CurrentManagedThreadId:00}] {message}");
-            }
-        }
-
         private readonly Stream _stream;
 
         public FileInStream(string filePath)
@@ -46,7 +34,7 @@ namespace ArchivePasswordTestTool
 
         public int Read(byte* data, uint size, uint* processedSize)
         {
-            ComTrace($"FileInStream.Read size={size}");
+            ComTrace.Write($"FileInStream.Read size={size}");
 
             // native 缓冲区由调用方保证至少可写 size 字节
             int request = size > int.MaxValue ? int.MaxValue : (int)size;
@@ -68,7 +56,7 @@ namespace ArchivePasswordTestTool
 
         public int Seek(long offset, uint seekOrigin, ulong* newPosition)
         {
-            ComTrace($"FileInStream.Seek offset={offset} origin={seekOrigin}");
+            ComTrace.Write($"FileInStream.Seek offset={offset} origin={seekOrigin}");
 
             SeekOrigin origin = (SeekOrigin)seekOrigin;
             long position = _stream.Seek(offset, origin);
@@ -83,7 +71,7 @@ namespace ArchivePasswordTestTool
 
         public void Dispose()
         {
-            _stream?.Dispose();
+            _stream.Dispose();
         }
     }
 
@@ -132,7 +120,7 @@ namespace ArchivePasswordTestTool
 
         public int Read(byte* data, uint size, uint* processedSize)
         {
-            FileInStream.ComTrace($"MultiVolumeInStream.Read size={size} pos={_position}");
+            ComTrace.Write($"MultiVolumeInStream.Read size={size} pos={_position}");
 
             int totalRead = 0;
             int request = size > int.MaxValue ? int.MaxValue : (int)size;
@@ -156,7 +144,7 @@ namespace ArchivePasswordTestTool
                 }
 
                 int chunk = (int)Math.Min(avail, request - totalRead);
-                _streams[vol].Seek(within, SeekOrigin.Begin);
+                _ = _streams[vol].Seek(within, SeekOrigin.Begin);
 
                 // 直接写进 native 缓冲区，省掉一次 ArrayPool 租借 + Marshal.Copy
                 var span = new Span<byte>(data + totalRead, chunk);
@@ -227,7 +215,7 @@ namespace ArchivePasswordTestTool
     {
         public int Write(byte* data, uint size, uint* processedSize)
         {
-            FileInStream.ComTrace($"DummyOutStream.Write size={size}");
+            ComTrace.Write($"DummyOutStream.Write size={size}");
 
             if (processedSize is not null)
             {
@@ -248,33 +236,31 @@ namespace ArchivePasswordTestTool
     internal sealed unsafe partial class TestExtractCallback : IArchiveExtractCallback, ICryptoGetTextPassword
     {
         private readonly string _password;
-        private OperationResult _lastOperationResult;
-        private readonly List<DummyOutStream> _outStreams;
+        private OperationResult _lastOperationResult = OperationResult.OK;
+        private readonly List<DummyOutStream> _outStreams = [];
 
         public TestExtractCallback(string password)
         {
             _password = password;
-            _lastOperationResult = OperationResult.OK;
-            _outStreams = [];
         }
 
         public OperationResult LastOperationResult => _lastOperationResult;
 
         public int SetTotal(ulong total)
         {
-            FileInStream.ComTrace($"TestExtractCallback.SetTotal total={total}");
+            ComTrace.Write($"TestExtractCallback.SetTotal total={total}");
             return 0; // S_OK
         }
 
         public int SetCompleted(ulong* completeValue)
         {
-            FileInStream.ComTrace($"TestExtractCallback.SetCompleted value={(completeValue is null ? 0 : *completeValue)}");
+            ComTrace.Write($"TestExtractCallback.SetCompleted value={(completeValue is null ? 0 : *completeValue)}");
             return 0; // S_OK
         }
 
         public int GetStream(uint index, out ISequentialOutStream? outStream, AskMode askExtractMode)
         {
-            FileInStream.ComTrace($"TestExtractCallback.GetStream index={index} mode={askExtractMode}");
+            ComTrace.Write($"TestExtractCallback.GetStream index={index} mode={askExtractMode}");
 
             // Skip 模式直接跳过
             if (askExtractMode == AskMode.Skip)
@@ -292,13 +278,13 @@ namespace ArchivePasswordTestTool
 
         public int PrepareOperation(AskMode askExtractMode)
         {
-            FileInStream.ComTrace($"TestExtractCallback.PrepareOperation mode={askExtractMode}");
+            ComTrace.Write($"TestExtractCallback.PrepareOperation mode={askExtractMode}");
             return 0; // S_OK
         }
 
         public int SetOperationResult(OperationResult operationResult)
         {
-            FileInStream.ComTrace($"TestExtractCallback.SetOperationResult result={operationResult}");
+            ComTrace.Write($"TestExtractCallback.SetOperationResult result={operationResult}");
             _lastOperationResult = operationResult;
             return 0; // S_OK
         }
@@ -338,19 +324,19 @@ namespace ArchivePasswordTestTool
 
         public int SetTotal(ulong* files, ulong* bytes)
         {
-            FileInStream.ComTrace("PasswordOpenCallback.SetTotal");
+            ComTrace.Write("PasswordOpenCallback.SetTotal");
             return 0; // S_OK
         }
 
         public int SetCompleted(ulong* files, ulong* bytes)
         {
-            FileInStream.ComTrace("PasswordOpenCallback.SetCompleted");
+            ComTrace.Write("PasswordOpenCallback.SetCompleted");
             return 0; // S_OK
         }
 
         public int CryptoGetTextPassword(out string password)
         {
-            FileInStream.ComTrace("PasswordOpenCallback.CryptoGetTextPassword");
+            ComTrace.Write("PasswordOpenCallback.CryptoGetTextPassword");
             password = _password;
             return 0; // S_OK
         }
@@ -376,7 +362,7 @@ namespace ArchivePasswordTestTool
 
         public int GetStream([MarshalAs(UnmanagedType.LPWStr)] string name, out IInStream? inStream)
         {
-            FileInStream.ComTrace($"PasswordOpenCallback.GetStream {name}");
+            ComTrace.Write($"PasswordOpenCallback.GetStream {name}");
             inStream = null;
 
             // 7-Zip 传入的是分卷文件名（相对名），按第一个分卷所在目录解析

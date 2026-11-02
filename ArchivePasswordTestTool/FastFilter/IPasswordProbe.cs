@@ -16,7 +16,7 @@ namespace ArchivePasswordTestTool
     /// <summary>
     /// 快速判错器：用候选密码解密归档数据的首个块，比对文件格式签名。
     /// <para>
-    /// 抽象成接口是为了让 <see cref="FastFilter"/> 同时支持 RAR4 与 ZipCrypto——
+    /// 抽象成接口是为了让 <see cref="FastFilter"/> 同时支持 7z（Copy 编码）、RAR4 与 ZipCrypto——
     /// 它们的共同点是「格式没有可靠的密码校验值，但存储模式让首块就是明文」。
     /// </para>
     /// <para>

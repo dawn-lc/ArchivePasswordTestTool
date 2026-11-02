@@ -55,7 +55,7 @@ namespace ArchivePasswordTestTool
             // 仅在此处（每路径一次）调整 DLL 搜索目录：原实现每次密码测试创建上下文时
             // 都会写一次进程级全局搜索路径，既多余又让并发创建上下文时行为不干净。
             // 7z.dll 常驻进程直到退出（不再 FreeLibrary），因此这一次设置足够
-            WindowsNativeMethods.SetDllDirectory(Path.GetDirectoryName(dllPath)!);
+            _ = WindowsNativeMethods.SetDllDirectory(Path.GetDirectoryName(dllPath)!);
 
             IntPtr module = WindowsNativeMethods.LoadLibrary(dllPath);
             if (module == IntPtr.Zero)
@@ -94,7 +94,7 @@ namespace ArchivePasswordTestTool
             finally
             {
                 // 释放 CreateObjectNative 带来的那一份原生引用
-                Marshal.Release(unknownPtr);
+                _ = Marshal.Release(unknownPtr);
             }
 
             return hr;

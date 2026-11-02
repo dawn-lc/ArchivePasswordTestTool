@@ -75,7 +75,7 @@ namespace ArchivePasswordTestTool
             uint length = 0;
 
             // 第一次调用只为取所需缓冲区大小，预期返回 ERROR_INSUFFICIENT_BUFFER
-            GetLogicalProcessorInformationEx(RelationProcessorCore, IntPtr.Zero, ref length);
+            _ = GetLogicalProcessorInformationEx(RelationProcessorCore, IntPtr.Zero, ref length);
             if (length == 0)
             {
                 return fallback;

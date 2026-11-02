@@ -173,7 +173,7 @@
     <value>未找到密码</value>
   </data>
   <data name="PasswordFoundSuccess" xml:space="preserve">
-    <value>找到解压密码: {0}</value>
+    <value>找到解压密码</value>
   </data>
   <data name="PasswordNotFound" xml:space="preserve">
     <value>未找到正确的解压密码！</value>
@@ -229,8 +229,26 @@
   <data name="InfoEncryption" xml:space="preserve">
     <value>加密状态</value>
   </data>
-  <data name="InfoQuickTest" xml:space="preserve">
-    <value>快速测试</value>
+  <data name="InfoUnpackedSize" xml:space="preserve">
+    <value>大小</value>
+  </data>
+  <data name="InfoMethod" xml:space="preserve">
+    <value>压缩方式</value>
+  </data>
+  <data name="InfoSolid" xml:space="preserve">
+    <value>固实压缩</value>
+  </data>
+  <data name="InfoTestTarget" xml:space="preserve">
+    <value>测密目标</value>
+  </data>
+  <data name="InfoVolumes" xml:space="preserve">
+    <value>分卷</value>
+  </data>
+  <data name="InfoDiskSize" xml:space="preserve">
+    <value>磁盘占用</value>
+  </data>
+  <data name="InfoSfxOffset" xml:space="preserve">
+    <value>数据偏移</value>
   </data>
   <data name="InfoHash" xml:space="preserve">
     <value>哈希值</value>
@@ -241,17 +259,38 @@
   <data name="InfoPasswords" xml:space="preserve">
     <value>密码数量</value>
   </data>
+  <data name="InfoPassword" xml:space="preserve">
+    <value>密码</value>
+  </data>
   <data name="InfoParallelism" xml:space="preserve">
     <value>并行度</value>
   </data>
   <data name="ValueYes" xml:space="preserve">
     <value>是</value>
   </data>
-  <data name="ValueNo" xml:space="preserve">
-    <value>否</value>
+  <data name="ValueEncryptionHeader" xml:space="preserve">
+    <value>数据 + 文件名（header 加密）</value>
   </data>
-  <data name="ValueHeaderEncryption" xml:space="preserve">
-    <value>Header 加密（完全加密）</value>
+  <data name="ValueEncryptionDataOnly" xml:space="preserve">
+    <value>仅数据（文件名可见）</value>
+  </data>
+  <data name="ValueEncryptionNone" xml:space="preserve">
+    <value>无</value>
+  </data>
+  <data name="ValueTestTargetHeader" xml:space="preserve">
+    <value>压缩包文件头（解压前即校验）</value>
+  </data>
+  <data name="ValueTestTargetQuickFile" xml:space="preserve">
+    <value>最小加密文件 {0}（{1}）</value>
+  </data>
+  <data name="ValueTestTargetAll" xml:space="preserve">
+    <value>全部加密数据（{0}）</value>
+  </data>
+  <data name="ValueSizeWithRatio" xml:space="preserve">
+    <value>{0}（压缩后 {1}，{2}%）</value>
+  </data>
+  <data name="ValueVolumeCount" xml:space="preserve">
+    <value>{0} 卷（共 {1}）</value>
   </data>
   <data name="ResultElapsed" xml:space="preserve">
     <value>耗时</value>
@@ -327,6 +366,12 @@
   </data>
   <data name="FastFilterActive" xml:space="preserve">
     <value>不压缩加密数据（{0}）：已启用快速密码筛选，仅解密首块、不解包数据。命中的候选仍会由 7-Zip 完整测试确认。</value>
+  </data>
+  <data name="FallbackFullDecodePrompt" xml:space="preserve">
+    <value>快速筛选已按文件签名排除全部 {0} 个密码。是否改用 7-Zip 完整解密复核？预计耗时 {1}。</value>
+  </data>
+  <data name="FallbackFullDecodeStarted" xml:space="preserve">
+    <value>已开始完整解密复核（快速筛选曾按签名排除全部 {0} 个密码）。</value>
   </data>
   <data name="SlowFullDecodeWarning" xml:space="preserve">
     <value>该压缩包使用了不压缩（store）编码且未加密文件名：每个错误密码都必须完整解出数据（每次 {0}）才能靠文件 CRC 判错。按当前字典预计耗时约 {1}。这是格式自身的限制，增加并行度也无法改善（瓶颈是内存带宽而非密钥派生）。建议改用更小的字典。</value>

@@ -11,8 +11,8 @@ namespace ArchivePasswordTestTool.Tests.Infrastructure;
 /// 而「快速判错」的正确性必须有一个**已知密码**的 RAR4 存档才能验证。
 /// </para>
 /// <para>
-/// 关键点：这里用生产代码的 <see cref="Rar3KeyDerivation"/> 派生密钥并加密。
-/// 若该 KDF 与真实 RAR3 算法有任何偏差，7-Zip 将无法解开本函数生成的存档——
+/// 关键点：这里用生产代码的 <see cref="Rar4KeyDerivation"/> 派生密钥并加密。
+/// 若该 KDF 与真实 RAR4 算法有任何偏差，7-Zip 将无法解开本函数生成的存档——
 /// 因此「用主程序/7-Zip 解开合成存档」这一断言同时反向验证了 KDF 实现。
 /// 存档未压缩（method 0x30），与真实快速判错的目标场景一致。
 /// </para>
@@ -39,15 +39,15 @@ internal static class Rar4ArchiveWriter
     /// <param name="salt">8 字节盐（测试传固定值以保证可重复）</param>
     public static void CreateStoredEncrypted(string path, string entryName, byte[] plaintext, string password, byte[] salt)
     {
-        if (salt.Length != Rar3KeyDerivation.SaltSize)
+        if (salt.Length != Rar4KeyDerivation.SaltSize)
         {
-            throw new ArgumentException($"盐必须为 {Rar3KeyDerivation.SaltSize} 字节", nameof(salt));
+            throw new ArgumentException($"盐必须为 {Rar4KeyDerivation.SaltSize} 字节", nameof(salt));
         }
 
         byte[] passwordBytes = Encoding.Unicode.GetBytes(password);
         byte[] key = new byte[16];
         byte[] iv = new byte[16];
-        Rar3KeyDerivation.DeriveKey(passwordBytes, salt, key, iv);
+        Rar4KeyDerivation.DeriveKey(passwordBytes, salt, key, iv);
 
         // CBC 无填充：明文补零到 16 的倍数（RAR4 存储模式就是这么做的）
         int paddedLength = (plaintext.Length + 15) / 16 * 16;

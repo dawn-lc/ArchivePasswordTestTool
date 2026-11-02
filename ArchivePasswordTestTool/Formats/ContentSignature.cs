@@ -85,6 +85,78 @@ namespace ArchivePasswordTestTool
                 && block.Slice(offset, expected.Length).SequenceEqual(expected);
         }
 
+        /// <summary>
+        /// 便捷判定：扩展名推断的签名，或者任一已知容器签名命中，都算候选。
+        /// <para>
+        /// 为什么必须加上后半句：压缩包内的文件名是打包者定的，可能被改名或伪装
+        /// （实测：PNG 内容命名为 <c>Sample.mp4</c>）。若只认扩展名推断出的签名，
+        /// 正确密码解出的 PNG 首块会被判为 <see cref="PasswordProbeResult.NoMatch"/> 而丢弃，
+        /// 用户得到「未找到密码」——静默漏测。已用真实样本复现并修复。
+        /// </para>
+        /// <para>
+        /// 反过来也不会明显变宽：兜底表只收录魔数 ≥ 3 字节的格式，最弱的三字节签名
+        /// 随机命中率 2⁻²⁴，2.5M 候选期望误报约 0.5 次，且命中的候选仍要 7-Zip 完整确认。
+        /// </para>
+        /// </summary>
+        public bool MatchesFileOrAnyKnownContainer(ReadOnlySpan<byte> block) =>
+            Matches(block) || MatchesAnyKnownContainer(block);
+
+        /// <summary>明文首块是否匹配任一已知容器格式（用于兜住扩展名与内容不符）</summary>
+        public static bool MatchesAnyKnownContainer(ReadOnlySpan<byte> block)
+        {
+            foreach (var signature in UniversalSignatures)
+            {
+                if (signature.Matches(block))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        /// <summary>
+        /// 兜底匹配要求的最短魔数长度。2 字节魔数（MZ / BM / gzip / MP3 帧同步）
+        /// 的随机命中率是 2⁻¹⁶，2.5M 候选会有上百次误报，足以把候选上限打满并让扫描提前中断，
+        /// 因此只把它们留给「扩展名明确」的精确匹配，不进兜底表。
+        /// </summary>
+        private const int UniversalMinimumMagicLength = 3;
+
+        /// <summary>
+        /// 该签名中最弱的匹配分支需要多少字节。取 All 与每个 Any 组的较小值——
+        /// 宁可低估强度（少收录一个格式），也不要把弱特征放进兜底表。
+        /// <c>RequirePlausibleBoxSize</c> 不计入：它只排除 6 个值，撑不起强度。
+        /// </summary>
+        private int MinimumMagicLength
+        {
+            get
+            {
+                int strength = int.MaxValue;
+
+                if (All.Length > 0)
+                {
+                    strength = 0;
+                    foreach (var (_, bytes) in All)
+                    {
+                        strength += bytes.Length;
+                    }
+                }
+
+                foreach (var group in Any)
+                {
+                    int groupStrength = 0;
+                    foreach (var (_, bytes) in group)
+                    {
+                        groupStrength += bytes.Length;
+                    }
+
+                    strength = Math.Min(strength, groupStrength);
+                }
+
+                return strength == int.MaxValue ? 0 : strength;
+            }
+        }
+
         // ---------- 特征表 ----------
 
         private static readonly Dictionary<string, ContentSignature> ByExtension =
@@ -187,7 +259,135 @@ namespace ArchivePasswordTestTool
             ByExtension[".bz2"] = Exact("bzip2", 0, "BZh");
             ByExtension[".xz"] = Exact("xz", 0, 0xFD, 0x37, 0x7A, 0x58, 0x5A, 0x00);
             ByExtension[".zst"] = Exact("zstd", 0, 0x28, 0xB5, 0x2F, 0xFD);
+            ByExtension[".lz4"] = Exact("lz4", 0, 0x04, 0x22, 0x4D, 0x18);
+
+            // ---------- 音频 ----------
+
+            // Ogg 家族（Vorbis / Theora / Opus / Speex）
+            var ogg = Exact("Ogg", 0, "OggS");
+            foreach (string ext in new[] { ".ogg", ".ogv", ".oga", ".ogx", ".opus", ".spx" })
+            {
+                ByExtension[ext] = ogg;
+            }
+
+            ByExtension[".flac"] = Exact("FLAC", 0, "fLaC");
+            ByExtension[".wv"] = Exact("WavPack", 0, "wvpk");
+            ByExtension[".ape"] = Exact("Monkey's Audio", 0, "MAC ");
+
+            var midi = Exact("MIDI", 0, "MThd");
+            ByExtension[".mid"] = midi;
+            ByExtension[".midi"] = midi;
+            ByExtension[".rmi"] = midi;
+
+            // AIFF / AIFC：IFF 容器，类型名在偏移 8（与 RIFF 同构，但魔数不同）
+            var aiff = new ContentSignature
+            {
+                Format = "AIFF",
+                All = [],
+                Any =
+                [
+                    [(0, Ascii("FORM")), (8, Ascii("AIFF"))],
+                    [(0, Ascii("FORM")), (8, Ascii("AIFC"))],
+                ],
+            };
+            foreach (string ext in new[] { ".aif", ".aiff", ".aifc" })
+            {
+                ByExtension[ext] = aiff;
+            }
+
+            // RealMedia：老片源/字幕组归档里仍常见
+            var realMedia = Exact("RealMedia", 0, ".RMF");
+            ByExtension[".rm"] = realMedia;
+            ByExtension[".rmvb"] = realMedia;
+
+            // ---------- 图像 ----------
+
+            // TIFF 有两种字节序（Intel / Motorola）
+            var tiff = new ContentSignature
+            {
+                Format = "TIFF",
+                All = [],
+                Any =
+                [
+                    [(0, [0x49, 0x49, 0x2A, 0x00])],
+                    [(0, [0x4D, 0x4D, 0x00, 0x2A])],
+                ],
+            };
+            foreach (string ext in new[] { ".tif", ".tiff" })
+            {
+                ByExtension[ext] = tiff;
+            }
+
+            // Photoshop（PSD 与大型文档 PSB 同一魔数）
+            var psd = Exact("PSD", 0, "8BPS");
+            ByExtension[".psd"] = psd;
+            ByExtension[".psb"] = psd;
+
+            ByExtension[".dds"] = Exact("DDS", 0, "DDS ");
+
+            var djvu = Exact("DjVu", 0, "AT&TFORM");
+            ByExtension[".djvu"] = djvu;
+            ByExtension[".djv"] = djvu;
+
+            // ---------- 文档 ----------
+
+            ByExtension[".rtf"] = Exact("RTF", 0, "{\\rtf");
+            ByExtension[".chm"] = Exact("CHM", 0, "ITSF");
+
+            // ---------- 字体 / 3D / Flash ----------
+
+            var swf = new ContentSignature
+            {
+                Format = "SWF",
+                All = [],
+                Any = [[(0, Ascii("FWS"))], [(0, Ascii("CWS"))], [(0, Ascii("ZWS"))]],
+            };
+            ByExtension[".swf"] = swf;
+
+            ByExtension[".woff"] = Exact("WOFF", 0, "wOFF");
+            ByExtension[".woff2"] = Exact("WOFF2", 0, "wOF2");
+            ByExtension[".otf"] = Exact("OpenType", 0, "OTTO");
+            ByExtension[".ttc"] = Exact("TrueType Collection", 0, "ttcf");
+            ByExtension[".fbx"] = Exact("FBX", 0, "Kaydara FBX B");
+
+            // ---------- 字节码 / 可执行 ----------
+
+            var elf = Exact("ELF", 0, 0x7F, 0x45, 0x4C, 0x46);
+            foreach (string ext in new[] { ".so", ".elf", ".o", ".axf" })
+            {
+                ByExtension[ext] = elf;
+            }
+
+            ByExtension[".class"] = Exact("Java class", 0, 0xCA, 0xFE, 0xBA, 0xBE);
+            ByExtension[".dex"] = Exact("Android dex", 0, "dex\n");
+
+            // ---------- 其它容器 ----------
+
+            var wim = Exact("WIM", 0, "MSWIM\0\0\0");
+            foreach (string ext in new[] { ".wim", ".esd", ".swm" })
+            {
+                ByExtension[ext] = wim;
+            }
+
+            ByExtension[".vpk"] = Exact("VPK", 0, 0x34, 0x12, 0xAA, 0x55);
+            ByExtension[".unity3d"] = Exact("UnityFS", 0, "UnityFS");
+
+            // 必须在这里（表填完之后）构建。写成字段初始化器是不行的：
+            // 有显式静态构造函数的类型，字段初始化器会在构造函数体**之前**执行，
+            // 那时 ByExtension 还是空的，兜底表会静默变成空数组。
+            UniversalSignatures = BuildUniversalSignatures();
         }
+
+        /// <summary>
+        /// 兜底签名表：从扩展名表里去重并筛出「魔数足够强」的项。
+        /// 与 <see cref="ByExtension"/> 同源，新增格式只改一处。
+        /// </summary>
+        private static readonly ContentSignature[] UniversalSignatures;
+
+        private static ContentSignature[] BuildUniversalSignatures() =>
+            [.. ByExtension.Values
+                .Distinct()
+                .Where(signature => signature.MinimumMagicLength >= UniversalMinimumMagicLength)];
 
         /// <summary>
         /// 按文件名取签名。未知扩展名返回 null —— 调用方据此关闭快速判错，

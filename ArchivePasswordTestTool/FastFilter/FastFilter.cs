@@ -12,7 +12,7 @@ namespace ArchivePasswordTestTool
         bool Completed);
 
     /// <summary>
-    /// 快速筛选：对每个候选密码只做「RAR3 密钥派生 + 解密首块 + 格式签名比对」，
+    /// 快速筛选：对每个候选密码只做「RAR4 密钥派生 + 解密首块 + 格式签名比对」，
     /// 每候选约 10ms（硬件 SHA1），不读 1.2GB 数据。
     /// <para>
     /// 它只负责排除错误密码。命中者必须由 7-Zip 完整解包确认——
@@ -27,11 +27,17 @@ namespace ArchivePasswordTestTool
         private const string DisableEnvVar = "APTT_NO_FAST_FILTER";
 
         /// <summary>
-        /// 命中候选数达到该值即停止扫描。签名误判率约 2^-32，
-        /// 8 个误报连续出现在真密码之前的概率可忽略；限制上限是为了
-        /// 在筛选逻辑本身有 bug 时不会把所有密码都变成候选。
+        /// 单轮最多收集的候选数，达到即停止本轮扫描（调用方确认完会接着扫剩余部分）。
+        /// <para>
+        /// 全错字典下每个候选的误报率：兜底签名表里最弱的是 3 字节魔数（2⁻²⁴，
+        /// 共 4 个：JPEG / FLV / bzip2 / SWF），其余四十多个都是 4 字节以上，
+        /// 整体约 3×10⁻⁷。250 万候选的期望误报不到 1 次，
+        /// 取 64 意味着「一轮就凑满」需要约 10⁸ 量级候选，实际上不会触发；
+        /// 留这个上限是为了在筛选逻辑本身出 bug（比如签名表被改坏、恒定命中）时，
+        /// 不会把整个字典都变成需要完整解密的候选。
+        /// </para>
         /// </summary>
-        private const int MaxCandidates = 8;
+        private const int MaxCandidates = 64;
 
         /// <summary>进度汇报粒度：每测这么多条回调一次，避免每密码刷新一次进度条</summary>
         private const int ProgressBatch = 64;
@@ -70,7 +76,7 @@ namespace ArchivePasswordTestTool
                 }
             }
 
-            Parallel.For(0, dictionary.Count, new ParallelOptions { MaxDegreeOfParallelism = parallelism }, (_, state) =>
+            _ = Parallel.For(0, dictionary.Count, new ParallelOptions { MaxDegreeOfParallelism = parallelism }, (_, state) =>
             {
                 if (Volatile.Read(ref found) >= MaxCandidates)
                 {
@@ -90,13 +96,19 @@ namespace ArchivePasswordTestTool
                     {
                         case PasswordProbeResult.Match:
                             candidates.Add(password);
-                            Interlocked.Increment(ref found);
+                            _ = Interlocked.Increment(ref found);
                             break;
 
                         case PasswordProbeResult.Unsupported:
                             unsupported.Add(password);
                             break;
                     }
+                }
+                catch (Exception)
+                {
+                    // Probe 的契约是「不抛异常」，但真抛了（如 CNG 句柄耗尽）
+                    // 也必须保守地退回完整测密，而不是让整个任务失败或丢弃候选
+                    unsupported.Add(password);
                 }
                 finally
                 {

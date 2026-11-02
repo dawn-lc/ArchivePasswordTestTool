@@ -5,7 +5,6 @@ using Spectre.Console;
 namespace ArchivePasswordTestTool
 {
     /// <summary>
-    /// 交互希望保留的键盘/鼠标行为都在真实终端里才可用。
     /// 无参数启动时的 CLI 交互引导：
     /// 依次引导用户输入密码字典与压缩包路径，支持把文件拖入窗口；
     /// 拖放粘贴的路径在短时空闲后自动验收（无需回车），
@@ -13,10 +12,14 @@ namespace ArchivePasswordTestTool
     /// 拖拽产生的首尾引号会被剥离（校验与取值均按剥离后路径判断）；
     /// 校验失败时原位重新询问。
     /// stdin 被重定向（管道/自动化调用）时回退为逐行读取并沿用同一套存在性校验。
-    /// 单键 y/n 确认（Confirm）：无需回车，按 Y/N/回车任一键立即生效
+    /// 单键 y/n 确认（Confirm）：无需回车，按 Y/N/回车任一键立即生效。
+    /// 键盘/鼠标交互（拖放、单键确认）只在真实终端里可用。
     /// </summary>
     internal static class InteractivePrompts
     {
+        /// <summary>等待输入时的轮询间隔，避免忙等</summary>
+        private const int IdlePollMilliseconds = 10;
+
         /// <summary>拖放粘贴的空闲阈值：超过该时长无新按键即认为粘贴结束并尝试自动验收</summary>
         private const int PasteIdleMilliseconds = 250;
 
@@ -44,9 +47,6 @@ namespace ArchivePasswordTestTool
 
             return burstDetected;
         }
-
-        /// <summary>等待输入时的轮询间隔，避免忙等</summary>
-        private const int IdlePollMilliseconds = 10;
 
         /// <summary>
         /// 报错后的退出确认是否必要：输入/输出被重定向（管道/自动化）→ 否；
@@ -81,7 +81,7 @@ namespace ArchivePasswordTestTool
                 IntPtr hwnd = WindowsNativeMethods.GetConsoleWindow();
                 if (hwnd != IntPtr.Zero)
                 {
-                    WindowsNativeMethods.SetForegroundWindow(hwnd);
+                    _ = WindowsNativeMethods.SetForegroundWindow(hwnd);
                 }
             }
             catch
@@ -151,8 +151,8 @@ namespace ArchivePasswordTestTool
                 return;
             }
 
-            AnsiConsole.MarkupLine($"[grey]{Resources.InteractivePressAnyKeyToExit}[/]");
-            Console.ReadKey(true);
+            Ui.WriteMuted(Resources.InteractivePressAnyKeyToExit);
+            _ = Console.ReadKey(true);
         }
 
         /// <summary>询问一个已存在文件的路径；交互终端用拖放即验收输入，重定向输入用逐行回退</summary>
@@ -203,7 +203,7 @@ namespace ArchivePasswordTestTool
 
                     if (key.Key == ConsoleKey.Enter)
                     {
-                        var candidate = Normalize(buffer.ToString());
+                        var candidate = Arguments.Unquote(buffer.ToString());
                         if (File.Exists(candidate))
                         {
                             Console.WriteLine();
@@ -219,7 +219,7 @@ namespace ArchivePasswordTestTool
                         }
 
                         AnsiConsole.Markup(title);
-                        buffer.Clear();
+                        _ = buffer.Clear();
                         burstDetected = false;
                         lastKeyTick = 0;
                         continue;
@@ -245,7 +245,7 @@ namespace ArchivePasswordTestTool
                         burstDetected = UpdateBurstState(burstDetected, gap);
 
                         lastKeyTick = now;
-                        buffer.Append(key.KeyChar);
+                        _ = buffer.Append(key.KeyChar);
                         Console.Write(key.KeyChar);
                     }
 
@@ -274,7 +274,7 @@ namespace ArchivePasswordTestTool
                     continue;
                 }
 
-                var idleCandidate = Normalize(buffer.ToString());
+                var idleCandidate = Arguments.Unquote(buffer.ToString());
                 if (File.Exists(idleCandidate))
                 {
                     Console.WriteLine();
@@ -292,8 +292,6 @@ namespace ArchivePasswordTestTool
                 lastKeyTick = 0;
             }
         }
-
-        private static string Normalize(string raw) => raw.Replace("\"", "").Trim();
 
         /// <summary>
         /// 输出一次无效路径提示（同一路径只提示一次）。
@@ -327,7 +325,7 @@ namespace ArchivePasswordTestTool
 
             while (Console.In.ReadLine() is { } line)
             {
-                var path = line.Replace("\"", "").Trim();
+                var path = Arguments.Unquote(line);
 
                 if (File.Exists(path))
                 {
