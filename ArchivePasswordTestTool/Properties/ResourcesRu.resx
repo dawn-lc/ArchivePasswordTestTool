@@ -325,4 +325,7 @@
   <data name="UpgradeApplied" xml:space="preserve">
     <value>Обновлено до {0}.</value>
   </data>
+  <data name="Rar4FastFilterActive" xml:space="preserve">
+    <value>RAR4, одиночный несжатый файл ({0}): включён быстрый отбор паролей — вычисляется только ключ, данные не расшифровываются. Совпавшие кандидаты всё равно проверяются полным тестом 7-Zip.</value>
+  </data>
 </root>

@@ -325,4 +325,7 @@
   <data name="UpgradeApplied" xml:space="preserve">
     <value>{0} に更新しました。</value>
   </data>
+  <data name="Rar4FastFilterActive" xml:space="preserve">
+    <value>RAR4 無圧縮の単一ファイル（{0}）：高速パスワード絞り込みを有効にしました。鍵導出のみでデータは展開しません。一致した候補は 7-Zip による完全テストで確認します。</value>
+  </data>
 </root>

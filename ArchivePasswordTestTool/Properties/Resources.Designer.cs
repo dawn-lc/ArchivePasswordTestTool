@@ -817,6 +817,17 @@ namespace ArchivePasswordTestTool.Properties
         }
 
         /// <summary>
+        ///   查找类似 RAR4 stored single file ({0}): fast password filter enabled 的本地化字符串。
+        /// </summary>
+        public static string Rar4FastFilterActive
+        {
+            get
+            {
+                return EmbeddedResourceManager.GetString("Rar4FastFilterActive", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   查找类似 Cannot determine the path of the running program. 的本地化字符串。
         /// </summary>
         public static string ProcessPathUnavailable

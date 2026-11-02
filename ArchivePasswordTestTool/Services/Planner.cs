@@ -22,13 +22,21 @@ namespace ArchivePasswordTestTool
         /// <summary>
         /// 执行模式与并发配置。多进程仅对 7z 且字典足够大时启用（绕开 dll 内 KDF 全局锁）
         /// </summary>
+        /// <param name="skipContextPool">
+        /// 调用方将要走快速判错路径时置 true：预建上下文池要为每个并行度打开一次归档，
+        /// 而快速判错只在最后用一次上下文做确认，预建纯属浪费
+        /// </param>
         public (ExecutionMode Mode, int WorkerCount, int ThreadParallelism, int DisplayParallelism) Plan(
             string dllPath,
             ArchiveInfo archiveInfo,
             string archivePath,
-            long dictionaryCount)
+            long dictionaryCount,
+            bool skipContextPool = false)
         {
-            int threadParallelism = Math.Max(1, Environment.ProcessorCount - 1);
+            // 全量解密路径按**物理核数**并行：该路径是内存/AES 吞吐密集型，
+            // ProcessorCount-1 会把 SMT 逻辑核算进来。实测 8 核 16 线程机器上
+            // 15 线程只有 6.4–7.3 密码/秒，8 线程反而 9.6–11.2（超订导致缓存与带宽争用）
+            int threadParallelism = Math.Max(1, CpuTopology.PhysicalCoreCount);
 
             if (int.TryParse(Environment.GetEnvironmentVariable("APTT_PARALLELISM"), out int envParallelism) && envParallelism > 0)
             {
@@ -45,7 +53,7 @@ namespace ArchivePasswordTestTool
                 AnsiConsole.MarkupLine($"[yellow]{Resources.FullyEncryptedArchiveWarning}[/]");
             }
 
-            if (!useMultiProcess && !archiveInfo.IsHeaderEncryption)
+            if (!useMultiProcess && !archiveInfo.IsHeaderEncryption && !skipContextPool)
             {
                 PreCreateContextPool(dllPath, archivePath, archiveInfo, threadParallelism);
             }

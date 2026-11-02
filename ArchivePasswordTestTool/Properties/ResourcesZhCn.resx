@@ -325,4 +325,7 @@
   <data name="UpgradeApplied" xml:space="preserve">
     <value>已更新到 {0}。</value>
   </data>
+  <data name="Rar4FastFilterActive" xml:space="preserve">
+    <value>RAR4 存储模式单文件（{0}）：已启用快速密码筛选，仅派生密钥、不解包数据。命中的候选仍会由 7-Zip 完整测试确认。</value>
+  </data>
 </root>

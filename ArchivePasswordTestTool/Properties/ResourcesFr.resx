@@ -325,4 +325,7 @@ Vous pouvez aussi le télécharger manuellement depuis la page des versions.</va
   <data name="UpgradeApplied" xml:space="preserve">
     <value>Mise à jour vers {0}.</value>
   </data>
+  <data name="Rar4FastFilterActive" xml:space="preserve">
+    <value>Archive RAR4 à fichier unique non compressé ({0}) : filtrage rapide activé — seule la clé est dérivée, les données ne sont pas déchiffrées. Les candidats retenus sont tout de même vérifiés par un test 7-Zip complet.</value>
+  </data>
 </root>

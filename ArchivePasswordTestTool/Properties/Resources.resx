@@ -325,4 +325,7 @@ You can also download it manually from the releases page.</value>
   <data name="UpgradeApplied" xml:space="preserve">
     <value>Updated to {0}.</value>
   </data>
+  <data name="Rar4FastFilterActive" xml:space="preserve">
+    <value>RAR4 stored single file ({0}): fast password filter enabled — only the key is derived, archive data is not decrypted. Candidates matching the file signature are still verified by a full 7-Zip test.</value>
+  </data>
 </root>

@@ -72,6 +72,130 @@ batchSize = clamp(ceil(count / (workers × 4)), 8, 64)
 | 1200 | 1245ms | 1489ms | 2349ms | 9571ms |
 | 5000 | 3825ms | 5393ms | 9245ms | 41320ms |
 
+## 全量解密路径的并行度：按物理核数
+
+`Planner.Plan` 的进程内并行度取 `CpuTopology.PhysicalCoreCount`，不是 `ProcessorCount - 1`。
+
+全量解密（RAR / Zip / 小字典 7z）是内存带宽与 AES 吞吐密集型，把 SMT 逻辑核算成物理核会超订。
+同一 1.2GB RAR5 样本、同一台 8 核 16 线程机器实测（200 密码，字典全错）：
+
+| 并行度 | 吞吐 | 说明 |
+|--------|------|------|
+| 1 | 1.9 /秒 | |
+| 4 | 6.7 /秒 | |
+| **8（物理核）** | **10.5 /秒** | 最优 |
+| 15（`ProcessorCount-1`） | 7.2 /秒 | 超订，比 8 线程慢约 30% |
+
+7z 多进程路径**不受此影响**（那边瓶颈是 dll 内全局锁，进程越多越好），仍用逻辑核数。
+
+### 还必须叠加进程亲和性掩码
+
+`GetLogicalProcessorInformationEx` 和 `Environment.ProcessorCount` **都不看进程亲和性**。
+实测（8C16T，把进程限制到 `0x3` = 2 个逻辑核）：
+
+| 口径 | 默认 | 亲和性=0x3 |
+|------|------|-----------|
+| `Environment.ProcessorCount` | 16 | **16（不变）** |
+| `GetLogicalProcessorInformationEx(RelationProcessorCore)` | 8 | **8（不变）** |
+| `GetProcessAffinityMask` 位数 | 16 | **2** |
+
+因此探测结果是 `min(物理核, 亲和性掩码位数)`：任务管理器的「设置相关性」、
+Job object 的 `JOB_OBJECT_LIMIT_AFFINITY`（Windows 容器限制 CPU 也走这个）都能被正确尊重。
+修复前在 2 核限制下会开 8 个线程，超订 4 倍。
+
+多处理器组（>64 逻辑核）时 `GetProcessAffinityMask` 只覆盖当前组，会低估可用核数，
+这种场景直接退回 `Environment.ProcessorCount`（跨组机器极罕见，优先不误压并行度）。
+
+### 为什么不用 WMI / 注册表取物理核
+
+`GetLogicalProcessorInformationEx(RelationProcessorCore)` 就是微软文档给出的「数物理核」标准做法，
+其余路径在耗时或可用性上都不成立（本机 8C16T 实测）：
+
+| 方式 | 是否给物理核 | 实测耗时 | Native AOT | 备注 |
+|------|-------------|---------|-----------|------|
+| **`GetLogicalProcessorInformationEx`** | ✅ | **0.002 ms** | ✅ | 当前实现 |
+| `GetSystemInfo` / `GetNativeSystemInfo` | ❌ 逻辑核 | ~0.001 ms | ✅ | `dwNumberOfProcessors` 只覆盖当前处理器组 |
+| `GetActiveProcessorCount(ALL)` | ❌ 逻辑核 | ~0.001 ms | ✅ | 跨组总数，仍不区分 SMT |
+| WMI `Win32_Processor.NumberOfCores` | ✅ | **首次 116.3 ms / 后续 4.5 ms** | ❌ **抛 `TypeInitializationException`** | 要拉起 WMI 服务与提供程序 |
+| 注册表 `HKLM\HARDWARE\DESCRIPTION\System\CentralProcessor\0\NumberOfCores` | 不一定 | 0.34 ms | ✅ | 本机该值**不存在**，不可靠 |
+| `__cpuid`（leaf 0x1F + 0x4 / AMD 0x80000008） | ✅ | ns 级 | ✅ | 需自己处理厂商差异与 SMT 位数，易错 |
+
+WMI 那行是决定性的：本项目对外只发 Native AOT 单文件，`System.Management` 依赖内置 COM，
+AOT 编译期就报 `IL3053`（AOT 分析警告）+ 三个方法「will always throw because: Invalid IL」，
+运行期直接异常。而 AOT 是发布形态，不是可选项。
+
+`ProcessorCount / 2` 这类启发式也不行：SMT 不总是 2 路（部分 CPU 无 SMT），
+多处理器组下 `ProcessorCount` 与物理核的对应关系还会错位。
+
+### 已知未覆盖的场景
+
+- **Intel P/E 异构核**：`RelationProcessorCore` 把 P 核与 E 核一并计数，取「全部物理核」
+  作为并行度。E 核跑 AES/SHA 明显慢于 P 核，理论上按 P 核数更优，但需要
+  `GetSystemCpuSetInformation` 的 `EfficiencyClass` 才能区分，收益未实测，暂不引入。
+- **Windows 进程隔离容器**：共享宿主机内核。若容器用 Job object 限制 CPU，能被亲和性掩码覆盖；
+  若只是「CPU 速率限制」（`JOBOBJECT_CPU_RATE_CONTROL_INFORMATION`）而非核数限制，
+  拓扑仍报宿主机核数，此时按宿主机并行度开线程是正确的（速率限制由调度器执行）。
+- **Hyper-V 隔离容器 / VM**：看到的是虚拟机的拓扑，结果正确。
+
+
+## RAR4 存储模式快速判错
+
+### 问题：RAR4 没有密码校验字段
+
+RAR5（WinRAR 5.21+）在压缩记录里带 `PswCheck`，密码错时 7-Zip 在 KDF 之后就能判定，
+代价只有一次密钥派生。RAR4 没有这个字段，错误密码必须把**整个文件解完**、靠文件尾 CRC 才能判错。
+
+实测 1.2GB 单文件 RAR4（store，仅数据加密）：
+
+- 每个错误密码读取 1126–1147MB（`Win32_Process.ReadTransferCount` 采样），单次约 0.5s
+- 7z.exe 单次耗时与文件大小严格线性：100MB=0.076s / 400MB=0.198s / 800MB=0.377s / 1200MB=0.54s
+- 250 万字典 = 2.8PB 读取量，默认并行度约 100 小时
+
+### 方案：只派生密钥，解首块判格式
+
+存储模式（method 0x30）密文就是明文（CBC 补零），因此：
+
+1. 用候选密码派生 RAR3 密钥（`Rar3KeyDerivation`）
+2. 只解密归档起始的 16 字节块
+3. 比对文件格式签名（`ContentSignature`）：MP4 要求首 4 字节是合理盒长且 offset 4 为
+   `ftyp`/`moov`/`mdat`/`free`/`skip`/`wide`/`styp`
+4. 命中的候选交给 7-Zip 完整解包确认
+
+错误密码解出的首块是随机字节，命中 4 字节魔数约 2⁻³²（MP4 还叠加盒长合理性），
+250 万候选期望误报 < 0.001 次；真密码必然命中，因此**不会漏掉正确答案**。
+筛选结果永远不当结论用，只用来排除。
+
+启用条件（任一不满足即 `TryCreate` 返回 null，退回完整解密）：RAR4、恰好 1 个文件、
+加密但未加密文件名、method=0x30、UNP_VER ≥ 29、未分卷、未用 LHD_LARGE、
+`packSize == ceil16(unpSize)`、扩展名在签名表内。
+
+### 实测
+
+同一台机器（Ryzen 7 7840HS，8C16T，硬件 SHA1）：
+
+| 方案 | 吞吐 | 250 万字典 |
+|------|------|-----------|
+| 完整解密，15 线程 | 7 /秒 | ≈100 小时 |
+| 完整解密，8 线程（改后默认） | 10.5 /秒 | ≈66 小时 |
+| **快速判错，16 线程** | **1020 /秒** | **≈41 分钟** |
+
+快速筛选用**逻辑核数**（16），与全量解密相反：KDF 是纯 CPU 且 SMT 有效
+（实测 16 线程 650/秒 vs 8 线程 499/秒，另有 1000+ 的更高实测值随机器负载浮动）。
+
+### 两个必须守住的实现细节
+
+1. **KDF 的 16 个 IV 检查点在 7-Zip 里是「当前 SHA1 状态」的摘要末字节**
+   （`Crypto/RarAes.cpp`：`if (i % (kNumRounds/16) == 0)` → `digest[19]`）。
+   本实现用 CNG 的 `BCryptDuplicateHash` 复制中间状态——但哈希数据按 1024 条一批缓冲，
+   **快照前必须先冲刷缓冲**，否则取到的是滞后最多 1024 条记录的状态，IV 全错
+   （开发时踩过：密文解出来是乱码，7-Zip 报 CRC Failed）。
+2. **密码字节是 UTF-16LE**（UNP_VER ≥ 29，7-Zip 逐 wchar 取低/高字节），不是 UTF-8。
+   密码超过 28 个字符时记录超过 64 字节，会触发 RAR 3.5 兼容分支（就地改写密码缓冲），
+   本实现不支持，`Probe` 返回 `Unsupported`，由调用方退回完整测密（绝不静默漏测）。
+
+测试用 `Rar4ArchiveWriter` 合成已知密码的 RAR4 存档：它用生产代码的 KDF 加密，
+再由 7-Zip 解密校验——若 KDF 与真实 RAR3 有偏差，7-Zip 就解不开，测试立即失败。
+
 ## 版本号与更新检查
 
 **唯一真相源是 git tag**，源码里不存在版本常量。

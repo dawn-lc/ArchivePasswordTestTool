@@ -177,7 +177,20 @@ namespace ArchivePasswordTestTool
                         Resources.DictionaryEncodingDetected, dictionary.Encoding.WebName));
                 }
 
-                var (Mode, WorkerCount, ThreadParallelism, DisplayParallelism) = planner.Plan(options.SevenZipDllPath, archiveInfo, archivePath, dictionaryCount);
+                // 快速判错能力探测放在规划之前：走快速路径时不必预建上下文池
+                // （预建要为每个并行度打开一次归档，而确认阶段只用一次上下文）
+                Rar4StoreProbe? fastProbe = FastFilter.IsEnabled
+                    ? Rar4StoreProbe.TryCreate(archivePath, archiveInfo)
+                    : null;
+
+                var (Mode, WorkerCount, ThreadParallelism, DisplayParallelism) = planner.Plan(
+                    options.SevenZipDllPath, archiveInfo, archivePath, dictionaryCount,
+                    skipContextPool: fastProbe is not null);
+
+                // 快速筛选是纯 CPU 的密钥派生，SMT 有效：用逻辑核数（实测 16 线程 650/秒 vs 8 线程 499/秒）。
+                // APTT_PARALLELISM 作为总并发上限，用户显式限制时一并遵守
+                int fastParallelism = fastProbe is null ? 0 : ResolveFastParallelism();
+
                 Ui.WriteArchiveInfo(
                     archivePath,
                     hashComputed ? archiveHash : null,
@@ -187,9 +200,16 @@ namespace ArchivePasswordTestTool
                     archiveInfo.SupportsQuickTest,
                     dictionaryPath,
                     dictionaryCount,
-                    DisplayParallelism);
+                    fastProbe is null ? DisplayParallelism : fastParallelism);
 
-                if (Mode == ExecutionMode.MultiProcess)
+                if (fastProbe is not null)
+                {
+                    // 明确告知走的是"只派生密钥、不解包"的路径：此时"未找到"的语义
+                    // 依赖文件格式签名，用户需要知道这个前提
+                    Ui.WriteWarning(string.Format(Resources.Rar4FastFilterActive, fastProbe.ContentFormat));
+                    RunFastFilter(options.SevenZipDllPath, archiveInfo, dictionary, fastProbe, fastParallelism);
+                }
+                else if (Mode == ExecutionMode.MultiProcess)
                 {
                     RunMultiProcess(options.SevenZipDllPath, dictionary, WorkerCount);
                 }
@@ -304,6 +324,85 @@ namespace ArchivePasswordTestTool
                 });
 
             hashComputed = true;
+        }
+
+        /// <summary>
+        /// 快速筛选的并行度：逻辑核数（KDF 是纯 CPU、SMT 有效），
+        /// 再受 APTT_PARALLELISM 总并发上限约束
+        /// </summary>
+        private static int ResolveFastParallelism()
+        {
+            int parallelism = Math.Max(1, Environment.ProcessorCount);
+
+            if (int.TryParse(Environment.GetEnvironmentVariable("APTT_PARALLELISM"), out int cap) && cap > 0)
+            {
+                parallelism = Math.Min(parallelism, cap);
+            }
+
+            return parallelism;
+        }
+
+        /// <summary>
+        /// 快速筛选模式：每个候选只派生 RAR3 密钥 + 解密首块（约 10ms），
+        /// 通过格式签名的极少数候选再由 7-Zip 完整解包确认。
+        /// <para>
+        /// 关键约束：筛选结果**绝不**直接作为"找到密码"。签名匹配只是强提示，
+        /// 权威判定仍然是 7-Zip 的真实解包（含文件 CRC 校验）。
+        /// </para>
+        /// </summary>
+        private void RunFastFilter(
+            string dllPath,
+            ArchiveInfo archiveInfo,
+            PasswordDictionary dictionary,
+            Rar4StoreProbe probe,
+            int parallelism)
+        {
+            stopwatch.Restart();
+
+            CreateProgress()
+                .Start(ctx =>
+                {
+                    var testProgressBar = ctx.AddTask(Resources.TestingPasswordProgress, maxValue: dictionaryCount);
+
+                    var result = FastFilter.Run(
+                        probe,
+                        dictionary,
+                        parallelism,
+                        delta =>
+                        {
+                            Interlocked.Add(ref testedCount, delta);
+                            testProgressBar.Increment(delta);
+                            ConsoleTitle.ShowProgress(Resources.TestingPasswordProgress, testProgressBar.Value, testProgressBar.MaxValue);
+                        });
+
+                    if (result.Completed)
+                    {
+                        // 字典确实扫完了：拉满进度（提前停止时剩余密码并未测试）
+                        testProgressBar.Value = testProgressBar.MaxValue;
+                    }
+
+                    // 超长密码无法走快速路径，与命中候选一起交给 7-Zip 权威确认
+                    var toConfirm = result.Candidates
+                        .Concat(result.Unsupported)
+                        .Distinct(StringComparer.Ordinal)
+                        .ToList();
+
+                    if (toConfirm.Count == 0)
+                    {
+                        return;
+                    }
+
+                    using var context = new ArchiveContext(dllPath, archivePath, password: null, archiveInfo);
+                    foreach (string candidate in toConfirm)
+                    {
+                        if (context.TestPassword(candidate))
+                        {
+                            foundPassword = candidate;
+                            stopwatch.Stop();
+                            break;
+                        }
+                    }
+                });
         }
 
         /// <summary>
