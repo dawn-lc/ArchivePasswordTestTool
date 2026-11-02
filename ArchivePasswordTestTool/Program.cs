@@ -41,6 +41,24 @@ namespace ArchivePasswordTestTool
             // 否则备用缓冲区里的进度画面会逐帧错位（详见 InitializeConsole）。
             InitializeConsole();
 
+            // 字体与代码页是临时借用的：从终端启动时那个窗口属于 shell，退出必须还回去。
+            // 正常返回走下面的 finally；Environment.Exit（错误路径、Ctrl+C 接管）不跑
+            // finally，由 ProcessExit 兜底。两处都调用，靠内部的「已还原」标记保证幂等。
+            AppDomain.CurrentDomain.ProcessExit += (_, _) => WindowsNativeMethods.RestoreConsole();
+
+            try
+            {
+                return RunCore(args);
+            }
+            finally
+            {
+                WindowsNativeMethods.RestoreConsole();
+            }
+        }
+
+        /// <summary>启动路由与主流程（详见 <see cref="Main"/> 的说明）。</summary>
+        private static int RunCore(string[] args)
+        {
             // 自我替换必须是启动动作的第一步：早于 GUI 委派、早于主流程。
             // 但工作进程要排除在外——它是主进程拉起的临时子进程，抢着替换会让
             // 主进程的多进程测密凭空少一个 worker，还会把替换后的新进程当成
@@ -102,6 +120,10 @@ namespace ArchivePasswordTestTool
             {
                 try
                 {
+                    // 先记录原值再改：Console.OutputEncoding 的 setter 自己就会改原生代码页，
+                    // 顺序反了记到的就是我们刚设的 UTF-8，退出时便「还原」成 UTF-8。
+                    WindowsNativeMethods.CaptureConsoleCodePage();
+
                     Console.OutputEncoding = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false);
 
                     // stdin 被重定向时输入来自调用方的管道，编码由对方决定（字典文件另有

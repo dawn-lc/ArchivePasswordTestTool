@@ -231,7 +231,7 @@ dotnet test ArchivePasswordTestTool.Tests\ArchivePasswordTestTool.Tests.csproj
 | `CetCompatTests` | apphost 的 `IMAGE_DEBUG_TYPE_EX_DLLCHARACTERISTICS(20)` 不含 CET 位 |
 | `VersionMetadataTests` | 版本号恰好三段、元数据注入生效、`Version` 确实来自元数据 |
 | `SourceEncodingTests` | 全仓源码文件为 UTF-8 无 BOM |
-| `ConsoleInitializationTests` | 控制台初始化早于其它启动动作；备用缓冲区进入后重新修正字体；字体结构体保持 blittable（AOT） |
+| `ConsoleInitializationTests` | 控制台初始化早于其它启动动作；备用缓冲区进入后重新修正字体；退出还原字体与代码页；字体写入有读回校验 |
 | `MultiProcessBatchSizeTests` | 每个工作进程至少分到一批活 |
 | `DictionaryEncodingTests` | 字典编码探测（GBK/UTF-8/BOM/截断尾字符）与真实密码可读性 |
 | `ResultsWriterTests` | 结果文件密码行三态；保存询问按"已探测"而非"已加密"守卫 |
@@ -283,15 +283,26 @@ Width 计算列宽。Windows 控制台有若干不归程序管的宿主属性，
 | `Capabilities.Unicode = true` | `Program.InitializeConsole` | 代码页已是 UTF-8，直接启用 Unicode 边框；不依赖 Spectre 对旧代码页的探测 |
 | 歧义宽度字体修正 | `WindowsNativeMethods.EnsureNarrowAmbiguousWidth` | 中文 Windows 默认字体（新宋体 8x16）把 `± → … · °` 画成两格，Spectre 按一格计算 → 面板/进度条折行、备用缓冲区逐帧错位 |
 | 进入备用缓冲区后再修正一次 | `Ui.RunInAlternateScreenWhenSupported` | conhost 的备用缓冲区有独立的一份字体：先设 Consolas 再进缓冲区，字体又变回新宋体 |
+| **退出时还原字体与代码页** | `Program.Main` 的 `finally` + `ProcessExit` → `WindowsNativeMethods.RestoreConsole` | 从终端启动时窗口是 shell 的，用户只借给我们用；不还原的话退出后终端一直停在程序换的字体（实测：新宋体被换成 Courier New，后续 shell 输出字体全变） |
 
 字体修正是「写一个 `±` 看光标前进几格」实测，已经是一格就不动，不覆盖用户调好的字体。
 候选只取各国 Windows 都预装的等宽字体（Consolas → Lucida Console → Courier New）；
 拉丁字体没有 CJK 字形，中文由 conhost 自行回退渲染，不会变方块。
 
-结构体 `ConsoleFontInfo` 用 `fixed char FaceName[32]` 而不是 `string + ByValTStr`：
-后者依赖运行时封送，而对外发布的是 Native AOT 产物（`ConsoleInitializationTests` 守护）。
+### 还原字体时的两个 conhost 陷阱（实测）
 
-输出被重定向时只改编码、不碰字体与原生代码页——没有格子概念，也不该影响调用方终端。
+1. **`SetCurrentConsoleFontEx` 返回 `true` 不代表改成功**：它可能只应用了字号，
+   字体名原样不动。因此每次写入后都要用 `GetCurrentConsoleFontEx` 读回比对，
+   不一致就换另一种结构体再写一次（`TrySetConsoleFont` → `IsConsoleFontApplied`）。
+2. **两种结构体声明的有效方向不同**：内联 `fixed char[32]` 能把「新宋体」切成 Courier New，
+   却切不回 MS Gothic；`ByValTStr` 定长字符串相反——用它才能读到完整名字
+   （`fixed` 版读回来只有第一个字符）并完成另一方向的切换。两者都保留。
+
+代码页必须在**任何 `Console.OutputEncoding` 赋值之前**记录（`CaptureConsoleCodePage`）：
+该属性的 setter 自己就会改原生代码页，顺序反了退出时「还原」成的是 UTF-8。
+
+字体结构体在 Native AOT 下均已实测可用（ByValTStr 的封送会被 AOT 编译器静态展开）。
+`ConsoleInitializationTests` 守护初始化顺序、备用缓冲区二次修正、退出还原与读回校验。
 
 ## 构建与发布
 

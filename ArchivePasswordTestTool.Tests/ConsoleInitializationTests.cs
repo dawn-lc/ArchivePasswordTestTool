@@ -1,12 +1,14 @@
 namespace ArchivePasswordTestTool.Tests;
 
 /// <summary>
-/// Windows 控制台适配的守护测试。字体宽度只能在真实终端里实测，这里锁定三件
-/// 「删掉就会在特定环境下静默错位」的事：
+/// Windows 控制台适配的守护测试。字体宽度只能在真实终端里实测，这里锁定几件
+/// 「删掉就会在特定环境下静默出问题」的事：
 /// <list type="number">
 /// <item>启动时先初始化控制台，再发起更新检查等其它动作；</item>
 /// <item>进入备用缓冲区后重新修正字体——conhost 切换缓冲区会重置窗口字体；</item>
-/// <item>字体结构体保持 blittable——对外发布的是 Native AOT 产物，不能依赖运行时封送。</item>
+/// <item>退出时把字体与代码页还给用户——终端窗口是 shell 的，不是本程序的；</item>
+/// <item>字体写入必须读回校验：conhost 会返回成功却只应用字号；</item>
+/// <item>两种结构体声明都要保留——读写各自只认其中一种。</item>
 /// </list>
 /// </summary>
 public sealed class ConsoleInitializationTests
@@ -22,6 +24,15 @@ public sealed class ConsoleInitializationTests
         return File.ReadAllText(path);
     }
 
+    /// <summary>只看非注释行：注释里解释取舍是正常的，按整份文本匹配会把说明文字当成用法。</summary>
+    private static List<string> CodeLines(string source) =>
+        source
+            .Split('\n')
+            .Select(line => line.TrimStart())
+            .Where(line => !line.StartsWith("//", StringComparison.Ordinal))
+            .Where(line => !line.StartsWith("*", StringComparison.Ordinal))
+            .ToList();
+
     [Fact]
     public void ConsoleIsInitializedBeforeOtherStartupWork()
     {
@@ -34,6 +45,25 @@ public sealed class ConsoleInitializationTests
         Assert.True(update > initialize, "控制台初始化必须早于更新检查/自我替换");
         Assert.Contains("AnsiConsole.Profile.Capabilities.Unicode = true", code);
         Assert.Contains("TryEnableUtf8Console", code);
+    }
+
+    [Fact]
+    public void ConsoleSettingsAreRestoredOnExit()
+    {
+        string code = ReadSource("ArchivePasswordTestTool", "Program.cs");
+
+        // 正常返回走 finally；Environment.Exit（错误路径、Ctrl+C 接管）不跑 finally，
+        // 由 ProcessExit 兜底。两条路都不能少。
+        Assert.Contains("finally", code, StringComparison.Ordinal);
+        Assert.Contains("AppDomain.CurrentDomain.ProcessExit", code, StringComparison.Ordinal);
+        Assert.Contains("WindowsNativeMethods.RestoreConsole();", code, StringComparison.Ordinal);
+
+        string interop = ReadSource("ArchivePasswordTestTool", "Interop", "WindowsNativeMethods.cs");
+        Assert.Contains("public static void RestoreConsole()", interop, StringComparison.Ordinal);
+        Assert.Contains("SetConsoleOutputCP(originalOutputCodePage)", interop, StringComparison.Ordinal);
+
+        // 代码页必须在改动前记录：Console.OutputEncoding 的 setter 自己会改原生代码页
+        Assert.Contains("CaptureConsoleCodePage()", interop, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -54,20 +84,24 @@ public sealed class ConsoleInitializationTests
     }
 
     [Fact]
-    public void ConsoleFontStructStaysBlittableForAot()
+    public void FontWriteIsVerifiedByReadBack()
     {
-        string code = ReadSource("ArchivePasswordTestTool", "Interop", "WindowsNativeMethods.cs");
+        string interop = ReadSource("ArchivePasswordTestTool", "Interop", "WindowsNativeMethods.cs");
 
-        // 定长缓冲是 blittable 的；string + ByValTStr 会引入运行时封送，
-        // 在 Native AOT 下属于动态代码路径。注释里解释这个取舍是正常的，
-        // 只检查非注释行（与其他源码守护测试一致）。
-        var codeLines = code
-            .Split('\n')
-            .Select(line => line.TrimStart())
-            .Where(line => !line.StartsWith("//", StringComparison.Ordinal))
-            .Where(line => !line.StartsWith("*", StringComparison.Ordinal));
+        // conhost 的 SetCurrentConsoleFontEx 会返回 true 却只应用字号，
+        // 不读回校验就会以为切换成功（实测：恢复时字体名不变，终端停在程序字体上）。
+        Assert.Contains("IsConsoleFontApplied", interop, StringComparison.Ordinal);
+        Assert.Contains("useInlineBuffer", interop, StringComparison.Ordinal);
+    }
 
-        Assert.Contains(codeLines, line => line.Contains("fixed char FaceName[32]", StringComparison.Ordinal));
-        Assert.DoesNotContain(codeLines, line => line.Contains("ByValTStr", StringComparison.Ordinal));
+    [Fact]
+    public void BothFontStructDeclarationsAreKept()
+    {
+        var code = CodeLines(ReadSource("ArchivePasswordTestTool", "Interop", "WindowsNativeMethods.cs"));
+
+        // 内联 fixed char[32] 负责「新宋体 → Courier New」这类切换，
+        // 定长字符串（ByValTStr）负责读到完整名字与另一方向的切换；少一个就有还原不了的情况。
+        Assert.Contains(code, line => line.Contains("fixed char FaceName[32]", StringComparison.Ordinal));
+        Assert.Contains(code, line => line.Contains("ByValTStr", StringComparison.Ordinal));
     }
 }
