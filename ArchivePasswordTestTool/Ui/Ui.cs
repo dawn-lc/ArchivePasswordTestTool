@@ -40,7 +40,16 @@ namespace ArchivePasswordTestTool
             alternateScreenActive = true;
             try
             {
-                AnsiConsole.AlternateScreen(action);
+                AnsiConsole.AlternateScreen(() =>
+                {
+                    // 切换缓冲区会重置窗口字体：conhost 的备用缓冲区有独立的一份字体，
+                    // 在外面设好的字体会被恢复成控制台默认字体（中文 Windows 是新宋体，
+                    // 会把 ± · × 这类歧义宽度字符画成两格）。必须在首帧绘制前再修正一次，
+                    // 否则进度画面会逐帧错位。非 Windows / 重定向时该方法内部直接返回。
+                    WindowsNativeMethods.EnsureNarrowAmbiguousWidth();
+
+                    action();
+                });
             }
             finally
             {

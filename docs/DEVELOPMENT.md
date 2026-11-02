@@ -216,9 +216,10 @@ dotnet test ArchivePasswordTestTool.Tests\ArchivePasswordTestTool.Tests.csproj
 - 需要断言"某提示未出现"时，**文案从各语言资源枚举**，不能写死一两种语言——
   写死会在其它 UI 语言下永不命中（假绿），失败被静默吞掉
 
-> 输出编码：主程序在 `Console.IsOutputRedirected` 时把 stdout/stderr 改为 **UTF-8 无 BOM**
-> （见 `Program.Main`）。默认编码是系统 OEM 代码页（中文 Windows = 936/GBK），
-> 而界面支持 5 种语言——法语重音、俄语西里尔在 GBK 下无法表示，会变成 `?`（数据损坏）。
+> 输出编码：主程序在重定向时把 stdout/stderr 改为 **UTF-8 无 BOM**，Windows 交互终端
+> 也把代码页切到 UTF-8（见 `Program.InitializeConsole` 与「Windows 控制台适配」）。
+> 系统默认是 OEM 代码页（中文 Windows = 936/GBK），而界面支持 5 种语言——法语重音、
+> 俄语西里尔在 GBK 下无法表示，会变成 `?`（数据损坏）。
 > **任何 `RedirectStandardOutput` 的测试都必须显式设 `StandardOutputEncoding = UTF8`**，
 > 否则读到的中文是乱码。
 
@@ -230,6 +231,7 @@ dotnet test ArchivePasswordTestTool.Tests\ArchivePasswordTestTool.Tests.csproj
 | `CetCompatTests` | apphost 的 `IMAGE_DEBUG_TYPE_EX_DLLCHARACTERISTICS(20)` 不含 CET 位 |
 | `VersionMetadataTests` | 版本号恰好三段、元数据注入生效、`Version` 确实来自元数据 |
 | `SourceEncodingTests` | 全仓源码文件为 UTF-8 无 BOM |
+| `ConsoleInitializationTests` | 控制台初始化早于其它启动动作；备用缓冲区进入后重新修正字体；字体结构体保持 blittable（AOT） |
 | `MultiProcessBatchSizeTests` | 每个工作进程至少分到一批活 |
 | `DictionaryEncodingTests` | 字典编码探测（GBK/UTF-8/BOM/截断尾字符）与真实密码可读性 |
 | `ResultsWriterTests` | 结果文件密码行三态；保存询问按"已探测"而非"已加密"守卫 |
@@ -268,6 +270,28 @@ dotnet test ArchivePasswordTestTool.Tests\ArchivePasswordTestTool.Tests.csproj
   `resourceCulture`）：必须回退到 `CultureInfo.CurrentUICulture`，否则全部界面都是英文
 - `zh` / `zh-Hans` / `zh-CHS` / `zh-SG` 等别名统一归到 `zh-CN`；
   `zh-Hant` 系（繁体）不在支持列表内，按 culture 链回退到英文
+
+## Windows 控制台适配
+
+界面完全基于 Spectre.Console（面板、Rule、Progress），而 Spectre 按 Unicode East Asian
+Width 计算列宽。Windows 控制台有若干不归程序管的宿主属性，却会直接破坏布局，启动时必须处理
+（见 `Program.InitializeConsole`）：
+
+| 处理 | 位置 | 为什么必须做 |
+|------|------|--------------|
+| 代码页切 UTF-8 | `WindowsNativeMethods.TryEnableUtf8Console` + `Console.OutputEncoding/InputEncoding` | 控制台代码页跟随系统语言（中文 Windows = 936/GBK）。界面有 5 种语言，法语重音与俄语西里尔字母在 GBK 下被编成 `?`（数据损坏，不是显示问题） |
+| `Capabilities.Unicode = true` | `Program.InitializeConsole` | 代码页已是 UTF-8，直接启用 Unicode 边框；不依赖 Spectre 对旧代码页的探测 |
+| 歧义宽度字体修正 | `WindowsNativeMethods.EnsureNarrowAmbiguousWidth` | 中文 Windows 默认字体（新宋体 8x16）把 `± → … · °` 画成两格，Spectre 按一格计算 → 面板/进度条折行、备用缓冲区逐帧错位 |
+| 进入备用缓冲区后再修正一次 | `Ui.RunInAlternateScreenWhenSupported` | conhost 的备用缓冲区有独立的一份字体：先设 Consolas 再进缓冲区，字体又变回新宋体 |
+
+字体修正是「写一个 `±` 看光标前进几格」实测，已经是一格就不动，不覆盖用户调好的字体。
+候选只取各国 Windows 都预装的等宽字体（Consolas → Lucida Console → Courier New）；
+拉丁字体没有 CJK 字形，中文由 conhost 自行回退渲染，不会变方块。
+
+结构体 `ConsoleFontInfo` 用 `fixed char FaceName[32]` 而不是 `string + ByValTStr`：
+后者依赖运行时封送，而对外发布的是 Native AOT 产物（`ConsoleInitializationTests` 守护）。
+
+输出被重定向时只改编码、不碰字体与原生代码页——没有格子概念，也不该影响调用方终端。
 
 ## 构建与发布
 
