@@ -45,12 +45,69 @@ namespace ArchivePasswordTestTool
         private long testedCount;
         private string? foundPassword;
 
-        public void Run()
+        /// <summary>
+        /// 出错时的异常信息。留到离开备用屏幕后再打印——备用缓冲区切回主屏时内容整体消失，
+        /// 在缓冲区里打印等于没打印
+        /// </summary>
+        private string? errorMessage;
+
+        /// <summary>Ctrl+C 是否已被接管（防止连按两次重复替换）</summary>
+        private int cancelHandled;
+
+        /// <summary>执行测试主流程并返回退出码（0 成功 / 1 出错）</summary>
+        public int Run()
         {
-            Ui.RunInAlternateScreenWhenSupported(RunCore);
+            int exitCode = 0;
+
+            // Ctrl+C 也要能把已就绪的更新装上：默认行为是立刻杀进程，连替换都来不及
+            Console.CancelKeyPress += OnCancelKeyPress;
+            try
+            {
+                Ui.RunInAlternateScreenWhenSupported(() => exitCode = RunCore());
+            }
+            finally
+            {
+                Console.CancelKeyPress -= OnCancelKeyPress;
+            }
+
+            if (errorMessage is not null)
+            {
+                Ui.WriteError(errorMessage);
+            }
+
+            // 测密结束（正常结束或出错）：新版本已下载并校验通过就当场替换并重启一次，
+            // 不必等用户下次启动。输出被重定时不重启——子进程的提示会混进调用方的数据流，
+            // 而且自动化场景也不需要“立刻生效”。
+            if (!Console.IsOutputRedirected)
+            {
+                PendingUpdate.TryApplyAndRestart(args);
+            }
+
+            return exitCode;
         }
 
-        private void RunCore()
+        /// <summary>
+        /// Ctrl+C：若已有校验通过的更新，先完成自我替换并重启再退出，而不是让进程被直接杀掉；
+        /// 没有待应用更新时保持默认行为（立即终止）。
+        /// </summary>
+        private void OnCancelKeyPress(object? sender, ConsoleCancelEventArgs e)
+        {
+            if (Interlocked.Exchange(ref cancelHandled, 1) == 1 || !PendingUpdate.IsReady)
+            {
+                return;
+            }
+
+            // 取消默认终止：否则进程在替换完成前就被杀掉，.new 只能留到下次启动
+            e.Cancel = true;
+
+            ConsoleTitle.Restore();
+            Ui.LeaveAlternateScreen();
+
+            // 中断本身不算成功：没替换上就按惯例返回 130（128 + SIGINT）
+            Environment.Exit(PendingUpdate.TryApplyAndRestart(args) ? 0 : 130);
+        }
+
+        private int RunCore()
         {
             try
             {
@@ -72,9 +129,6 @@ namespace ArchivePasswordTestTool
                     Ui.WriteWarning(string.Format(Resources.UpgradeApplied, Program.VersionText));
                 }
 
-                // 更新检查在后台发起：网络耗时与后续引导、测密重叠，不阻塞首屏
-                Upgrade.StartBackgroundCheck();
-
                 var options = Options.Parse(args);
                 archivePath = options.ArchivePath;
                 dictionaryPath = options.DictionaryPath;
@@ -95,7 +149,7 @@ namespace ArchivePasswordTestTool
                 {
                     archiveEncrypted = false;
                     AnsiConsole.WriteLine(string.Format(Resources.ArchiveNotEncrypted, archivePath));
-                    return;
+                    return 0;
                 }
 
                 // 在线共享（默认开启）：按哈希向服务器查询共享密码（一个哈希对应一个密码），
@@ -167,38 +221,42 @@ namespace ArchivePasswordTestTool
                     ComputeArchiveHash();
                     Sync.ReportFoundPassword(options.OnlineServiceUrl, archiveHashHex, foundPassword);
                 }
+
+                return 0;
             }
             catch (Exception ex)
             {
-                // FileNotFoundException 与其它异常处理完全相同（打印 + exit 1），
-                // 原先分成两个 catch 块只是重复
-                Ui.WriteError(ex.Message);
-
-                // Environment.Exit 不跑 finally，标题只能在这里自己还
-                ConsoleTitle.Restore();
-                Environment.Exit(1);
+                // 所有启动/测密异常处理完全相同（打印 + exit 1），原先分成两个 catch 块只是重复。
+                // 错误信息留到离开备用屏幕后由 Run 打印（见 errorMessage 的说明）
+                errorMessage = ex.Message;
+                return 1;
             }
             finally
             {
-                // 更新提示先于保存结果确认消费：后者含两个阻塞式确认（是否保存、是否打开报告），
-                // 用户若卡在那里（或直接关窗口）就再也看不到更新提示了。
-                // 两者不会抢屏幕：进度条已 AutoClear，结果面板也已输出完毕。
-                Upgrade.CompleteBackgroundCheck();
-
-                if (archiveInspected && !string.IsNullOrEmpty(archivePath) && !string.IsNullOrEmpty(dictionaryPath))
+                // 出错时既不提示更新也不问是否保存结果：屏幕即将切回主屏，提示都看不到，
+                // 而没有有效结果时「是否保存」的阻塞式确认也没有意义
+                if (errorMessage is null)
                 {
-                    // 哈希按需计算：用户确认保存后才读文件（见 WriteIfRequested 内部调用顺序）
-                    ResultsWriter.WriteIfRequested(
-                        archivePath,
-                        dictionaryPath,
-                        foundPassword,
-                        archiveEncrypted,
-                        stopwatch.Elapsed,
-                        () =>
-                        {
-                            ComputeArchiveHash();
-                            return archiveHash;
-                        });
+                    // 更新提示先于保存结果确认消费：后者含两个阻塞式确认（是否保存、是否打开报告），
+                    // 用户若卡在那里（或直接关窗口）就再也看不到更新提示了。
+                    // 两者不会抢屏幕：进度条已 AutoClear，结果面板也已输出完毕。
+                    Upgrade.CompleteBackgroundCheck();
+
+                    if (archiveInspected && !string.IsNullOrEmpty(archivePath) && !string.IsNullOrEmpty(dictionaryPath))
+                    {
+                        // 哈希按需计算：用户确认保存后才读文件（见 WriteIfRequested 内部调用顺序）
+                        ResultsWriter.WriteIfRequested(
+                            archivePath,
+                            dictionaryPath,
+                            foundPassword,
+                            archiveEncrypted,
+                            stopwatch.Elapsed,
+                            () =>
+                            {
+                                ComputeArchiveHash();
+                                return archiveHash;
+                            });
+                    }
                 }
 
                 // 放在 finally 的最后：上面的保存/打开报告确认可能让用户停留很久，

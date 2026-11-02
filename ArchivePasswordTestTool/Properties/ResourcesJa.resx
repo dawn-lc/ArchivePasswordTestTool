@@ -320,7 +320,7 @@
 リリースページから手動でダウンロードすることもできます。</value>
   </data>
   <data name="UpgradeReadyForNextLaunch" xml:space="preserve">
-    <value>新しいバージョンをダウンロードしました。次回起動時に自動で更新されます。</value>
+    <value>新しいバージョンをダウンロードしました。今回の実行終了時に自動で更新されます。</value>
   </data>
   <data name="UpgradeApplied" xml:space="preserve">
     <value>{0} に更新しました。</value>

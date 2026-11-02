@@ -57,16 +57,30 @@ namespace ArchivePasswordTestTool
             // 但工作进程要排除在外——它是主进程拉起的临时子进程，抢着替换会让
             // 主进程的多进程测密凭空少一个 worker，还会把替换后的新进程当成
             // worker 去跑 JSON 协议。多开场景下别人的 worker 同理。
-            if (!args.Contains(MultiProcess.WorkerFlag) && PendingUpdate.TryApply(args))
+            //
+            // 更新检查与下载紧跟着最早发起（自我替换之后、路由之前）：后台任务与
+            // 用户输入、测密全程重叠，结束前多半已下载完成，不必在退出前干等。
+            // 结果由 Runner 消费（见 Upgrade.CompleteBackgroundCheck），
+            // 测密结束时还会把已就绪的更新装上并重启一次（见 PendingUpdate.TryApplyAndRestart）。
+            if (!args.Contains(MultiProcess.WorkerFlag))
             {
-                return 0;
+                if (PendingUpdate.TryApply(args))
+                {
+                    return 0;
+                }
+
+                // 上一次运行结束时完成了自我替换并发起了这次重启：只报告版本号，
+                // 绝不能重跑一遍测密（重放用户的命令等于白测一次）
+                if (args.Contains(PendingUpdate.RestartedFlag))
+                {
+                    PendingUpdate.ReportRestarted();
+                    return 0;
+                }
+
+                Upgrade.StartBackgroundCheck();
             }
 
-            return Instance.Execute(args, () =>
-            {
-                new Runner(args).Run();
-                return 0;
-            });
+            return Instance.Execute(args, () => new Runner(args).Run());
         }
 
         /// <summary>

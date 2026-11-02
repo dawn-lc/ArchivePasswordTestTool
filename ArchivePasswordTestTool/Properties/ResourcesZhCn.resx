@@ -320,7 +320,7 @@
 也可前往发布页手动下载。</value>
   </data>
   <data name="UpgradeReadyForNextLaunch" xml:space="preserve">
-    <value>新版本已下载完成，下次启动时自动更新。</value>
+    <value>新版本已下载完成，本次测试结束时自动更新。</value>
   </data>
   <data name="UpgradeApplied" xml:space="preserve">
     <value>已更新到 {0}。</value>

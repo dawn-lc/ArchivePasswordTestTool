@@ -260,4 +260,130 @@ public class UpgradeTests
         Assert.Contains("yield return (asset.Url, true)", body, StringComparison.Ordinal);
         Assert.Contains("yield return (asset.BrowserDownloadUrl, false)", body, StringComparison.Ordinal);
     }
+
+    /// <summary>
+    /// 更新检查必须发生在启动最早时机：`Program.Main` 里、自我替换之后、启动路由之前。
+    /// <para>
+    /// 越早发起，检查与下载越可能与用户输入、测密重叠——晚到测试结束才动手，
+    /// 短测试要白等一整个下载窗口，长测试则把传输全部堆到退出前。
+    /// </para>
+    /// <para>
+    /// 同时必须排除工作进程（主进程拉起的临时子进程，每个都查一次/下一次纯属浪费），
+    /// 且 `Runner` 不得再单独发起第二次（节流虽能挡住网络请求，但两处触发点意味着语义漂移）。
+    /// </para>
+    /// </summary>
+    [Fact]
+    public void UpdateCheckStartsAtStartupBeforeRouting()
+    {
+        string programPath = Path.Combine(TestPaths.RepoRoot, "ArchivePasswordTestTool", "Program.cs");
+        string program = File.ReadAllText(programPath);
+
+        int workerGuard = program.IndexOf("MultiProcess.WorkerFlag", StringComparison.Ordinal);
+        int applyIndex = program.IndexOf("PendingUpdate.TryApply(", StringComparison.Ordinal);
+        int checkIndex = program.IndexOf("Upgrade.StartBackgroundCheck()", StringComparison.Ordinal);
+        int routeIndex = program.IndexOf("Instance.Execute(", StringComparison.Ordinal);
+
+        Assert.True(checkIndex >= 0, "Program.cs 中未找到 Upgrade.StartBackgroundCheck() 调用");
+        Assert.True(workerGuard >= 0 && workerGuard < checkIndex, "更新检查前必须先排除工作进程");
+        Assert.True(applyIndex >= 0 && applyIndex < checkIndex, "更新检查必须排在自我替换之后（否则替换重启后白跑一次）");
+        Assert.True(routeIndex >= 0 && checkIndex < routeIndex, "更新检查必须排在启动路由之前");
+
+        string runnerPath = Path.Combine(TestPaths.RepoRoot, "ArchivePasswordTestTool", "Services", "Runner.cs");
+        string runner = File.ReadAllText(runnerPath);
+        Assert.DoesNotContain("Upgrade.StartBackgroundCheck", runner, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// 下载必须在后台任务里就地开始（检查到新版本即下载），而不是等测试结束才做。
+    /// 同时后台线程绝不能写控制台——进度条正在主线程渲染，交叉输出会把画面打乱。
+    /// </summary>
+    [Fact]
+    public void DownloadStartsInBackgroundTaskAndStaysSilent()
+    {
+        string upgradePath = Path.Combine(
+            TestPaths.RepoRoot, "ArchivePasswordTestTool", "Services", "Upgrade.cs");
+        string source = File.ReadAllText(upgradePath);
+
+        int method = source.IndexOf("private static UpdateOutcome? CheckAndDownload(", StringComparison.Ordinal);
+        Assert.True(method >= 0, "Upgrade.cs 中未找到 CheckAndDownload（检查+下载的后台任务）");
+
+        int methodEnd = source.IndexOf("\n        private static void AnnounceDownloading(", method, StringComparison.Ordinal);
+        Assert.True(methodEnd > method, "未找到 CheckAndDownload 的结束边界");
+
+        string body = source[method..methodEnd];
+        Assert.Contains("DownloadFile(asset, downloading)", body, StringComparison.Ordinal);
+        Assert.Contains("PendingUpdate.ReadyPath", body, StringComparison.Ordinal);
+        Assert.DoesNotContain("AnsiConsole", body, StringComparison.Ordinal);
+        Assert.DoesNotContain("Ui.Write", body, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// 重启标记与工作进程标记必须是两个不同的参数：前者落在主进程（只报告版本），
+    /// 后者落在无 UI 的 JSON 协议子进程，混用会让多进程测密直接把更新报告进程当成 worker。
+    /// </summary>
+    [Fact]
+    public void RestartFlagIsDistinctFromWorkerFlag()
+    {
+        Assert.NotEqual(MultiProcess.WorkerFlag, PendingUpdate.RestartedFlag);
+        Assert.StartsWith("-", PendingUpdate.RestartedFlag, StringComparison.Ordinal);
+        Assert.NotEqual(PendingUpdate.DownloadingSuffix, PendingUpdate.RestartedFlag);
+    }
+
+    /// <summary>
+    /// 更新必须在「测试结束后」应用：自我替换会重启进程，若放在备用屏幕内部，
+    /// 新进程的输出会写进即将被切走的缓冲区；而放在 <c>Run</c> 的末尾，
+    /// 用户已经看完成了结果、屏幕也已恢复。
+    /// </summary>
+    [Fact]
+    public void PendingUpdateIsAppliedAfterTestRunEnds()
+    {
+        string runnerPath = Path.Combine(TestPaths.RepoRoot, "ArchivePasswordTestTool", "Services", "Runner.cs");
+        string source = File.ReadAllText(runnerPath);
+
+        int alternateScreenIndex = source.IndexOf("RunInAlternateScreenWhenSupported", StringComparison.Ordinal);
+        int applyIndex = source.IndexOf("PendingUpdate.TryApplyAndRestart(", StringComparison.Ordinal);
+
+        Assert.True(alternateScreenIndex >= 0, "Runner.cs 中未找到备用屏幕调用");
+        Assert.True(applyIndex >= 0, "Runner.cs 中未找到 PendingUpdate.TryApplyAndRestart 调用");
+        Assert.True(applyIndex > alternateScreenIndex, "更新必须在备用屏幕退出之后应用");
+    }
+
+    /// <summary>
+    /// 中断（Ctrl+C）也必须能应用已就绪的更新：默认的 Ctrl+C 行为会立刻杀进程，
+    /// 连重命名自身都来不及，.new 只能留到下次启动。
+    /// </summary>
+    [Fact]
+    public void InterruptAlsoAppliesPendingUpdate()
+    {
+        string runnerPath = Path.Combine(TestPaths.RepoRoot, "ArchivePasswordTestTool", "Services", "Runner.cs");
+        string source = File.ReadAllText(runnerPath);
+
+        int handler = source.IndexOf("Console.CancelKeyPress +=", StringComparison.Ordinal);
+        Assert.True(handler >= 0, "Runner.cs 中未注册 Ctrl+C 处理");
+
+        int handlerBody = source.IndexOf("private void OnCancelKeyPress(", StringComparison.Ordinal);
+        Assert.True(handlerBody > handler, "未找到 OnCancelKeyPress 实现");
+
+        string body = source[handlerBody..];
+        Assert.Contains("e.Cancel = true", body, StringComparison.Ordinal);
+        Assert.Contains("PendingUpdate.TryApplyAndRestart(", body, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// 重启出来的进程必须跳过测密主流程：否则会原样重放用户的命令，白测一遍。
+    /// 标记检查要排在启动路由（<c>Instance.Execute</c>）之前。
+    /// </summary>
+    [Fact]
+    public void RestartedProcessSkipsTestWorkflow()
+    {
+        string programPath = Path.Combine(TestPaths.RepoRoot, "ArchivePasswordTestTool", "Program.cs");
+        string source = File.ReadAllText(programPath);
+
+        int markerIndex = source.IndexOf("PendingUpdate.RestartedFlag", StringComparison.Ordinal);
+        int routeIndex = source.IndexOf("Instance.Execute(", StringComparison.Ordinal);
+
+        Assert.True(markerIndex >= 0, "Program.cs 中未处理重启标记");
+        Assert.True(routeIndex >= 0, "Program.cs 中未找到启动路由");
+        Assert.True(markerIndex < routeIndex, "重启标记必须在启动路由之前处理");
+    }
 }

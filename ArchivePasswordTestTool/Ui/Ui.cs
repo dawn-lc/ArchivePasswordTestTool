@@ -16,6 +16,9 @@ namespace ArchivePasswordTestTool
             return Markup.Escape(value ?? string.Empty);
         }
 
+        /// <summary>当前是否处于备用屏幕缓冲区（供 <see cref="LeaveAlternateScreen"/> 判定）</summary>
+        private static bool alternateScreenActive;
+
         /// <summary>
         /// 终端支持 ANSI 且支持备用屏幕缓冲时，在备用屏幕中执行 action：
         /// 进入时自动切换（CSI ?1049h），委托返回或异常时在 finally 中自动切回主屏
@@ -34,7 +37,39 @@ namespace ArchivePasswordTestTool
                 return;
             }
 
-            AnsiConsole.AlternateScreen(action);
+            alternateScreenActive = true;
+            try
+            {
+                AnsiConsole.AlternateScreen(action);
+            }
+            finally
+            {
+                alternateScreenActive = false;
+            }
+        }
+
+        /// <summary>
+        /// 立即切回主屏幕缓冲区。只给「不经过正常返回路径」的场景用（Ctrl+C 接管后要继续做事），
+        /// 正常路径由 <see cref="RunInAlternateScreenWhenSupported"/> 的 finally 负责。
+        /// </summary>
+        public static void LeaveAlternateScreen()
+        {
+            if (!alternateScreenActive)
+            {
+                return;
+            }
+
+            alternateScreenActive = false;
+
+            try
+            {
+                Console.Out.Write("\u001b[?1049l");
+                Console.Out.Flush();
+            }
+            catch
+            {
+                // 控制台已失效（被关闭等）：忽略
+            }
         }
 
         /// <summary>

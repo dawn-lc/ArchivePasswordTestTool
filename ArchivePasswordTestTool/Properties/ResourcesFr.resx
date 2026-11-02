@@ -320,7 +320,7 @@ Veuillez d'abord télécharger et installer 7-Zip.</value>
 Vous pouvez aussi le télécharger manuellement depuis la page des versions.</value>
   </data>
   <data name="UpgradeReadyForNextLaunch" xml:space="preserve">
-    <value>La nouvelle version a été téléchargée et sera appliquée automatiquement au prochain démarrage.</value>
+    <value>La nouvelle version a été téléchargée et sera appliquée à la fin de cette exécution.</value>
   </data>
   <data name="UpgradeApplied" xml:space="preserve">
     <value>Mise à jour vers {0}.</value>

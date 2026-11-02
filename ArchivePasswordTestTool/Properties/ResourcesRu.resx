@@ -320,7 +320,7 @@
 Вы также можете загрузить вручную со страницы релизов.</value>
   </data>
   <data name="UpgradeReadyForNextLaunch" xml:space="preserve">
-    <value>Новая версия загружена и будет применена автоматически при следующем запуске.</value>
+    <value>Новая версия загружена и будет применена по завершении этого запуска.</value>
   </data>
   <data name="UpgradeApplied" xml:space="preserve">
     <value>Обновлено до {0}.</value>

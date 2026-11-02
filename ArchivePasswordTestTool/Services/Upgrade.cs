@@ -122,9 +122,64 @@ namespace ArchivePasswordTestTool
         /// <summary>本次启动是否刚刚完成自我替换（用于提示用户）</summary>
         public static bool JustUpdated { get; private set; }
 
+        /// <summary>是否存在已下载并校验通过、可以立刻应用的更新</summary>
+        public static bool IsReady => File.Exists(ReadyPath);
+
+        /// <summary>
+        /// 「替换后重启」的标记参数。带此参数的进程只报告新版本号就退出，不会重新跑一遍测密
+        /// （重放用户的命令意味着白测一次，纯属浪费）。与 <c>-Worker</c> 一样是内部参数。
+        /// </summary>
+        public const string RestartedFlag = "-UpdateRestarted";
+
         /// <summary>
         /// 启动最早时机调用：若存在待应用的更新就替换自身并重启新进程。
         /// 返回 <see langword="true"/> 表示当前进程应立刻退出（新进程已接管）。
+        /// </summary>
+        public static bool TryApply(string[] args)
+        {
+            // 上一次更新成功后留下的旧版本：本次启动顺手清理，并标记「刚更新过」
+            if (File.Exists(BackupPath) && File.Exists(ExecutablePath))
+            {
+                TryDelete(BackupPath);
+                JustUpdated = !File.Exists(BackupPath);
+            }
+
+            return Replace(args);
+        }
+
+        /// <summary>
+        /// 测密结束（正常结束、出错或被中断）后调用：把已校验的新版本替换上去并
+        /// **立刻重启自身一次**，让更新当场生效，不必等用户下次启动。
+        /// <para>
+        /// 重启的子进程带 <see cref="RestartedFlag"/>，只报告版本后退出。
+        /// 没有待应用更新时什么也不做。
+        /// </para>
+        /// </summary>
+        /// <returns>是否已完成替换并拉起新进程</returns>
+        public static bool TryApplyAndRestart(string[] args)
+        {
+            if (!IsReady)
+            {
+                return false;
+            }
+
+            // 标记放在最前：即使后面还跟着用户的原始参数，Main 也会先看到它并跳过测密
+            var relaunchArgs = new string[args.Length + 1];
+            relaunchArgs[0] = RestartedFlag;
+            args.CopyTo(relaunchArgs, 1);
+
+            return Replace(relaunchArgs);
+        }
+
+        /// <summary>报告本次启动是「更新后重启」（由 Main 在入口处调用）</summary>
+        public static void ReportRestarted()
+        {
+            // 只打一行：上一次的输出在退出备用屏幕时已被整体移除，这里没有上下文可依赖
+            Ui.WriteWarning(string.Format(Resources.UpgradeApplied, Program.VersionText));
+        }
+
+        /// <summary>
+        /// 执行替换并拉起新进程。
         /// <para>
         /// 替换手法：Windows 允许**重命名正在运行的 exe**，因此
         /// 自身 → .old、.new → 自身，再启动新 exe，最后由新进程删除 .old。
@@ -132,18 +187,11 @@ namespace ArchivePasswordTestTool
         /// </para>
         /// 任何异常都回滚到旧二进制度，绝不把用户留在「两个文件都不完整」的状态。
         /// </summary>
-        public static bool TryApply(string[] args)
+        private static bool Replace(string[] relaunchArgs)
         {
-            string executable = PendingUpdate.ExecutablePath;
-            string ready = PendingUpdate.ReadyPath;
-            string backup = PendingUpdate.BackupPath;
-
-            // 上一次更新成功后留下的旧版本：本次启动顺手清理，并标记「刚更新过」
-            if (File.Exists(backup) && File.Exists(executable))
-            {
-                PendingUpdate.TryDelete(backup);
-                JustUpdated = !File.Exists(backup);
-            }
+            string executable = ExecutablePath;
+            string ready = ReadyPath;
+            string backup = BackupPath;
 
             if (!File.Exists(ready))
             {
@@ -165,13 +213,12 @@ namespace ArchivePasswordTestTool
             {
                 File.Move(ready, executable);
 
-                // 新进程从当前 exe 启动，参数原样透传（保持用户此次的调用意图）
                 var startInfo = new ProcessStartInfo(executable)
                 {
                     UseShellExecute = false,
                     WorkingDirectory = Environment.CurrentDirectory,
                 };
-                foreach (string arg in args)
+                foreach (string arg in relaunchArgs)
                 {
                     startInfo.ArgumentList.Add(arg);
                 }
@@ -230,8 +277,9 @@ namespace ArchivePasswordTestTool
         private static readonly TimeSpan CheckInterval = TimeSpan.FromHours(1);
 
         /// <summary>
-        /// 后台检查的等待上限。后台请求需要 1~2 秒，而快速测试（前几个密码就命中）
-        /// 往往几百毫秒就结束；不等待会导致更新提示几乎永远来不及展示。
+        /// 结束时等待后台**检查**阶段的上限。检查请求需要 1~2 秒，而快速测试
+        /// （前几个密码就命中）往往几百毫秒就结束；不等待会导致更新提示几乎永远来不及展示。
+        /// 已进入下载阶段时不受此限制（见 <c>WaitForBackgroundTask</c>）。
         /// </summary>
         private static readonly TimeSpan CompletionGrace = TimeSpan.FromSeconds(3);
 
@@ -247,9 +295,58 @@ namespace ArchivePasswordTestTool
         /// </summary>
         private static readonly TimeSpan DownloadConnectTimeout = TimeSpan.FromSeconds(30);
 
-        /// <summary>后台进行中的检查（null 表示本次启动无需检查）</summary>
-        private static Task<UpgradeReleasesInfo?>? pendingCheck;
+        /// <summary>
+        /// 后台任务：一次做完「检查 + 下载」。
+        /// <para>
+        /// 下载在发现新版本时就地开始，与用户输入、测密全程重叠——等到测试结束才动手，
+        /// 短测试会让用户白等一整个下载窗口，长测试则把传输整个堆到退出前。
+        /// null 表示本次启动无需检查（已节流/开发构建/被环境变量禁用）。
+        /// </para>
+        /// </summary>
+        private static Task<UpdateOutcome?>? pendingUpdate;
 
+        /// <summary>
+        /// 后台任务的当前阶段。结束时据此决定要不要等下载收尾——
+        /// <c>Task.IsCompleted</c> 只能说明「整个任务是否结束」，区分不了「还在查」与「正在下载」。
+        /// </summary>
+        private static volatile UpdatePhase backgroundPhase;
+
+        /// <summary>正在下载的版本 tag（仅 <see cref="UpdatePhase.Downloading"/> 阶段有效）</summary>
+        private static volatile string? downloadingTag;
+
+        /// <summary>后台更新的阶段</summary>
+        private enum UpdatePhase
+        {
+            /// <summary>没有进行中的后台任务</summary>
+            Idle,
+
+            /// <summary>正在请求 Releases API</summary>
+            Checking,
+
+            /// <summary>已发现新版本，正在下载并校验</summary>
+            Downloading,
+        }
+
+        /// <summary>
+        /// 后台任务的产出。null 表示没有新版本、检查失败或无需处理（无人值守）。
+        /// </summary>
+        private sealed class UpdateOutcome
+        {
+            /// <summary>线上新版本的 tag</summary>
+            public required string Tag { get; init; }
+
+            /// <summary>Release 页面地址（无 exe 资产时用于引导用户手动下载）</summary>
+            public string? HtmlUrl { get; init; }
+
+            /// <summary>该 Release 是否带可下载的 exe 资产</summary>
+            public bool HasAsset { get; init; } = true;
+
+            /// <summary>已下载并校验通过，<c>.new</c> 已落盘待下次启动应用</summary>
+            public bool Ready { get; init; }
+
+            /// <summary>下载失败原因（<see cref="HasAsset"/> 为 true 且 <see cref="Ready"/> 为 false 时有效）</summary>
+            public string? Error { get; init; }
+        }
         /// <summary>
         /// 配置文件放在用户本地应用数据目录：原先用相对路径写在当前工作目录，
         /// 从不同目录启动就会到处生成 config.json。
@@ -290,7 +387,8 @@ namespace ArchivePasswordTestTool
         }
 
         /// <summary>
-        /// 启动时调用：距上次**尝试**满 1 小时才在后台发起检查（不阻塞、不打印）。
+        /// 启动时调用（越早越好）：距上次**尝试**满 1 小时才在后台发起检查，
+        /// 发现新版本就在同一个后台任务里立刻下载（不阻塞、不打印）。
         /// 时间戳在本次尝试时就写入（无论成败），用于约束重试频率——
         /// 否则离线用户每次启动都要白等一个等待窗口。
         /// </summary>
@@ -320,46 +418,39 @@ namespace ArchivePasswordTestTool
                 config.LastCheckUpgrade = DateTime.Now;
                 SaveConfig(config);
 
-                pendingCheck = Task.Run(FetchLatestRelease);
+                // 先置阶段再起任务：任务可能在赋值前就跑到下载阶段
+                backgroundPhase = UpdatePhase.Checking;
+                pendingUpdate = Task.Run(CheckAndDownload);
             }
             catch
             {
                 // 尽力而为：读配置失败等一律跳过
-                pendingCheck = null;
+                backgroundPhase = UpdatePhase.Idle;
+                pendingUpdate = null;
             }
         }
 
         /// <summary>
         /// 测试结束后调用：消费后台结果并（视情况）提示更新。
         /// <para>
-        /// 后台请求需要 1~2 秒，而快速测试（前几个密码就命中）往往几百毫秒就结束——
-        /// 若「未完成就放弃」，更新提示几乎永远不会出现。
-        /// 因此给一个有上限的等待窗口：此时测试结果面板已输出完毕，用户正在阅读结果，
-        /// 短暂等待无感。重定向场景不等待（无人值守，纯属浪费）。
+        /// 检查与下载在启动时就已发起，正常情况下这里直接拿结果；只有测试结束得比下载还快
+        /// 才会等待（见 <see cref="WaitForBackgroundTask"/>）。重定向场景不等待也不下载
+        /// （无人值守，纯属浪费）。
         /// </para>
         /// </summary>
         public static void CompleteBackgroundCheck()
         {
-            var task = pendingCheck;
-            pendingCheck = null;
+            var task = pendingUpdate;
+            pendingUpdate = null;
 
             if (task is null)
             {
                 return;
             }
 
-            if (!task.IsCompleted && !Console.IsInputRedirected)
-            {
-                try
-                {
-                    task.Wait(CompletionGrace);
-                }
-                catch
-                {
-                    // 任务内异常由下面的 IsCompletedSuccessfully 统一处理；
-                    // 此处若让异常逃逸会中断调用方的 finally，连带跳过"保存测试结果"确认
-                }
-            }
+            bool announced = !task.IsCompleted
+                && !Console.IsInputRedirected
+                && WaitForBackgroundTask(task);
 
             if (!task.IsCompletedSuccessfully)
             {
@@ -369,34 +460,7 @@ namespace ArchivePasswordTestTool
 
             try
             {
-                var info = task.Result;
-                if (info is null)
-                {
-                    // 请求失败（网络故障、或 GitHub API 限流 403）
-                    return;
-                }
-
-                var config = LoadConfig();
-                if (!ShouldPrompt(info.TagName, Program.Version, Program.VersionType, config.LastNotifiedVersion))
-                {
-                    return;
-                }
-
-                // 无人值守环境不下新版、也不提示：下载 12MB 无人消费，纯属浪费
-                if (Console.IsInputRedirected)
-                {
-                    return;
-                }
-
-                Ui.WriteWarning(string.Format(Resources.UpgradeAvailable, info.TagName));
-
-                // 「已提示」标记只在本次确实把事办完时落下：下载失败（目录只读、断网、
-                // 校验不过）要留待 1 小时后重试，否则该版本会被永久跳过。
-                if (DownloadPendingUpdate(info))
-                {
-                    config.LastNotifiedVersion = info.TagName;
-                    SaveConfig(config);
-                }
+                AnnounceAndRecord(task.Result, announced);
             }
             catch
             {
@@ -405,55 +469,180 @@ namespace ArchivePasswordTestTool
         }
 
         /// <summary>
-        /// 下载新版本到主程序旁，等待下次启动时替换。
-        /// 单文件发布下 exe 运行期间无法自我覆盖，故必须分两次启动完成更新。
-        /// 全程尽力而为：目录不可写、校验失败等只提示不阻断退出。
+        /// 结束时等后台任务收尾，返回是否已经提示过「发现新版本」。
+        /// <para>
+        /// 只给检查一个有上限的等待窗口：检查 1~2 秒即可完成，而快速测试（前几个密码就命中）
+        /// 往往几百毫秒就结束，不等待就永远看不到提示。此时测试结果面板已输出完毕，
+        /// 用户正在阅读结果，短暂等待无感。
+        /// </para>
+        /// <para>
+        /// 一旦进入下载阶段则提示后等它收尾（下载自带连接/总超时兜底）：
+        /// 否则进程退出会中断传输，留下的半截文件只能等下次启动重下。
+        /// </para>
         /// </summary>
-        /// <returns>
-        /// 是否已「处置完」该版本（下载成功，或无 exe 资产已引导到发布页）。
-        /// 返回 <see langword="false"/> 时调用方不记已提示标记，下个周期会重试。
-        /// </returns>
-        private static bool DownloadPendingUpdate(UpgradeReleasesInfo info)
+        private static bool WaitForBackgroundTask(Task<UpdateOutcome?> task)
         {
-            UpgradeAsset? asset = info.MainAsset;
-            if (asset is null)
+            bool completed;
+            try
             {
-                // 该 Release 没有可下载 exe（例如手工创建的 Release）：退回发布页引导
-                if (InteractivePrompts.ConfirmSingleKey(Resources.UpgradeOpenReleasesPrompt, defaultYes: true))
-                {
-                    OpenReleasesPage(info.HtmlUrl ?? ReleasesPageUrl);
-                }
-
-                // 用户已被告知且已引导到发布页，不再重复烦他
-                return true;
+                completed = task.Wait(CompletionGrace);
             }
+            catch
+            {
+                // 任务内异常由调用方的 IsCompletedSuccessfully 统一处理；
+                // 此处若让异常逃逸会中断调用方的 finally，连带跳过"保存测试结果"确认
+                return false;
+            }
+
+            if (completed || backgroundPhase != UpdatePhase.Downloading)
+            {
+                return false;
+            }
+
+            AnnounceDownloading();
 
             try
             {
-                // 先下到临时名，校验通过才改成 .new：避免半截文件在下个启动被当成有效更新
-                string downloading = PendingUpdate.DownloadingPath;
-                PendingUpdate.TryDelete(downloading);
-
-                AnsiConsole.MarkupLine($"[grey]{Markup.Escape(Resources.UpgradeDownloading)}[/]");
-
-                DownloadFile(asset, downloading);
-
-                VerifyDownload(downloading, asset);
-
-                PendingUpdate.TryDelete(PendingUpdate.ReadyPath);
-                File.Move(downloading, PendingUpdate.ReadyPath);
-                Ui.WriteWarning(Resources.UpgradeReadyForNextLaunch);
-
-                return true;
+                task.Wait();
             }
-            catch (Exception ex)
+            catch
             {
-                // 目录只读（如装在 Program Files）、磁盘满、网络中断、校验失败等：提示后正常退出
-                PendingUpdate.TryDelete(PendingUpdate.DownloadingPath);
-                Ui.WriteWarning(string.Format(Resources.UpgradeDownloadFailed, ex.Message));
-
-                return false;
+                // 同上：最终结果由调用方的 IsCompletedSuccessfully 判定
             }
+
+            return true;
+        }
+
+        /// <summary>
+        /// 后台线程：查询最新版，发现新版就立刻下载（<b>全程不输出</b>——控制台只归主线程，
+        /// 后台写屏会打断正在渲染的进度条）。结果交给 <see cref="CompleteBackgroundCheck"/> 呈现。
+        /// </summary>
+        private static UpdateOutcome? CheckAndDownload()
+        {
+            try
+            {
+                var info = FetchLatestRelease();
+                string? tag = info?.TagName;
+
+                if (string.IsNullOrWhiteSpace(tag))
+                {
+                    // 请求失败（网络故障、或 GitHub API 限流 403）
+                    return null;
+                }
+
+                // 无人值守（管道/无输入）：下载了也没人消费，还白占带宽
+                if (Console.IsInputRedirected)
+                {
+                    return null;
+                }
+
+                // 已提示并处置过的版本不再重复下载
+                if (!ShouldPrompt(tag, Program.Version, Program.VersionType, LoadConfig().LastNotifiedVersion))
+                {
+                    return null;
+                }
+
+                UpgradeAsset? asset = info!.MainAsset;
+                if (asset is null)
+                {
+                    // 该 Release 没有可下载 exe（例如手工创建的 Release）：结束时引导到发布页
+                    return new UpdateOutcome { Tag = tag, HtmlUrl = info.HtmlUrl, HasAsset = false };
+                }
+
+                downloadingTag = tag;
+                backgroundPhase = UpdatePhase.Downloading;
+
+                try
+                {
+                    // 先下到临时名，校验通过才改成 .new：避免半截文件在下个启动被当成有效更新
+                    string downloading = PendingUpdate.DownloadingPath;
+                    PendingUpdate.TryDelete(downloading);
+
+                    DownloadFile(asset, downloading);
+                    VerifyDownload(downloading, asset);
+
+                    PendingUpdate.TryDelete(PendingUpdate.ReadyPath);
+                    File.Move(downloading, PendingUpdate.ReadyPath);
+
+                    return new UpdateOutcome { Tag = tag, HtmlUrl = info.HtmlUrl, Ready = true };
+                }
+                catch (Exception ex)
+                {
+                    // 目录只读（如装在 Program Files）、磁盘满、网络中断、校验失败等：
+                    // 收走半截文件，失败原因留到结束时提示
+                    PendingUpdate.TryDelete(PendingUpdate.DownloadingPath);
+
+                    return new UpdateOutcome { Tag = tag, HtmlUrl = info.HtmlUrl, Error = ex.Message };
+                }
+                finally
+                {
+                    downloadingTag = null;
+                    backgroundPhase = UpdatePhase.Idle;
+                }
+            }
+            catch
+            {
+                // 尽力而为：任何失败都按「没有更新」处理，下个周期重试
+                return null;
+            }
+        }
+
+        /// <summary>提示「发现新版本 + 正在下载」（只允许主线程调用）</summary>
+        private static void AnnounceDownloading()
+        {
+            if (downloadingTag is { } tag)
+            {
+                Ui.WriteWarning(string.Format(Resources.UpgradeAvailable, tag));
+            }
+
+            AnsiConsole.MarkupLine($"[grey]{Markup.Escape(Resources.UpgradeDownloading)}[/]");
+        }
+
+        /// <summary>
+        /// 主线程收尾：把后台结果翻译成用户可见的提示，并记录已处置的版本。
+        /// <paramref name="announced"/> 为 true 表示「发现新版本」那句已经打印过，不再重复。
+        /// </summary>
+        private static void AnnounceAndRecord(UpdateOutcome? outcome, bool announced)
+        {
+            if (outcome is null)
+            {
+                return;
+            }
+
+            if (!announced)
+            {
+                Ui.WriteWarning(string.Format(Resources.UpgradeAvailable, outcome.Tag));
+            }
+
+            if (!outcome.HasAsset)
+            {
+                // 无 exe 资产：退回发布页引导。用户已被告知且已引导，不再重复烦他
+                if (InteractivePrompts.ConfirmSingleKey(Resources.UpgradeOpenReleasesPrompt, defaultYes: true))
+                {
+                    OpenReleasesPage(outcome.HtmlUrl ?? ReleasesPageUrl);
+                }
+
+                RecordNotified(outcome.Tag);
+                return;
+            }
+
+            if (outcome.Ready)
+            {
+                Ui.WriteWarning(Resources.UpgradeReadyForNextLaunch);
+                RecordNotified(outcome.Tag);
+                return;
+            }
+
+            // 下载失败：只提示不记已提示标记，1 小时后重试，否则该版本会被永久跳过
+            Ui.WriteWarning(string.Format(Resources.UpgradeDownloadFailed, outcome.Error ?? string.Empty));
+        }
+
+        /// <summary>记下已处置的版本（每版本只提示/下载一次的前提）</summary>
+        private static void RecordNotified(string tag)
+        {
+            var config = LoadConfig();
+            config.LastNotifiedVersion = tag;
+            SaveConfig(config);
         }
 
         /// <summary>
