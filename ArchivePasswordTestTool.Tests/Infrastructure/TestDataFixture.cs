@@ -11,6 +11,20 @@ public sealed class TestDataFixture
 {
     public const string CorrectPassword = "Correct123!";
 
+    /// <summary>
+    /// 样本生成互斥锁。
+    /// <para>
+    /// 多个测试类各自持有 <c>Lazy&lt;TestDataFixture&gt;</c>（<see cref="TestDataCollection"/> 之外的类是各自 new 的），
+    /// xunit 会把不同 collection 并行跑，于是两个线程可能同时判定「样本不存在」并同时执行
+    /// <c>7z a</c> 写同一个文件——后到的那个报 <c>The file exists.</c>（exit=2）。
+    /// </para>
+    /// <para>
+    /// 本地测不出这个问题：开发机上的 TestData 早已生成好，<c>File.Exists</c> 恒为 true，
+    /// 生成路径根本不会进入。CI 是全新 checkout，实测一次性挂掉 56 个用例。
+    /// </para>
+    /// </summary>
+    private static readonly Lock CreationGate = new();
+
     /// <summary>7-Zip CLI 路径（必需）</summary>
     public string SevenZipExe { get; }
 
@@ -37,16 +51,22 @@ public sealed class TestDataFixture
             @"C:\Program Files (x86)\WinRAR\Rar.exe");
 
         TestDataDir = TestPaths.TestDataDir;
-        Directory.CreateDirectory(TestDataDir);
 
-        CreatePayloadIfMissing();
-        CreateDictionariesIfMissing();
-        CreateSevenZipFixtures();
-        CreateNonArchiveExeIfMissing();
-
-        if (WinRarExe is not null)
+        // 全部生成动作串行化：第二个线程进来时第一个已完成，File.Exists 全为 true 直接跳过。
+        // 文件系统操作与 7z 子进程都在锁内，不追求并行——样本总量只有几 MB
+        lock (CreationGate)
         {
-            CreateRarFixtures();
+            _ = Directory.CreateDirectory(TestDataDir);
+
+            CreatePayloadIfMissing();
+            CreateDictionariesIfMissing();
+            CreateSevenZipFixtures();
+            CreateNonArchiveExeIfMissing();
+
+            if (WinRarExe is not null)
+            {
+                CreateRarFixtures();
+            }
         }
     }
 

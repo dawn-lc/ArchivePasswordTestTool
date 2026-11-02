@@ -318,7 +318,9 @@ public sealed class FastFilterBenchmarkTests(ITestOutputHelper output)
 
         Assert.Equal(0, fast.ExitCode);
         Assert.Equal(0, slow.ExitCode);
-        Assert.Contains("快速", fast.Output);
+
+        // 断言快筛提示已出现：用格式名（ASCII）而不是中文文案，跨 UI 语言都成立
+        Assert.Contains("MP4", fast.Output);
     }
 
     /// <summary>扣除「1 条字典」基线后，每个候选密码的平均耗时（毫秒）</summary>

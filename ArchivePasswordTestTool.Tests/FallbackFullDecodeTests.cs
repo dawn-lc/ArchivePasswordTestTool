@@ -77,8 +77,13 @@ public sealed class FallbackFullDecodeTests
             Assert.Equal(0, result.ExitCode);
             Assert.Contains(CorrectPassword, result.Output);
 
-            // 快筛命中即结束，不会走到复核分支
-            Assert.DoesNotContain("Full-decode verification started", KeepProse(result.Output));
+            // 快筛命中即结束，不会走到复核分支。
+            // 同样按约定枚举全部语言的文案——只写一种语言在别的 UI 语言下会永不命中（假绿）
+            string prose = KeepProse(result.Output);
+            string? leaked = LocalizedTexts("FallbackFullDecodeStarted")
+                .FirstOrDefault(marker => prose.Contains(marker, StringComparison.Ordinal));
+
+            Assert.True(leaked is null, $"不该出现复核提示，但输出含「{leaked}」：\n{result.Output}");
         }
         finally
         {
@@ -89,6 +94,10 @@ public sealed class FallbackFullDecodeTests
     /// <summary>
     /// 复核阶段的计数与耗时必须独立：最终「已测试」应等于字典条数（复核跑一遍），
     /// 而不是「快筛 N 条 + 复核 N 条」的两倍——那是两个不同量级的成本，混在一起无法解读。
+    /// <para>
+    /// 标签文案按项目约定从各语言资源枚举（<c>ResultTested</c>），不能写死某一种语言：
+    /// 写死会在其它 UI 语言下永不命中（假绿或假红），CI 跑在英文系统上曾因此失败。
+    /// </para>
     /// </summary>
     [Fact]
     public void FallbackReportsItsOwnPassCount()
@@ -107,10 +116,9 @@ public sealed class FallbackFullDecodeTests
             Assert.Equal(0, result.ExitCode);
             Assert.Contains(CorrectPassword, result.Output);
 
-            var match = System.Text.RegularExpressions.Regex.Match(
-                KeepProse(result.Output), @"已测试\s+(\d+)");
-            Assert.True(match.Success, $"输出里找不到「已测试」行：\n{result.Output}");
-            Assert.Equal(3, int.Parse(match.Groups[1].Value));
+            int? tested = FindTestedCount(result.Output);
+            Assert.True(tested is not null, $"输出里找不到「已测试」行：\n{result.Output}");
+            Assert.Equal(3, tested!.Value);
         }
         finally
         {
@@ -118,13 +126,109 @@ public sealed class FallbackFullDecodeTests
         }
     }
 
+    /// <summary>
+    /// 取某个资源键在全部受支持语言下的文案（已按 KeepProse 同样规则净化）。
+    /// 断言「某提示是否出现」必须这么做：只写一种语言，在其它 UI 语言下会永不命中。
+    /// </summary>
+    internal static IEnumerable<string> LocalizedTexts(string key)
+    {
+        foreach (string culture in new[] { "en", "zh-CN", "ja", "fr", "ru" })
+        {
+            string? value = ArchivePasswordTestTool.Properties.EmbeddedResourceManager.GetString(
+                key, new System.Globalization.CultureInfo(culture));
+
+            if (!string.IsNullOrWhiteSpace(value))
+            {
+                // 资源里可能有 {0} 占位符，取第一段常量文字作为标记
+                string marker = KeepProse(value.Split('{')[0]).Trim();
+
+                if (marker.Length > 0)
+                {
+                    yield return marker;
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// 从输出里读出「已测试」的计数。标签在五种语言下各不相同，逐个尝试；
+    /// 面板边框与折行可能夹在标签与数字之间，因此先滤成「字母 + 空格 + 数字」再匹配。
+    /// </summary>
+    internal static int? FindTestedCount(string output)
+    {
+        string prose = KeepProse(output);
+        foreach (string culture in new[] { "en", "zh-CN", "ja", "fr", "ru" })
+        {
+            string? label = ArchivePasswordTestTool.Properties.EmbeddedResourceManager.GetString(
+                "ResultTested", new System.Globalization.CultureInfo(culture));
+
+            if (string.IsNullOrWhiteSpace(label))
+            {
+                continue;
+            }
+
+            var match = System.Text.RegularExpressions.Regex.Match(
+                prose, System.Text.RegularExpressions.Regex.Escape(label.Trim()) + @"\s+(\d+)");
+
+            if (match.Success)
+            {
+                return int.Parse(match.Groups[1].Value);
+            }
+        }
+
+        return null;
+    }
+
     // ---------- 辅助 ----------
+
+    /// <summary>
+    /// 语言无关断言的自我保护：这两种「从输出里认文案」的逻辑必须对**每一种** UI 语言都成立。
+    /// <para>
+    /// 真实 CI 跑在英文系统上，只断言中文文案的用例会在那里失败（曾经发生过）；
+    /// 反过来只断英文又会在中文环境下假绿。这里显式构造各语言的面板行直接验证解析逻辑，
+    /// 不依赖跑测试的那台机器的系统语言。
+    /// </para>
+    /// </summary>
+    [Theory]
+    [InlineData("en")]
+    [InlineData("zh-CN")]
+    [InlineData("ja")]
+    [InlineData("fr")]
+    [InlineData("ru")]
+    public void TestedCountIsReadableInEveryUiLanguage(string culture)
+    {
+        var info = new System.Globalization.CultureInfo(culture);
+        string label = ArchivePasswordTestTool.Properties.EmbeddedResourceManager.GetString("ResultTested", info)!;
+
+        // 模拟真实面板行：边框 + 标签 + 缩进 + 数字（与 Ui.WriteOutcome 的 AddRow 一致）
+        Assert.Equal(3, FindTestedCount($"│ {label}    3  │"));
+    }
+
+    /// <summary>同理验证「复核已开始」提示的识别：各语言的标记都必须在各自文案里命中</summary>
+    [Theory]
+    [InlineData("en")]
+    [InlineData("zh-CN")]
+    [InlineData("ja")]
+    [InlineData("fr")]
+    [InlineData("ru")]
+    public void FullDecodeMarkerIsDetectedInEveryUiLanguage(string culture)
+    {
+        var info = new System.Globalization.CultureInfo(culture);
+        string template = ArchivePasswordTestTool.Properties.EmbeddedResourceManager.GetString(
+            "FallbackFullDecodeStarted", info)!;
+
+        string prose = KeepProse($"│ {string.Format(template, "3")} │");
+
+        Assert.Contains(
+            LocalizedTexts("FallbackFullDecodeStarted"),
+            marker => prose.Contains(marker, StringComparison.Ordinal));
+    }
 
     /// <summary>
     /// 输出里有 ANSI 序列与面板边框；只保留字母与数字便于跨边框做包含判断
     /// （与 EndToEndTests.LongPasswordIsReportedInFull 同一手法）。
     /// </summary>
-    private static string KeepProse(string text)
+    internal static string KeepProse(string text)
     {
         var builder = new StringBuilder(text.Length);
         foreach (char c in text)

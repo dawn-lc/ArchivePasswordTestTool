@@ -127,7 +127,10 @@ public sealed class Rar4FastFilterTests
             var (ExitCode, Output) = RunTool(dictPath, sample.Path);
             Assert.Equal(0, ExitCode);
             Assert.Contains(CorrectPassword, Output);
-            Assert.Contains("快速", Output); // 中文界面的快速筛选提示
+
+            // 断言快筛提示已出现：用格式名（ASCII）而不是中文文案——
+            // FastFilterActive 在所有语言下都含 {0}（内容格式名），这个断言才能跨 UI 语言成立
+            Assert.Contains("MP4", Output);
 
             // 关闭快速筛选：走 7-Zip 完整测密。若 KDF/加密实现与真实 RAR4 有偏差，
             // 这里会解不开存档 → 找不到密码

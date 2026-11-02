@@ -171,7 +171,10 @@ public sealed class SevenZipStoreProbeTests
             var fast = RunTool(dictPath, sample.Path);
             Assert.Equal(0, fast.ExitCode);
             Assert.Contains(CorrectPassword, fast.Output);
-            Assert.Contains("快速", fast.Output); // 中文界面的快速筛选提示
+
+            // 断言快筛提示已出现：用格式名（ASCII）而不是中文文案——
+            // FastFilterActive 在所有语言下都含 {0}（内容格式名），这个断言才能跨 UI 语言成立
+            Assert.Contains("MP4", fast.Output);
 
             var slow = RunTool(dictPath, sample.Path, ("APTT_NO_FAST_FILTER", "1"));
             Assert.Equal(0, slow.ExitCode);
