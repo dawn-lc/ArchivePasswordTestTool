@@ -108,7 +108,9 @@ public sealed class FallbackFullDecodeTests
             string archivePath = Path.Combine(dir, "NoMagic2.7z");
             CreateStoredArchive(dir, archivePath, CreatePlainText(60000));
 
-            // 3 条密码：复核应当只报 3，不是 6
+            // 3 条密码且正确密码在末尾：复核必须把 3 条全测完才对，计数因此是确定的。
+            // 放在中间时计数会变成 2——找到密码后 state.Stop() 让最后一条不再启动，
+            // 那是产品的正确行为（剩余密码确实没测），断言不该假设「必然等于字典条数」
             string dictPath = WriteDictionary(archivePath);
 
             var result = RunTool(dictPath, archivePath, fallback: true);
@@ -253,7 +255,10 @@ public sealed class FallbackFullDecodeTests
     private static string WriteDictionary(string archivePath)
     {
         string dictPath = Path.ChangeExtension(archivePath, ".txt");
-        File.WriteAllLines(dictPath, ["DefinitelyWrong1", CorrectPassword, "DefinitelyWrong2"]);
+
+        // 正确密码放末尾：需要「测完全部才找到」的用例才能得到确定的测试计数；
+        // 前面几条错误密码同时保证快筛会先把它们全部否定掉
+        File.WriteAllLines(dictPath, ["DefinitelyWrong1", "DefinitelyWrong2", CorrectPassword]);
         return dictPath;
     }
 
