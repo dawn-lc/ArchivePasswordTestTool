@@ -212,7 +212,7 @@ public sealed class Rar5ArchiveWriterTests(TestDataFixture fx, ITestOutputHelper
     // ---------- 结构层：把技术说明里两条易错规则钉成断言 ----------
 
     /// <summary>
-    /// 重新解析自产归档的头部，逐条核对：
+    /// 用 <see cref="Rar5HeaderReader"/> 重新解析自产归档，逐条核对：
     /// ① headerSize 从 type 字段开始计数（不含 headerSize 自身）；
     /// ② Header CRC32 覆盖 [headerSize 字段 .. extra area 末尾]。
     /// 这两条当初都是靠真实 WinRAR 样本标定出来的，理解错任何一条 7-Zip 都会拒绝整个归档，
@@ -225,50 +225,25 @@ public sealed class Rar5ArchiveWriterTests(TestDataFixture fx, ITestOutputHelper
         try
         {
             string path = Path.Combine(directory, "Single.rar");
-            _ = Rar5ArchiveWriter.CreateStoredEncrypted(path, EntryName, CreatePlaintext(1024), CorrectPassword, DataSalt, DataIv);
+            byte[] plaintext = CreatePlaintext(1024);
+            _ = Rar5ArchiveWriter.CreateStoredEncrypted(path, EntryName, plaintext, CorrectPassword, DataSalt, DataIv);
 
             byte[] bytes = File.ReadAllBytes(path);
-            int position = 8; // 跳过签名
+            IReadOnlyList<Rar5Header> headers = Rar5HeaderReader.Read(bytes);
 
-            var seenTypes = new List<ulong>();
-            while (position < bytes.Length)
-            {
-                uint storedCrc = BinaryPrimitives.ReadUInt32LittleEndian(bytes.AsSpan(position));
-                int sizeFieldStart = position + 4;
-                int cursor = sizeFieldStart;
+            Assert.Equal([Rar5HeaderReader.TypeMain, Rar5HeaderReader.TypeFile, Rar5HeaderReader.TypeEndOfArchive], headers.Select(h => h.Type));
 
-                ulong headerSize = ReadVint(bytes, ref cursor);
-                int bodyStart = cursor;
-                ulong headerType = ReadVint(bytes, ref cursor);
-                ulong flags = ReadVint(bytes, ref cursor);
+            // CRC 自洽是「覆盖范围理解正确」的最直接证据：范围错一个字节就算不出同样的值
+            Assert.All(headers, header => Assert.True(Rar5HeaderReader.CrcMatches(bytes, header), $"头部 @0x{header.Offset:X4} 的 CRC 覆盖范围不匹配"));
 
-                ulong extraSize = 0;
-                if ((flags & 0x0001) != 0)
-                {
-                    extraSize = ReadVint(bytes, ref cursor);
-                }
+            Rar5Header file = headers.Single(h => h.Type == Rar5HeaderReader.TypeFile);
+            Assert.Equal((ulong)plaintext.Length, file.UnpackedSize);
+            Assert.Equal(EntryName, file.Name);
+            Assert.True(file.HasFlag(Rar5HeaderReader.FlagExtraArea));
+            Assert.True(file.HasFlag(Rar5HeaderReader.FlagDataArea));
 
-                ulong dataSize = 0;
-                if ((flags & 0x0002) != 0)
-                {
-                    dataSize = ReadVint(bytes, ref cursor);
-                }
-
-                int bodyEnd = bodyStart + (int)headerSize;
-
-                // ① headerSize 不含自身：body 从 type 字段开始，恰好到 extra 末尾结束
-                Assert.True(bodyEnd <= bytes.Length, "headerSize 越界");
-                Assert.True(extraSize <= headerSize, "extraSize 超出 headerSize");
-
-                // ② CRC 覆盖 [size 字段 .. extra 末尾]
-                uint computed = Crc32.Compute(bytes.AsSpan(sizeFieldStart, bodyEnd - sizeFieldStart));
-                Assert.Equal(storedCrc, computed);
-
-                seenTypes.Add(headerType);
-                position = bodyEnd + (int)dataSize;
-            }
-
-            Assert.Equal([1UL, 2UL, 5UL], seenTypes);
+            // 头部正文恰好填满 headerSize（不多不少），是「headerSize 不含自身」的等价表述
+            Assert.All(headers, header => Assert.Equal((int)header.HeaderSize, header.BodyEnd - header.BodyStart));
         }
         finally
         {
@@ -301,23 +276,6 @@ public sealed class Rar5ArchiveWriterTests(TestDataFixture fx, ITestOutputHelper
     }
 
     // ---------- 工具 ----------
-
-    private static ulong ReadVint(byte[] buffer, ref int position)
-    {
-        ulong value = 0;
-        int shift = 0;
-        while (true)
-        {
-            byte current = buffer[position++];
-            value |= (ulong)(current & 0x7F) << shift;
-            if ((current & 0x80) == 0)
-            {
-                return value;
-            }
-
-            shift += 7;
-        }
-    }
 
     private int RunSevenZip(string arguments)
     {

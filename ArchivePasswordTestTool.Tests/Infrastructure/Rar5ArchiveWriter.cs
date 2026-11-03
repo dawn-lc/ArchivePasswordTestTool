@@ -71,6 +71,11 @@ internal sealed record Rar5WriterOptions
 /// （生产侧根本没有 RAR5 KDF，密码由 7-Zip 自己校验），所以本写入器不具备「反向验证生产 KDF」的作用；
 /// 它反向验证的是 7-Zip 能解开，也即本文件对 RAR5 结构的理解没有偏差。
 /// </para>
+/// <para>
+/// <b>修改本文件的头部布局、加密记录或分卷规则后，请在装有 WinRAR 的机器上跑一次
+/// <c>Rar5ReferenceCompareTests</c></b>：它拿本地 <c>Rar.exe</c> 生成同参数归档，与这里产出的归档做逐字段结构对照。
+/// 「7-Zip 能打开」只能证明没写坏，参考实现的对照才能证明写对了。
+/// </para>
 /// </summary>
 internal static class Rar5ArchiveWriter
 {

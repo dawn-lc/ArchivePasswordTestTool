@@ -286,16 +286,29 @@ EULA §7 允许自由分发**用 WinRAR 创建的**压缩包，所以「把样�
   错误密码必须被拒。这一条把「对 RAR5 结构的理解」钉死在可执行的断言上，而不是散落在注释里
 - 顺带得到 SFX 样本：任意不超过 1MB 的前缀 + RAR5 签名即可，不需要一个真的自解压模块
 
-集成关系是「7-Zip 相关」而非「WinRAR 相关」，所以验收用 7-Zip 是充分的。不过当初定位问题时额外做过一次跨实现校验——用参考实现自身验证合成样本，确认不是只对 7-Zip 的兼容性凑巧成立（在 `TestData/` 下，本机装有 WinRAR 时可手动复跑）：
+### 用本地 WinRAR 做对照源
 
-```powershell
-& 'C:\Program Files\WinRAR\Rar.exe' t -pCorrect123! TestData\Rar5Single.rar
-& 'C:\Program Files\WinRAR\Rar.exe' t -pCorrect123! TestData\Rar5Split.part1.rar
-& 'C:\Program Files\WinRAR\Rar.exe' t -pCorrect123! TestData\Rar5HeaderSplit.part1.rar
-& 'C:\Program Files\WinRAR\Rar.exe' t -pCorrect123! TestData\RarSfx.exe
-```
+「7-Zip 能打开」只能证明没写坏，不能证明写对了：字段位置偏一点，只要不致命，7-Zip 往往会容忍。所以**修改写入器时要拿参考实现做结构对照**——`Rar5ReferenceCompareTests` 就是这件事的可执行版本：
 
-四种形态都是 `All OK`（RAR 7.21 x64）。这条不进自动化：CI 上没有 WinRAR，加进去也只是又一个跳过。
+1. 让本机 `Rar.exe` 用同样参数（`-ma5 -m0 -p`）生成一份参考归档，再让 `Rar5ArchiveWriter` 生成一份；
+2. 用**同一个** `Rar5HeaderReader` 解析两边，要求 Header CRC32 全部自洽（覆盖范围错一个字节，就算不出同样的 CRC）；
+3. 逐项比对语义字段：头部类型序列、`ArchiveFlags`、`FileFlags`、`UnpackedSize`、`Attributes`、`CompressionInfo`、`HostOS`、文件名、`DataCrc`、加密记录版本与 salt/IV 长度；
+4. 末尾打印一张对照表，将来复核不用重新造样本。
+
+门控：只在本机存在 WinRAR 时真正执行（`C:\Program Files\WinRAR\Rar.exe`、x86 目录或环境变量 `APTT_WINRAR`），CI 上自动空跑并打印原因。它是**开发期**手段，不是 CI 门禁；CI 门禁是不依赖专有软件的 `Rar5ArchiveWriterTests`。
+
+这条对照做过负例验证：把 `Attributes` 从 `0x20` 改成 `0x21`，测试立刻报 `Expected: 32 / Actual: 33`。
+
+允许的差异只有两条，都是刻意省略的可选字段（算法只存在于 UnRAR 源码，技术说明里标为可选），测试用断言把它们钉住：
+
+| 字段 | 参考实现 | 合成归档 | 后果 |
+| ---- | ---- | ---- | ---- |
+| 文件加密 `PswCheck`（`0x0001`）| 写 12 字节校验值 | 不写 | 7-Zip / WinRAR 退化为「解出数据后比对 CRC32」判密码 |
+| tweaked checksums（`0x0002`）| 置位，`Data CRC32` 随密钥变换 | 不置位，`Data CRC32` 即明文 CRC32 | 同上 |
+
+> tweaked checksums 置位时，参考归档的 `DataCrc` **不等于**明文 CRC32。所以不能简单断言两边 `DataCrc` 相等——测试按标志位分流断言，顺带把「为什么真实归档的 CRC 和明文 CRC 不一样」这个易混点固化下来。
+
+历史事实：四种形态（单卷 / 分卷 / 头部加密分卷 / SFX）都曾被 `Rar.exe t` 判为 `All OK`（RAR 7.21 x64）。
 
 ## ZipCrypto 快速判错
 
@@ -744,6 +757,7 @@ dotnet test ArchivePasswordTestTool.Tests\ArchivePasswordTestTool.Tests.csproj
 | `EmbeddedSevenZipTests`                                      | 内嵌 `7z.dll` / 许可证存在性、提取落地尺寸、缓存复用、并发提取不互相踩踏                             |
 | `EndToEndTests.EmbeddedSevenZipWorksWhenNoInstalledSevenZip` | 强制走内嵌 dll 时真的能解包破密（语言无关判据：exit 0 + ASCII 密码命中）                             |
 | `Rar5ArchiveWriterTests`                                     | 合成 RAR5 被真实 7-Zip 解开且内容逐字节一致、错误密码必被拒、头部 CRC 覆盖范围、样本可重复          |
+| `Rar5ReferenceCompareTests`                                  | 与本地 WinRAR 产出的同参数归档做结构对照（无 WinRAR 时空跑，属开发期手段）                          |
 
 ## 字典编码
 
