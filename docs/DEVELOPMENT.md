@@ -228,6 +228,75 @@ RAR5（WinRAR 5.21+）在压缩记录里带 `PswCheck`，密码错时 7-Zip 在 
 测试用 `Rar4ArchiveWriter` 合成已知密码的 RAR4 存档：它用生产代码的 KDF 加密，
 再由 7-Zip 解密校验——若 KDF 与真实 RAR3 有偏差，7-Zip 就解不开，测试立即失败。
 
+## 合成 RAR 归档：不再依赖 WinRAR
+
+### 为什么不能用 WinRAR
+
+RAR 系用例原先靠 WinRAR 的 `Rar.exe` 现场生成样本，在托管 CI 上直接失效：
+
+- GitHub `windows-2022` 镜像与 AppVeyor 镜像都**没有 WinRAR**（前者预装 7-Zip 26.05，后者也没有 RAR）
+- WinRAR 是闭源付费软件：EULA §2 试用期 40 天，§6a 商用按设备数授权，托管 runner 每跑一次都是新机器
+- 于是那 7 个用例在 CI 上一直是「跳过」，等于没有回归保护
+
+EULA §7 允许自由分发**用 WinRAR 创建的**压缩包，所以「把样本提交进仓库」在许可上没问题，
+但它把二进制黑盒塞进版本库、且样本一旦需要调整就得重装 WinRAR。
+最终选择纯托管合成：RAR5 的结构在 rarlab.com 的 technote 里是公开的，缺的只有两个可选字段的算法。
+
+### 与真实 WinRAR 样本的标定结果
+
+下面几条都是拿本机 WinRAR 7.21 生成的样本逐字节对照出来的，文档本身读不出来：
+
+| 项目 | 结论 |
+| ---- | ---- |
+| 签名 | 8 字节 `52 61 72 21 1A 07 01 00`（RAR4 是 7 字节、末字节 0x00）|
+| `headerSize` | **不含自身**，从 `type` 字段数到 extra area 末尾 |
+| Header CRC32 | 覆盖 `[headerSize 字段 .. extra area 末尾]`，不含 4 字节 CRC 自身、不含 data area |
+| 文件数据 KDF | PBKDF2-HMAC-SHA256，密码按 **UTF-8**（RAR4 是 UTF-16LE），`2^kdfCount` 次，输出 32 字节 |
+| 文件数据加密 | AES-256-CBC，**无填充**（明文补零到 16 的倍数）|
+| 归档加密头之后 | 每个头 = 16 字节 IV + 16 字节对齐的密文块，**4 字节 CRC 也在密文里**（所以明文的头部 CRC 不会泄露）|
+| 分卷 | 每卷各自带签名 + 主头（首卷 `ArchiveFlags=0x0001`，后续卷 `0x0003` + 卷号）+ 该卷片段 + 结束头（未收尾时 `EndFlags=0x0001`）|
+| 分卷加密 | 整个文件的密文是**一条连续的 CBC 流**，卷边界可以不对齐块（真实样本就是 20221 字节处断开）|
+
+### 分卷的 Data CRC32 是两套语义
+
+这是最容易踩的坑，7-Zip 报错写的是 `CRC Failed in encrypted file. Wrong password?`，看起来像密码错了，实际是 CRC 语义写错了：
+
+- **非末卷**（头部带 `0x0010`「数据在下一卷延续」）：读 `Rar5Handler.cpp` 的 `CVolsInStream::Read` 可知，7-Zip 对**本卷的打包数据（也就是密文）**算 CRC32，与该卷头部的 CRC 比对
+- **末卷**（不带延续标志）：7-Zip 在 `CUnpacker` 里对**整个文件的解包数据（明文）**算 CRC32，与末卷头部的 CRC 比对
+
+所以单卷时 `Crc32(明文)` 就对了；分卷时前面各卷必须是各卷**密文**的 CRC。
+这也解释了为什么 WinRAR 生成的各卷 `DataCrc` 互不相同——它写的是密文 CRC。
+
+### 刻意省略的两个字段
+
+技术说明里这两个字段都是可选的，算法却只存在于 UnRAR 源码中（EULA §10 禁止反向工程以重造压缩算法，因此不去碰）：
+
+- 文件加密记录的 `PswCheck`（12 字节密码校验值，`EncryptionFlags` 的 `0x0001`）
+- tweaked checksums（`Data CRC32` 随密钥变换，`0x0002`）
+
+不置位时 7-Zip 退化为「解出数据后比对 CRC32」判定密码——正好是本项目关心的弱校验场景。
+代价是错误密码的判错要多解一次数据，对样本（几十 KB）完全无感。
+
+### 这样做的收获
+
+- CI 上 7 个原先跳过的 RAR 用例全部真跑，`已跳过: 0`
+- 样本生成从「起一个外部进程压缩」变成「几毫秒内存里拼完」，且**逐字节可重复**，
+  因此可以断言体积、签名偏移、头部 CRC 覆盖范围这些结构细节
+- `Rar5ArchiveWriterTests` 用真实的 7-zip.exe 做验收：正确密码必须能解出**与明文逐字节相同**的内容，
+  错误密码必须被拒。这一条把「对 RAR5 结构的理解」钉死在可执行的断言上，而不是散落在注释里
+- 顺带得到 SFX 样本：任意不超过 1MB 的前缀 + RAR5 签名即可，不需要一个真的自解压模块
+
+集成关系是「7-Zip 相关」而非「WinRAR 相关」，所以验收用 7-Zip 是充分的。不过当初定位问题时额外做过一次跨实现校验——用参考实现自身验证合成样本，确认不是只对 7-Zip 的兼容性凑巧成立（在 `TestData/` 下，本机装有 WinRAR 时可手动复跑）：
+
+```powershell
+& 'C:\Program Files\WinRAR\Rar.exe' t -pCorrect123! TestData\Rar5Single.rar
+& 'C:\Program Files\WinRAR\Rar.exe' t -pCorrect123! TestData\Rar5Split.part1.rar
+& 'C:\Program Files\WinRAR\Rar.exe' t -pCorrect123! TestData\Rar5HeaderSplit.part1.rar
+& 'C:\Program Files\WinRAR\Rar.exe' t -pCorrect123! TestData\RarSfx.exe
+```
+
+四种形态都是 `All OK`（RAR 7.21 x64）。这条不进自动化：CI 上没有 WinRAR，加进去也只是又一个跳过。
+
 ## ZipCrypto 快速判错
 
 ### 问题：1 字节校验带来 1/256 假阳性
@@ -641,8 +710,8 @@ dotnet test ArchivePasswordTestTool.Tests\ArchivePasswordTestTool.Tests.csproj
 ```
 
 - xUnit 2.9.2 + VSTest adapter，net10.0
-- 样本夹具 `TestDataFixture` 幂等生成 `TestData/`（不入库）：需要 7-Zip CLI；
-  RAR 系用例需要 WinRAR，未安装时自动跳过（此时样本生成失败会直接抛异常而非静默通过）
+- 样本夹具 `TestDataFixture` 幂等生成 `TestData/`（不入库）：唯一外部依赖是 7-Zip CLI。
+  RAR 系样本（RAR4 + RAR5）由纯托管写入器合成，**不需要 WinRAR**（见「合成 RAR 归档」）
 - 覆盖范围：格式识别（含 SFX 签名偏移）、分卷收集规则、字典消费语义（含并发出队）、
   多进程协议与批大小调度、在线服务交互（内置 fake HTTP server）、多语言资源一致性、
   源码编码与 CET 位、以及针对真实 exe 的端到端矩阵
@@ -674,6 +743,7 @@ dotnet test ArchivePasswordTestTool.Tests\ArchivePasswordTestTool.Tests.csproj
 | `ResultsWriterTests`                                         | 结果文件密码行三态；保存询问按"已探测"而非"已加密"守卫                                               |
 | `EmbeddedSevenZipTests`                                      | 内嵌 `7z.dll` / 许可证存在性、提取落地尺寸、缓存复用、并发提取不互相踩踏                             |
 | `EndToEndTests.EmbeddedSevenZipWorksWhenNoInstalledSevenZip` | 强制走内嵌 dll 时真的能解包破密（语言无关判据：exit 0 + ASCII 密码命中）                             |
+| `Rar5ArchiveWriterTests`                                     | 合成 RAR5 被真实 7-Zip 解开且内容逐字节一致、错误密码必被拒、头部 CRC 覆盖范围、样本可重复          |
 
 ## 字典编码
 

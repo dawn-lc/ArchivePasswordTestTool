@@ -4,8 +4,9 @@ namespace ArchivePasswordTestTool.Tests.Infrastructure;
 
 /// <summary>
 /// 测试样本夹具：确保 TestData 下存在完整样本集合（幂等，缺失才生成）。
-/// 生产动作依赖本机工具：7-Zip CLI 必需；WinRAR 仅影响 RAR 系用例（无则相应用例跳过）。
-/// 生成参数与本次重构实测时使用的完全一致，密码统一为 Correct123!。
+/// 生产动作只依赖 7-Zip CLI（唯一的外部工具）；RAR 系样本由 <see cref="Rar5ArchiveWriter"/> 纯托管合成，
+/// 不再需要 WinRAR——托管 CI 镜像里根本没有 WinRAR，而它又是闭源付费软件，装不了也不该装。
+/// 密码统一为 Correct123!。
 /// </summary>
 public sealed class TestDataFixture
 {
@@ -25,15 +26,10 @@ public sealed class TestDataFixture
     /// </summary>
     private static readonly Lock CreationGate = new();
 
-    /// <summary>7-Zip CLI 路径（必需）</summary>
+    /// <summary>7-Zip CLI 路径（唯一必需的外部工具）</summary>
     public string SevenZipExe { get; }
 
-    /// <summary>WinRAR Rar.exe 路径（可选，决定 RAR 系用例是否执行）</summary>
-    public string? WinRarExe { get; }
-
     public string TestDataDir { get; }
-
-    public bool HasWinRAR => WinRarExe is not null;
 
     public string Archive(string name) => Path.Combine(TestDataDir, name);
 
@@ -46,10 +42,6 @@ public sealed class TestDataFixture
             @"C:\Program Files (x86)\7-Zip\7z.exe")
             ?? throw new InvalidOperationException("生成测试样本需要 7z.exe，请先安装 7-Zip");
 
-        WinRarExe = FindFirstExisting(
-            @"C:\Program Files\WinRAR\Rar.exe",
-            @"C:\Program Files (x86)\WinRAR\Rar.exe");
-
         TestDataDir = TestPaths.TestDataDir;
 
         // 全部生成动作串行化：第二个线程进来时第一个已完成，File.Exists 全为 true 直接跳过。
@@ -61,12 +53,8 @@ public sealed class TestDataFixture
             CreatePayloadIfMissing();
             CreateDictionariesIfMissing();
             CreateSevenZipFixtures();
+            CreateRarFixtureFiles();
             CreateNonArchiveExeIfMissing();
-
-            if (WinRarExe is not null)
-            {
-                CreateRarFixtures();
-            }
         }
     }
 
@@ -195,22 +183,86 @@ public sealed class TestDataFixture
         }
     }
 
-    // ---------- RAR 系样本（需 WinRAR） ----------
+    // ---------- RAR 系样本（纯托管合成，不依赖 WinRAR） ----------
 
-    private void CreateRarFixtures()
+    /// <summary>
+    /// RAR5 样本的盐与 IV：全部写死，保证生成的字节每次都一样（可以断言体积与偏移）。
+    /// 每个样本各用一组，避免不同样本共享密钥材料。
+    /// </summary>
+    private static readonly byte[] SingleDataSalt =
+        [0x6B, 0x24, 0x80, 0x07, 0xF1, 0xE7, 0x71, 0x3F, 0x3D, 0xCE, 0xBE, 0x8B, 0xFE, 0xD4, 0x52, 0x49];
+
+    private static readonly byte[] SingleDataIv =
+        [0xA4, 0x2D, 0x69, 0x89, 0xE2, 0x76, 0x92, 0xBC, 0xAF, 0x9B, 0x94, 0xCA, 0xA1, 0xE4, 0xA1, 0x34];
+
+    private static readonly byte[] SplitDataSalt =
+        [0x7D, 0xEC, 0xF2, 0xEA, 0xE9, 0x92, 0xE1, 0x3F, 0xFE, 0x2A, 0xA1, 0xB0, 0xE2, 0x00, 0x6D, 0xF8];
+
+    private static readonly byte[] SplitDataIv =
+        [0xDA, 0x33, 0x5D, 0x21, 0x3D, 0x0A, 0xBD, 0x7E, 0xF1, 0xA7, 0x44, 0x3F, 0x57, 0xE4, 0x40, 0x99];
+
+    private static readonly byte[] HeaderSplitDataSalt =
+        [0x15, 0x8F, 0x97, 0x5A, 0x02, 0x1B, 0x3C, 0xFC, 0x9D, 0x01, 0x04, 0x80, 0x90, 0x03, 0x20, 0x1F];
+
+    private static readonly byte[] HeaderSplitDataIv =
+        [0x43, 0x32, 0xAD, 0x80, 0x4D, 0x1A, 0x9E, 0x3B, 0xC7, 0x25, 0x08, 0x74, 0xB1, 0x6D, 0x03, 0xE9];
+
+    private static readonly byte[] HeaderSalt =
+        [0x53, 0xF9, 0xB2, 0x69, 0xD8, 0x43, 0xF5, 0x43, 0xB4, 0xF4, 0xD5, 0x4D, 0xF8, 0xCF, 0xFF, 0xD2];
+
+    private void CreateRarFixtureFiles()
     {
-        string payload = PayloadPath;
+        byte[] payload = File.ReadAllBytes(PayloadPath);
+        const string entryName = "Payload.bin";
 
-        // 单卷 / 分卷 / header 加密分卷 / SFX。
-        // 注意：RAR -v 同样不接受带 .part1 序号的目标名，需剥离后传入基名
-        CreateIfMissing("Rar5Single.rar",
-            p => RunWinRar($"a -ma5 -p{CorrectPassword} \"{p}\" \"{payload}\""));
-        CreateIfMissing("Rar5Split.part1.rar",
-            p => RunWinRar($"a -ma5 -v8k -p{CorrectPassword} \"{StripVolumeSuffix(p)}\" \"{payload}\""));
-        CreateIfMissing("Rar5HeaderSplit.part1.rar",
-            p => RunWinRar($"a -ma5 -v8k -hp{CorrectPassword} \"{StripVolumeSuffix(p)}\" \"{payload}\""));
-        CreateIfMissing("RarSfx.exe",
-            p => RunWinRar($"a -ma5 -sfx -p{CorrectPassword} \"{p}\" \"{payload}\""));
+        CreateIfMissing("Rar5Single.rar", path => _ = Rar5ArchiveWriter.Create(path, new Rar5WriterOptions
+        {
+            EntryName = entryName,
+            Plaintext = payload,
+            Password = CorrectPassword,
+            DataSalt = SingleDataSalt,
+            DataIv = SingleDataIv,
+        }));
+
+        CreateIfMissing("Rar5Split.part1.rar", path => _ = Rar5ArchiveWriter.Create(path, new Rar5WriterOptions
+        {
+            EntryName = entryName,
+            Plaintext = payload,
+            Password = CorrectPassword,
+            DataSalt = SplitDataSalt,
+            DataIv = SplitDataIv,
+            VolumeCount = 3,
+        }));
+
+        CreateIfMissing("Rar5HeaderSplit.part1.rar", path => _ = Rar5ArchiveWriter.Create(path, new Rar5WriterOptions
+        {
+            EntryName = entryName,
+            Plaintext = payload,
+            Password = CorrectPassword,
+            DataSalt = HeaderSplitDataSalt,
+            DataIv = HeaderSplitDataIv,
+            EncryptHeaders = true,
+            HeaderSalt = HeaderSalt,
+            VolumeCount = 3,
+        }));
+
+        CreateIfMissing("RarSfx.exe", path =>
+        {
+            // 只需要 4 KB 的 MZ 桩：RAR5 允许最多 1 MB 的自解压前缀，7-Zip 靠扫描签名定位
+            var stub = new byte[4096];
+            stub[0] = (byte)'M';
+            stub[1] = (byte)'Z';
+
+            _ = Rar5ArchiveWriter.Create(path, new Rar5WriterOptions
+            {
+                EntryName = entryName,
+                Plaintext = payload,
+                Password = CorrectPassword,
+                DataSalt = SingleDataSalt,
+                DataIv = SingleDataIv,
+                SfxStub = stub,
+            });
+        });
     }
 
     // ---------- 工具方法 ----------
@@ -225,16 +277,12 @@ public sealed class TestDataFixture
     }
 
     /// <summary>
-    /// 剥离第一分卷的序号后缀（.001 → 去尾，.part1.rar → .rar），得到分卷工具要求的基名
+    /// 剥掉第一分卷的序号后缀（<c>X.zip.001</c> → <c>X.zip</c>），得到 7z 分卷参数要求的基名。
+    /// 只用于 7z 系样本：RAR 分卷由 <see cref="Rar5ArchiveWriter"/> 直接按 <c>X.partN.rar</c> 命名写出，不经过这里。
     /// </summary>
-    private static string StripVolumeSuffix(string firstVolumePath) =>
-        firstVolumePath.EndsWith(".part1.rar", StringComparison.OrdinalIgnoreCase)
-            ? firstVolumePath[..^".part1.rar".Length] + ".rar"
-            : Path.ChangeExtension(firstVolumePath, null);
+    private static string StripVolumeSuffix(string firstVolumePath) => Path.ChangeExtension(firstVolumePath, null);
 
     private void RunSevenZip(string arguments) => RunTool(SevenZipExe, arguments);
-
-    private void RunWinRar(string arguments) => RunTool(WinRarExe!, $" {arguments} -idq");
 
     private static void RunTool(string exe, string arguments)
     {

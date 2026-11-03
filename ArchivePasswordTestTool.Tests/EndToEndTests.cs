@@ -359,16 +359,11 @@ public sealed class EndToEndTests(TestDataFixture fx, ITestOutputHelper output)
         }
     }
 
-    // ---------- RAR 系（需 WinRAR，缺失时跳过） ----------
+    // ---------- RAR 系（纯托管合成 RAR5，不依赖 WinRAR） ----------
 
     [Fact]
     public void Rar5SingleFindsPassword()
     {
-        if (!RequireWinRAR())
-        {
-            return;
-        }
-
         var (ExitCode, Output) = RunTool($"-D \"{fx.Dict("PasswordDictionary.txt")}\" -F \"{fx.Archive("Rar5Single.rar")}\"");
 
         Assert.Equal(0, ExitCode);
@@ -378,11 +373,6 @@ public sealed class EndToEndTests(TestDataFixture fx, ITestOutputHelper output)
     [Fact]
     public void Rar5SplitFindsPassword()
     {
-        if (!RequireWinRAR())
-        {
-            return;
-        }
-
         var (ExitCode, Output) = RunTool($"-D \"{fx.Dict("PasswordDictionary.txt")}\" -F \"{fx.Archive("Rar5Split.part1.rar")}\"");
 
         Assert.Equal(0, ExitCode);
@@ -392,11 +382,6 @@ public sealed class EndToEndTests(TestDataFixture fx, ITestOutputHelper output)
     [Fact]
     public void Rar5HeaderEncryptedSplitFindsPassword()
     {
-        if (!RequireWinRAR())
-        {
-            return;
-        }
-
         var (ExitCode, Output) = RunTool($"-D \"{fx.Dict("PasswordDictionary.txt")}\" -F \"{fx.Archive("Rar5HeaderSplit.part1.rar")}\"");
 
         Assert.Equal(0, ExitCode);
@@ -406,11 +391,6 @@ public sealed class EndToEndTests(TestDataFixture fx, ITestOutputHelper output)
     [Fact]
     public void Rar5SfxFindsPassword()
     {
-        if (!RequireWinRAR())
-        {
-            return;
-        }
-
         var (ExitCode, Output) = RunTool($"-D \"{fx.Dict("PasswordDictionary.txt")}\" -F \"{fx.Archive("RarSfx.exe")}\"");
 
         Assert.Equal(0, ExitCode);
@@ -420,11 +400,6 @@ public sealed class EndToEndTests(TestDataFixture fx, ITestOutputHelper output)
     [Fact]
     public void Rar5SplitWrongPasswordsReportNotFound()
     {
-        if (!RequireWinRAR())
-        {
-            return;
-        }
-
         var (ExitCode, Output) = RunTool($"-D \"{fx.Dict("Dict7.txt")}\" -F \"{fx.Archive("Rar5Split.part1.rar")}\"");
 
         Assert.Equal(0, ExitCode);
@@ -539,18 +514,7 @@ public sealed class EndToEndTests(TestDataFixture fx, ITestOutputHelper output)
         return (process.ExitCode, outputText);
     }
 
-    /// <summary>WinRAR 缺失时返回 false 并输出跳过原因</summary>
-    private bool RequireWinRAR()
-    {
-        if (fx.HasWinRAR)
-        {
-            return true;
-        }
-
-        output.WriteLine("跳过：未安装 WinRAR，无法生成/验证 RAR 样本");
-        return false;
-    }
-
+    /// <summary>启动主程序，返回 (退出码, 合并后的输出)</summary>
     private (int ExitCode, string Output) RunTool(string arguments, int timeoutMs = 120_000, params (string Key, string Value)[] env)
     {
         Assert.True(File.Exists(TestPaths.MainExePath), $"主程序不存在：{TestPaths.MainExePath}");

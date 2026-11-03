@@ -115,17 +115,11 @@ public sealed class FormatDetectionTests(TestDataFixture fx, ITestOutputHelper o
         }
     }
 
-    // ---------- RAR 系（需 WinRAR，缺失时跳过） ----------
+    // ---------- RAR 系（纯托管合成 RAR5） ----------
 
     [Fact]
     public void Rar5SingleHeadOffsetZero()
     {
-        if (!fx.HasWinRAR)
-        {
-            output.WriteLine("跳过：未安装 WinRAR");
-            return;
-        }
-
         var (format, offset) = DetectArchiveFormat(fx.Archive("Rar5Single.rar"));
 
         Assert.Equal(SevenZipGuids.CLSID_CFormatRar5, format);
@@ -135,12 +129,6 @@ public sealed class FormatDetectionTests(TestDataFixture fx, ITestOutputHelper o
     [Fact]
     public void Rar5SfxSignatureFoundAfterStub()
     {
-        if (!fx.HasWinRAR)
-        {
-            output.WriteLine("跳过：未安装 WinRAR");
-            return;
-        }
-
         string path = fx.Archive("RarSfx.exe");
 
         var (format, offset) = DetectArchiveFormat(path);

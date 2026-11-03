@@ -57,17 +57,11 @@ runs:
     - name: Test
       shell: pwsh
       run: |
-        # 测试样本由 TestDataFixture 现场生成（TestData 不入库），依赖本机 7-Zip CLI；
-        # WinRAR 缺失时 RAR 系用例自动跳过而非失败
+        # 测试样本由 TestDataFixture 现场生成（TestData 不入库），唯一的外部依赖是 7-Zip CLI。
+        # RAR 系样本（RAR4 + RAR5）由纯托管写入器合成，不需要 WinRAR——
+        # 托管 runner 镜像里本来就没有它，而 WinRAR 是闭源付费软件，也不适合装到 CI。
         if (-not (Test-Path 'C:\Program Files\7-Zip\7z.exe')) {
           throw '未找到 7-Zip CLI，测试样本无法生成。'
-        }
-        if (Test-Path 'C:\Program Files\WinRAR\Rar.exe') {
-          # 打印版本：RAR 样本生成失败时靠它区分「WinRAR 版本行为差异」与代码问题
-          Write-Host ('检测到 WinRAR：' + (Get-Item 'C:\Program Files\WinRAR\Rar.exe').VersionInfo.FileVersion)
-          Write-Host 'RAR 系用例将执行。'
-        } else {
-          Write-Host '未检测到 WinRAR：RAR 系用例将跳过。'
         }
 
         dotnet test ArchivePasswordTestTool.Tests\ArchivePasswordTestTool.Tests.csproj `

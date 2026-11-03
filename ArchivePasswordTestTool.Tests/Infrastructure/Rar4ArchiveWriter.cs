@@ -7,8 +7,8 @@ namespace ArchivePasswordTestTool.Tests.Infrastructure;
 /// <summary>
 /// 合成 RAR4（WinRAR -ma4）存档，仅供测试使用。
 /// <para>
-/// 本机通常没有 WinRAR（真实 RAR 样本靠 <see cref="TestDataFixture"/> 生成，无 WinRAR 时跳过），
-/// 而「快速判错」的正确性必须有一个**已知密码**的 RAR4 存档才能验证。
+/// 「快速判错」的正确性必须有一个**已知密码**的 RAR4 存档才能验证，而托管 CI 上没有 WinRAR（闭源付费软件），
+/// 所以这里直接按格式合成。RAR5 的对应实现见 <see cref="Rar5ArchiveWriter"/>。
 /// </para>
 /// <para>
 /// 关键点：这里用生产代码的 <see cref="Rar4KeyDerivation"/> 派生密钥并加密。
@@ -75,7 +75,7 @@ internal static class Rar4ArchiveWriter
         BinaryPrimitives.WriteUInt32LittleEndian(fileHeader.AsSpan(7), (uint)cipher.Length);
         BinaryPrimitives.WriteUInt32LittleEndian(fileHeader.AsSpan(11), (uint)plaintext.Length);
         fileHeader[15] = 2;                                                  // HOST_OS = Win32
-        BinaryPrimitives.WriteUInt32LittleEndian(fileHeader.AsSpan(16), Crc32(plaintext));
+        BinaryPrimitives.WriteUInt32LittleEndian(fileHeader.AsSpan(16), Crc32.Compute(plaintext));
         BinaryPrimitives.WriteUInt32LittleEndian(fileHeader.AsSpan(20), DosTimestamp(new DateTime(2024, 1, 2, 3, 4, 6)));
         fileHeader[24] = UnpackVersion;
         fileHeader[25] = MethodStored;
@@ -128,41 +128,11 @@ internal static class Rar4ArchiveWriter
     /// <summary>RAR4 头部校验：HEAD_CRC = CRC32(header[2..]) 的低 16 位</summary>
     private static void WriteHeadCrc(byte[] header)
     {
-        ushort crc = (ushort)Crc32(header.AsSpan(2));
+        ushort crc = (ushort)Crc32.Compute(header.AsSpan(2));
         BinaryPrimitives.WriteUInt16LittleEndian(header, crc);
     }
 
     private static uint DosTimestamp(DateTime time) =>
         (uint)(((time.Year - 1980) << 25) | (time.Month << 21) | (time.Day << 16)
                | (time.Hour << 11) | (time.Minute << 5) | (time.Second / 2));
-
-    private static readonly uint[] CrcTable = BuildCrcTable();
-
-    private static uint[] BuildCrcTable()
-    {
-        var table = new uint[256];
-        for (uint i = 0; i < 256; i++)
-        {
-            uint c = i;
-            for (int k = 0; k < 8; k++)
-            {
-                c = (c & 1) != 0 ? 0xEDB88320u ^ (c >> 1) : c >> 1;
-            }
-
-            table[i] = c;
-        }
-
-        return table;
-    }
-
-    public static uint Crc32(ReadOnlySpan<byte> data)
-    {
-        uint crc = 0xFFFFFFFF;
-        foreach (byte b in data)
-        {
-            crc = CrcTable[(crc ^ b) & 0xFF] ^ (crc >> 8);
-        }
-
-        return crc ^ 0xFFFFFFFF;
-    }
 }
