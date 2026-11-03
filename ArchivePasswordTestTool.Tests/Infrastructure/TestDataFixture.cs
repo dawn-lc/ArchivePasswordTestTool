@@ -215,16 +215,19 @@ public sealed class TestDataFixture
         byte[] payload = File.ReadAllBytes(PayloadPath);
         const string entryName = "Payload.bin";
 
-        CreateIfMissing("Rar5Single.rar", path => _ = Rar5ArchiveWriter.Create(path, new Rar5WriterOptions
+        // RAR 样本不用「存在即跳过」：合成一份只要几毫秒，而跳过会留下陈旧状态
+        // （例如以前用 WinRAR -v8k 生成过 7 个分卷，残留的 partN 会让「为什么是 7 卷」这种问题查很久）。
+        // 每次覆盖写入 + 清掉同类旧分卷，样本集合的内容就只由本方法决定。
+        WriteRarFixture("Rar5Single.rar", new Rar5WriterOptions
         {
             EntryName = entryName,
             Plaintext = payload,
             Password = CorrectPassword,
             DataSalt = SingleDataSalt,
             DataIv = SingleDataIv,
-        }));
+        });
 
-        CreateIfMissing("Rar5Split.part1.rar", path => _ = Rar5ArchiveWriter.Create(path, new Rar5WriterOptions
+        WriteRarFixture("Rar5Split.part1.rar", new Rar5WriterOptions
         {
             EntryName = entryName,
             Plaintext = payload,
@@ -232,9 +235,9 @@ public sealed class TestDataFixture
             DataSalt = SplitDataSalt,
             DataIv = SplitDataIv,
             VolumeCount = 3,
-        }));
+        });
 
-        CreateIfMissing("Rar5HeaderSplit.part1.rar", path => _ = Rar5ArchiveWriter.Create(path, new Rar5WriterOptions
+        WriteRarFixture("Rar5HeaderSplit.part1.rar", new Rar5WriterOptions
         {
             EntryName = entryName,
             Plaintext = payload,
@@ -244,25 +247,42 @@ public sealed class TestDataFixture
             EncryptHeaders = true,
             HeaderSalt = HeaderSalt,
             VolumeCount = 3,
-        }));
-
-        CreateIfMissing("RarSfx.exe", path =>
-        {
-            // 只需要 4 KB 的 MZ 桩：RAR5 允许最多 1 MB 的自解压前缀，7-Zip 靠扫描签名定位
-            var stub = new byte[4096];
-            stub[0] = (byte)'M';
-            stub[1] = (byte)'Z';
-
-            _ = Rar5ArchiveWriter.Create(path, new Rar5WriterOptions
-            {
-                EntryName = entryName,
-                Plaintext = payload,
-                Password = CorrectPassword,
-                DataSalt = SingleDataSalt,
-                DataIv = SingleDataIv,
-                SfxStub = stub,
-            });
         });
+
+        // SFX 只需要 4 KB 的 MZ 桩：RAR5 允许最多 1 MB 的自解压前缀，7-Zip 靠扫描签名定位
+        var stub = new byte[4096];
+        stub[0] = (byte)'M';
+        stub[1] = (byte)'Z';
+
+        WriteRarFixture("RarSfx.exe", new Rar5WriterOptions
+        {
+            EntryName = entryName,
+            Plaintext = payload,
+            Password = CorrectPassword,
+            DataSalt = SingleDataSalt,
+            DataIv = SingleDataIv,
+            SfxStub = stub,
+        });
+    }
+
+    /// <summary>
+    /// 写出一组 RAR 样本：先删掉同名基线的旧分卷（<c>stem.part*.rar</c>），再生成。
+    /// </summary>
+    private void WriteRarFixture(string name, Rar5WriterOptions options)
+    {
+        string path = Archive(name);
+        string stem = Path.GetFileNameWithoutExtension(path);
+        if (stem.EndsWith(".part1", StringComparison.OrdinalIgnoreCase))
+        {
+            stem = stem[..^".part1".Length];
+        }
+
+        foreach (string stale in Directory.EnumerateFiles(TestDataDir, $"{stem}.part*.rar"))
+        {
+            File.Delete(stale);
+        }
+
+        _ = Rar5ArchiveWriter.Create(path, options);
     }
 
     // ---------- 工具方法 ----------
