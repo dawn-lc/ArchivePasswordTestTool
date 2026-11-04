@@ -255,7 +255,8 @@ namespace ArchivePasswordTestTool
 
                 if (string.IsNullOrEmpty(foundPassword))
                 {
-                    ConsoleTitle.ShowNotFound();
+                    // 标题同样不能把「筛掉了」说成「没找到」：那是在窗口标题上留一条假结论
+                    ConsoleTitle.ShowNotFound(signatureFiltered);
                 }
                 else
                 {
@@ -297,6 +298,7 @@ namespace ArchivePasswordTestTool
                             dictionaryPath,
                             foundPassword,
                             archiveEncrypted,
+                            signatureFiltered,
                             stopwatch.Elapsed,
                             () =>
                             {

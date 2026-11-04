@@ -131,10 +131,12 @@ namespace ArchivePasswordTestTool
             Apply($"{Product} · {Resources.TitlePasswordFound}", force: true);
         }
 
-        /// <summary>测试结束：未找到密码</summary>
-        public static void ShowNotFound()
+        /// <summary>测试结束：未找到密码；<paramref name="tentative"/> 表示结论只来自快速筛选的签名比对</summary>
+        public static void ShowNotFound(bool tentative = false)
         {
-            Apply($"{Product} · {Resources.TitlePasswordNotFound}", force: true);
+            Apply(
+                $"{Product} · {(tentative ? Resources.TitlePasswordUnconfirmed : Resources.TitlePasswordNotFound)}",
+                force: true);
         }
 
         private static void Apply(string title, bool force = false)

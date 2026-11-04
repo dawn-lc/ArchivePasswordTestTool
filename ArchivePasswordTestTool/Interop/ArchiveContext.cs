@@ -12,6 +12,16 @@ namespace ArchivePasswordTestTool
         : Exception($"Cannot open archive: wrong password or corrupted data (HRESULT 0x{hresult:X8}).", innerException);
 
     /// <summary>
+    /// 归档本身不完整或不可读：分卷缺失、文件被截断、结构损坏。
+    /// <para>
+    /// 单独立一类是因为它和「密码错误」的结论完全相反：密码错误要换字典，文件不全只能去补文件。
+    /// 拿不到条目时若一律当成「header 加密」，每个密码试下来都是 false，最终会把
+    /// 「你的文件不全」报成「未找到正确的解压密码」（而且是确定口吻、退出码 0）。
+    /// </para>
+    /// </summary>
+    internal sealed class ArchiveIncompleteException(string message) : Exception(message);
+
+    /// <summary>
     /// 压缩包上下文：持有一个已打开的 7-Zip 归档对象，负责它的生命周期与密码测试。
     /// <para>
     /// 职责边界：本类只管 COM 对象的打开/关闭/加锁复用；归档内部属性怎么读、
@@ -41,34 +51,17 @@ namespace ArchivePasswordTestTool
         internal static bool TryGetVolumePaths(string firstPath, out List<string> paths)
         {
             paths = [];
+
+            if (!TryParseVolumeNaming(firstPath, out string directory, out string stem, out int width))
+            {
+                return false;
+            }
+
             try
             {
-                string dir = Path.GetDirectoryName(firstPath)!;
-                string name = Path.GetFileName(firstPath);
-
-                int dot = name.LastIndexOf('.');
-                if (dot <= 0)
-                {
-                    return false;
-                }
-
-                string digits = name[(dot + 1)..];
-                if (digits.Length is < 2 or > 3 || !digits.All(char.IsAsciiDigit))
-                {
-                    return false;
-                }
-
-                // 必须从第一分卷开始，从中间分卷无法拼出完整流
-                if (int.Parse(digits) != 1)
-                {
-                    return false;
-                }
-
-                string stem = name[..dot];
-
                 for (int i = 1; ; i++)
                 {
-                    string vol = Path.Combine(dir, $"{stem}.{i.ToString($"D{digits.Length}")}");
+                    string vol = Path.Combine(directory, $"{stem}.{i.ToString($"D{width}")}");
                     if (!File.Exists(vol))
                     {
                         break;
@@ -88,6 +81,90 @@ namespace ArchivePasswordTestTool
             catch
             {
                 paths = [];
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// 已收集的分卷是否缺了中间的号：收集逻辑遇到第一个不存在的号就停，
+        /// 因此缺 .004 时只会拿到 .001-.003 而看上去一切正常。
+        /// 目录里存在比已收集编号更大的同宽编号，就说明这里断过。
+        /// </summary>
+        /// <param name="missing">缺失的第一卷完整路径（按编号顺序）</param>
+        internal static bool TryFindMissingVolume(string firstPath, IReadOnlyList<string> collected, out string missing)
+        {
+            missing = string.Empty;
+
+            if (collected.Count == 0 || !TryParseVolumeNaming(firstPath, out _, out string stem, out int width))
+            {
+                return false;
+            }
+
+            try
+            {
+                int highest = collected.Count;
+
+                foreach (string candidate in Directory.EnumerateFiles(Path.GetDirectoryName(firstPath)!, $"{stem}.*"))
+                {
+                    string digits = Path.GetFileName(candidate)[(stem.Length + 1)..];
+                    if (digits.Length == width && digits.All(char.IsAsciiDigit) && int.TryParse(digits, out int number) && number > highest)
+                    {
+                        highest = number;
+                    }
+                }
+
+                if (highest == collected.Count)
+                {
+                    return false;
+                }
+
+                missing = Path.Combine(Path.GetDirectoryName(firstPath)!, $"{stem}.{(collected.Count + 1).ToString($"D{width}")}");
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// 解析 <c>name.ext.001</c> 这种分卷命名：必须是三位以内全数字后缀且编号为 1（从中间分卷拼不出完整流）。
+        /// 收集与缺卷判定共用这一份规则，否则「能收集到什么」与「缺了哪一卷」会各说各话。
+        /// </summary>
+        private static bool TryParseVolumeNaming(string firstPath, out string directory, out string stem, out int width)
+        {
+            directory = string.Empty;
+            stem = string.Empty;
+            width = 0;
+
+            try
+            {
+                directory = Path.GetDirectoryName(firstPath)!;
+                string name = Path.GetFileName(firstPath);
+
+                int dot = name.LastIndexOf('.');
+                if (dot <= 0)
+                {
+                    return false;
+                }
+
+                string digits = name[(dot + 1)..];
+                if (digits.Length is < 2 or > 3 || !digits.All(char.IsAsciiDigit))
+                {
+                    return false;
+                }
+
+                if (int.Parse(digits) != 1)
+                {
+                    return false;
+                }
+
+                stem = name[..dot];
+                width = digits.Length;
+                return true;
+            }
+            catch
+            {
                 return false;
             }
         }
@@ -193,14 +270,64 @@ namespace ArchivePasswordTestTool
                     : new FileInfo(archivePath).Length;
 
                 // 非归档数据的范围只用于展示与分离：分卷时多个文件拼成一条流，「某文件末尾」没有意义；
-                // 终点未知（头部加密的 RAR5 等）时只保留起始偏移，尾随量留空而不是猜一个数
+                // 终点未知（头部加密的 RAR5 等）时只保留起始偏移，尾随量留空而不是猜一个数。
+                // 同一份探测结果同时用于下面的 0 条目分类，不重复解析一遍
+                ArchiveExtent? extent = null;
                 if (!multiVolume)
                 {
-                    Info.TrailingBytes = ArchiveExtentDetector
-                        .Detect(archivePath, Type, signatureOffset)?.TrailingBytes(Info.DiskSize);
+                    extent = ArchiveExtentDetector.Detect(archivePath, Type, signatureOffset);
+                    Info.TrailingBytes = extent?.TrailingBytes(Info.DiskSize);
                 }
 
                 ArchiveInspector.Populate(archive, Info);
+
+                // 拿不到条目不等于「header 加密」：分卷不全、文件截断同样得到 0 条目。
+                // 必须在建上下文时就分清，否则后续每个密码都会被判错。
+                // 只在无密码探测时判定：带候选密码重开时 0 条目本来就是「密码错」的表现，
+                // 在那条路径上抛异常会把正常的错密码变成致命错误
+                if (Info.FileCount == 0 && password is null)
+                {
+                    ReclassifyZeroItems(archivePath, multiVolume, volumePaths, extent);
+                }
+            }
+        }
+
+        /// <summary>
+        /// 0 条目的三种真实原因只能靠证据区分：格式自证 header 加密 / 结构残缺 / 本来就没有条目。
+        /// <para>
+        /// <see cref="ArchiveInspector.Populate"/> 只能看到「没有条目」，看不到原因，于是它只能
+        /// 按最常见的一种（header 加密）填结论。这个默认在残缺文件上会变成一条假结论：
+        /// <see cref="TestPassword"/> 的 header 加密分支只回读 Open 的结果，于是每个密码都是 false，
+        /// 最后报「未找到正确的解压密码」——把「文件不全」说成「密码不对」。
+        /// </para>
+        /// <para>
+        /// 判据优先级从硬到软：缺卷（文件名层面确凿）→ 格式自证加密（结构层面确凿）→
+        /// 结构走不通（说明文件不全）→ 无密码即可打开（说明真的没有条目）→ 剩下的只能承认是 header 加密。
+        /// </para>
+        /// </summary>
+        private void ReclassifyZeroItems(string archivePath, bool multiVolume, List<string> volumePaths, ArchiveExtent? extent)
+        {
+            if (multiVolume && TryFindMissingVolume(archivePath, volumePaths, out string missing))
+            {
+                throw new ArchiveIncompleteException(string.Format(Resources.ArchiveVolumeMissing, Path.GetFileName(missing)));
+            }
+
+            // 格式自己写明后面是密文（RAR4 主头的 MHD_PASSWORD / RAR5 的归档加密头）：这是 header 加密
+            if (extent?.HeaderEncrypted == true)
+            {
+                return;
+            }
+
+            // 结构走不通：只给了一个分卷（7z 起始头指向分卷之外）、文件被截断、下载未完成
+            if (!multiVolume && extent is null)
+            {
+                throw new ArchiveIncompleteException(Resources.ArchiveIncomplete);
+            }
+
+            // 结构完整却没条目：不带密码都能打开，说明归档里确实没有可测内容，而不是被加密藏起来了
+            if (_openResult == 0)
+            {
+                throw new ArchiveIncompleteException(Resources.ArchiveHasNoEntries);
             }
         }
 

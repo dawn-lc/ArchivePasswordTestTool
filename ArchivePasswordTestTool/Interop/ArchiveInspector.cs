@@ -24,6 +24,10 @@ namespace ArchivePasswordTestTool
 
             if (fileCount == 0)
             {
+                // 这里只能给出「默认推断」而不是结论：分卷缺失、文件截断同样会让 7-Zip 报 0 条目，
+                // 而它们的正确处理与「header 加密」完全相反。调用方（ArchiveContext）必须在
+                // 建上下文时用卷/结构证据核实一遍，否则会把「文件不全」报成「密码不对」。
+                // 详见 ArchiveContext.ReclassifyZeroItems
                 info.IsEncrypted = true;
                 info.IsHeaderEncryption = true;
                 info.SupportsQuickTest = false;

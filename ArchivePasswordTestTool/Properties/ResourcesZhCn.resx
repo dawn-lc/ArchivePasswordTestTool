@@ -145,6 +145,15 @@
   <data name="ArchiveFileNotFound" xml:space="preserve">
     <value>未找到压缩包文件。</value>
   </data>
+  <data name="ArchiveVolumeMissing" xml:space="preserve">
+    <value>分卷不完整：缺少 {0}。请补齐后再测密——分卷不全时任何密码都无法被证实或证伪。</value>
+  </data>
+  <data name="ArchiveIncomplete" xml:space="preserve">
+    <value>压缩包不完整或已损坏：无法读取归档结构（常见原因：文件被截断、下载未完成、只给了部分分卷）。此状态下无法判断密码是否正确。</value>
+  </data>
+  <data name="ArchiveHasNoEntries" xml:space="preserve">
+    <value>压缩包里没有任何条目，没有可测内容。</value>
+  </data>
   <data name="UsingInstalledSevenZip" xml:space="preserve">
     <value>使用已安装的7-Zip: {0}</value>
   </data>
@@ -168,6 +177,9 @@
   </data>
   <data name="TitlePasswordFound" xml:space="preserve">
     <value>已找到密码</value>
+  </data>
+  <data name="TitlePasswordUnconfirmed" xml:space="preserve">
+    <value>未确认密码</value>
   </data>
   <data name="TitlePasswordNotFound" xml:space="preserve">
     <value>未找到密码</value>
@@ -201,6 +213,9 @@
   </data>
   <data name="TestResultDecompressionPassword" xml:space="preserve">
     <value>解压密码: {0}</value>
+  </data>
+  <data name="TestResultPasswordTentative" xml:space="preserve">
+    <value>未确认：快速筛选按内容签名否定了全部候选，但它无法排除密码正确。请关闭快速筛选后重跑以完整校验。</value>
   </data>
   <data name="TestResultArchiveNotEncrypted" xml:space="preserve">
     <value>压缩包未加密</value>

@@ -18,10 +18,10 @@ public class ResultsWriterTests
         // 未加密必须单列一态：它的 password 是空串，按「空即未找到」会误导
         Assert.Equal(
             Resources.TestResultArchiveNotEncrypted,
-            ResultsWriter.BuildPasswordLine(null, archiveEncrypted: false));
+            ResultsWriter.BuildPasswordLine(null, archiveEncrypted: false, signatureFiltered: false));
         Assert.Equal(
             Resources.TestResultArchiveNotEncrypted,
-            ResultsWriter.BuildPasswordLine(string.Empty, archiveEncrypted: false));
+            ResultsWriter.BuildPasswordLine(string.Empty, archiveEncrypted: false, signatureFiltered: false));
     }
 
     [Fact]
@@ -31,7 +31,7 @@ public class ResultsWriterTests
         // 说明归档没加密，密码无从谈起
         Assert.Equal(
             Resources.TestResultArchiveNotEncrypted,
-            ResultsWriter.BuildPasswordLine("whatever", archiveEncrypted: false));
+            ResultsWriter.BuildPasswordLine("whatever", archiveEncrypted: false, signatureFiltered: false));
     }
 
     [Fact]
@@ -41,7 +41,32 @@ public class ResultsWriterTests
 
         Assert.Equal(
             string.Format(Resources.TestResultDecompressionPassword, Password),
-            ResultsWriter.BuildPasswordLine(Password, archiveEncrypted: true));
+            ResultsWriter.BuildPasswordLine(Password, archiveEncrypted: true, signatureFiltered: false));
+    }
+
+    /// <summary>
+    /// 「未找到」只来自快速筛选的签名比对时，结果文件不能写成确定结论：
+    /// 报告是给别人看的，没有上下文，一句「未找到正确的解压密码」会被当成已验证的事实。
+    /// </summary>
+    [Fact]
+    public void SignatureFilteredVerdictIsWrittenAsUnconfirmed()
+    {
+        Assert.Equal(
+            Resources.TestResultPasswordTentative,
+            ResultsWriter.BuildPasswordLine(null, archiveEncrypted: true, signatureFiltered: true));
+
+        Assert.NotEqual(Resources.TestResultPasswordNotFound, Resources.TestResultPasswordTentative);
+    }
+
+    /// <summary>找到密码时与筛选状态无关：结论本身是真的，不需要加保留语气</summary>
+    [Fact]
+    public void FoundPasswordIsWrittenAsDefiniteEvenWhenFiltered()
+    {
+        const string Password = "Correct123!";
+
+        Assert.Equal(
+            string.Format(Resources.TestResultDecompressionPassword, Password),
+            ResultsWriter.BuildPasswordLine(Password, archiveEncrypted: true, signatureFiltered: true));
     }
 
     [Fact]
@@ -49,10 +74,10 @@ public class ResultsWriterTests
     {
         Assert.Equal(
             Resources.TestResultPasswordNotFound,
-            ResultsWriter.BuildPasswordLine(null, archiveEncrypted: true));
+            ResultsWriter.BuildPasswordLine(null, archiveEncrypted: true, signatureFiltered: false));
         Assert.Equal(
             Resources.TestResultPasswordNotFound,
-            ResultsWriter.BuildPasswordLine(string.Empty, archiveEncrypted: true));
+            ResultsWriter.BuildPasswordLine(string.Empty, archiveEncrypted: true, signatureFiltered: false));
     }
 
     [Fact]
@@ -66,7 +91,7 @@ public class ResultsWriterTests
                      (string.Empty, false),
                  })
         {
-            string line = ResultsWriter.BuildPasswordLine(password, encrypted);
+            string line = ResultsWriter.BuildPasswordLine(password, encrypted, signatureFiltered: false);
 
             Assert.False(
                 string.IsNullOrWhiteSpace(line),

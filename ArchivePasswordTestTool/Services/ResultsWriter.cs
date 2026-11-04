@@ -17,11 +17,17 @@ namespace ArchivePasswordTestTool
         /// 归档是否加密。未加密时密码行写「未加密」而不是「未找到密码」——
         /// 后者会误导（不是找不到，是压根没有密码）。
         /// </param>
+        /// <param name="signatureFiltered">
+        /// 「未找到」只来自快速筛选的签名比对（没做完整解密复核）。
+        /// 结果文件是要传出去的，落盘的结论必须和屏幕上的口径一致，
+        /// 否则一份「未找到正确的解压密码」会被当成已验证的事实转给下一个人。
+        /// </param>
         public static void WriteIfRequested(
             string archivePath,
             string dictionaryPath,
             string? password,
             bool archiveEncrypted,
+            bool signatureFiltered,
             TimeSpan elapsed,
             Func<string> getArchiveHash)
         {
@@ -45,7 +51,7 @@ namespace ArchivePasswordTestTool
                 testOut.WriteLine(string.Format(Resources.TestResultDictionary, dictionaryPath));
                 testOut.WriteLine(string.Format(Resources.TestResultElapsedTime, elapsed));
                 testOut.WriteLine(string.Format(Resources.TestResultArchiveHash, archiveHash));
-                testOut.WriteLine(BuildPasswordLine(password, archiveEncrypted));
+                testOut.WriteLine(BuildPasswordLine(password, archiveEncrypted, signatureFiltered));
             }
 
             if (InteractivePrompts.ConfirmSingleKey(Resources.ViewTestReportPrompt, true))
@@ -55,23 +61,32 @@ namespace ArchivePasswordTestTool
         }
 
         /// <summary>
-        /// 结果文件的密码行，三态：找到密码 / 加密但未找到 / 归档未加密。
+        /// 结果文件的密码行，四态：找到密码 / 加密但未找到 / 加密且只有签名筛选结论 / 归档未加密。
         /// <para>
         /// 未加密必须单列一态：它的 password 是空串，若按「空即未找到」处理会写成
         /// 「未找到正确的解压密码」——不是找不到，是压根没有密码，会误导用户。
         /// 旧实现用 <c>password != null</c> 判定，未加密包甚至会留下一行空密码。
         /// </para>
+        /// <para>
+        /// 「仅签名筛选」也必须单列：那种「未找到」只是快速筛选的推断，落盘后没有任何上下文，
+        /// 读到的人会当成已验证的结论。
+        /// </para>
         /// </summary>
-        internal static string BuildPasswordLine(string? password, bool archiveEncrypted)
+        internal static string BuildPasswordLine(string? password, bool archiveEncrypted, bool signatureFiltered)
         {
             if (!archiveEncrypted)
             {
                 return Resources.TestResultArchiveNotEncrypted;
             }
 
-            return string.IsNullOrEmpty(password)
-                ? Resources.TestResultPasswordNotFound
-                : string.Format(Resources.TestResultDecompressionPassword, password);
+            if (!string.IsNullOrEmpty(password))
+            {
+                return string.Format(Resources.TestResultDecompressionPassword, password);
+            }
+
+            return signatureFiltered
+                ? Resources.TestResultPasswordTentative
+                : Resources.TestResultPasswordNotFound;
         }
     }
 }

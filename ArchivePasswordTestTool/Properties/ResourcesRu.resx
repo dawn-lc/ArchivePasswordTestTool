@@ -145,6 +145,15 @@
   <data name="ArchiveFileNotFound" xml:space="preserve">
     <value>Файл архива не найден.</value>
   </data>
+  <data name="ArchiveVolumeMissing" xml:space="preserve">
+    <value>Набор томов неполон: отсутствует {0}. Восстановите его перед проверкой — по неполному набору нельзя ни подтвердить, ни опровергнуть пароль.</value>
+  </data>
+  <data name="ArchiveIncomplete" xml:space="preserve">
+    <value>Архив усечён, повреждён или не хватает томов: структура не читается. В таком состоянии проверка пароля невозможна.</value>
+  </data>
+  <data name="ArchiveHasNoEntries" xml:space="preserve">
+    <value>В архиве нет ни одного элемента — проверять нечего.</value>
+  </data>
   <data name="UsingInstalledSevenZip" xml:space="preserve">
     <value>Используется установленный 7-Zip: {0}</value>
   </data>
@@ -168,6 +177,9 @@
   </data>
   <data name="TitlePasswordFound" xml:space="preserve">
     <value>Пароль найден</value>
+  </data>
+  <data name="TitlePasswordUnconfirmed" xml:space="preserve">
+    <value>Пароль не подтверждён</value>
   </data>
   <data name="TitlePasswordNotFound" xml:space="preserve">
     <value>Пароль не найден</value>
@@ -201,6 +213,9 @@
   </data>
   <data name="TestResultDecompressionPassword" xml:space="preserve">
     <value>Пароль для распаковки: {0}</value>
+  </data>
+  <data name="TestResultPasswordTentative" xml:space="preserve">
+    <value>Не подтверждено: сигнатуры содержимого отклонили всех кандидатов, но быстрый фильтр не может исключить верный пароль. Запустите повторно с отключённым быстрым фильтром.</value>
   </data>
   <data name="TestResultArchiveNotEncrypted" xml:space="preserve">
     <value>Архив не зашифрован</value>

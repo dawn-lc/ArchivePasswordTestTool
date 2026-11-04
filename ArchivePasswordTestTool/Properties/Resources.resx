@@ -145,6 +145,15 @@ Please download and install 7-Zip first.</value>
   <data name="ArchiveFileNotFound" xml:space="preserve">
     <value>Archive file not found.</value>
   </data>
+  <data name="ArchiveVolumeMissing" xml:space="preserve">
+    <value>Incomplete volume set: {0} is missing. Restore it before password testing, because a partial set can neither confirm nor rule out any password.</value>
+  </data>
+  <data name="ArchiveIncomplete" xml:space="preserve">
+    <value>The archive is truncated, damaged or missing volumes, so its structure cannot be read. Password testing is impossible in this state.</value>
+  </data>
+  <data name="ArchiveHasNoEntries" xml:space="preserve">
+    <value>The archive contains no entries, so there is nothing to test.</value>
+  </data>
   <data name="UsingInstalledSevenZip" xml:space="preserve">
     <value>Using installed 7-Zip: {0}</value>
   </data>
@@ -168,6 +177,9 @@ Please download and install 7-Zip first.</value>
   </data>
   <data name="TitlePasswordFound" xml:space="preserve">
     <value>Password found</value>
+  </data>
+  <data name="TitlePasswordUnconfirmed" xml:space="preserve">
+    <value>Password not confirmed</value>
   </data>
   <data name="TitlePasswordNotFound" xml:space="preserve">
     <value>Password not found</value>
@@ -201,6 +213,9 @@ Please download and install 7-Zip first.</value>
   </data>
   <data name="TestResultDecompressionPassword" xml:space="preserve">
     <value>Decompression password: {0}</value>
+  </data>
+  <data name="TestResultPasswordTentative" xml:space="preserve">
+    <value>Not confirmed: content signatures rejected every candidate, but the fast filter cannot rule out a correct password. Re-run with the fast filter disabled to verify.</value>
   </data>
   <data name="TestResultArchiveNotEncrypted" xml:space="preserve">
     <value>Archive is not encrypted</value>

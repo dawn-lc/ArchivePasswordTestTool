@@ -9,8 +9,14 @@ namespace ArchivePasswordTestTool
     /// 被拼接在头部的其它文件、下载工具追加的尾部垃圾。<see cref="End"/> 为 <see langword="null"/>
     /// 表示无法确定（头部被加密、结构损坏或超出扫描窗口），此时只能给出起始位置。
     /// </para>
+    /// <para>
+    /// <see cref="HeaderEncrypted"/> 是格式自身给出的<b>正向证据</b>：RAR4 主头的 <c>MHD_PASSWORD</c> 标志、
+    /// RAR5 的归档加密头。它与「终点未知」是两件不同的事——前者说明「读不下去是因为加密了」，
+    /// 后者只能说明「读不下去了」。区分它是为了让调用方能判断 0 条目到底是加密导致还是文件残缺导致，
+    /// 这两者的结论完全相反（前者要试密码，后者必须先补文件）。
+    /// </para>
     /// </summary>
-    internal sealed record ArchiveExtent(long Start, long? End)
+    internal sealed record ArchiveExtent(long Start, long? End, bool HeaderEncrypted = false)
     {
         /// <summary>尾随的非归档字节数；<see cref="End"/> 未知时为 <see langword="null"/></summary>
         public long? TrailingBytes(long fileLength) => End is long end ? Math.Max(0, fileLength - end) : null;
@@ -164,6 +170,11 @@ namespace ArchivePasswordTestTool
         {
             const ushort FlagAddSize = 0x8000;
             const byte EndBlockType = 0x7B;
+            const byte MainBlockType = 0x73;
+
+            // RAR4 主头标志 MHD_PASSWORD：置位表示主头之后的全部头部都被加密（WinRAR 的 -hp）
+            const ushort MainFlagPassword = 0x0080;
+
             const int BlockHeaderSize = 7;
 
             Span<byte> header = stackalloc byte[BlockHeaderSize];
@@ -194,7 +205,14 @@ namespace ArchivePasswordTestTool
                     return null;
                 }
 
-                // 只认 RAR4 实际会出现的块类型；出现别的说明结构不符（例如头部把整包加密了），不要瞎猜
+                // 主头的 MHD_PASSWORD 是格式写明的「后面都是密文」：这里有正向证据，
+                // 而不是「读不下去所以猜是坏了」。缺了这一步，-hp 的 RAR4 会被当成残缺文件报错
+                if (type == MainBlockType && (flags & MainFlagPassword) != 0)
+                {
+                    return new ArchiveExtent(start, null, HeaderEncrypted: true);
+                }
+
+                // 只认 RAR4 实际会出现的块类型；出现别的说明结构不符，不要瞎猜
                 if (type is not ((byte)0x72) and not ((byte)0x73) and not ((byte)0x74)
                     and not ((byte)0x75) and not ((byte)0x76) and not ((byte)0x77)
                     and not ((byte)0x78) and not ((byte)0x79) and not ((byte)0x7A)
@@ -307,8 +325,9 @@ namespace ArchivePasswordTestTool
 
                 if (type == HeaderTypeArchiveEncryption)
                 {
-                    // 其后每个头都是「16 字节 IV + 密文块」，无法判断哪里是真正的末尾
-                    return new ArchiveExtent(start, null);
+                    // 其后每个头都是「16 字节 IV + 密文块」，无法判断哪里是真正的末尾。
+                    // 但「加密头本身以明文出现」是格式写明的正向证据：终点未知是因为加密，不是因为残缺
+                    return new ArchiveExtent(start, null, HeaderEncrypted: true);
                 }
 
                 if (type == HeaderTypeEndOfArchive)

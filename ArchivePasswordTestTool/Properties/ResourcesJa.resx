@@ -145,6 +145,15 @@
   <data name="ArchiveFileNotFound" xml:space="preserve">
     <value>アーカイブファイルが見つかりません。</value>
   </data>
+  <data name="ArchiveVolumeMissing" xml:space="preserve">
+    <value>分割ファイルが不完全です：{0} が見つかりません。揃えてから再実行してください（不完全な状態ではパスワードの正否を判定できません）。</value>
+  </data>
+  <data name="ArchiveIncomplete" xml:space="preserve">
+    <value>アーカイブが不完全か破損しています：構造を読み取れません（切り詰め、ダウンロード未完了、一部の分割ファイルのみ、など）。この状態ではパスワードの正否を判定できません。</value>
+  </data>
+  <data name="ArchiveHasNoEntries" xml:space="preserve">
+    <value>アーカイブに項目がありません。テストできる内容がありません。</value>
+  </data>
   <data name="UsingInstalledSevenZip" xml:space="preserve">
     <value>インストール済みの 7-Zip を使用します: {0}</value>
   </data>
@@ -168,6 +177,9 @@
   </data>
   <data name="TitlePasswordFound" xml:space="preserve">
     <value>パスワード検出</value>
+  </data>
+  <data name="TitlePasswordUnconfirmed" xml:space="preserve">
+    <value>パスワード未確認</value>
   </data>
   <data name="TitlePasswordNotFound" xml:space="preserve">
     <value>パスワード未検出</value>
@@ -201,6 +213,9 @@
   </data>
   <data name="TestResultDecompressionPassword" xml:space="preserve">
     <value>解凍パスワード: {0}</value>
+  </data>
+  <data name="TestResultPasswordTentative" xml:space="preserve">
+    <value>未確認：内容シグネチャが全候補を否定しましたが、高速フィルタでは正しいパスワードを排除できません。高速フィルタを無効にして再実行してください。</value>
   </data>
   <data name="TestResultArchiveNotEncrypted" xml:space="preserve">
     <value>アーカイブは暗号化されていません</value>

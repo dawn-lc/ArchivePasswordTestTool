@@ -101,6 +101,39 @@ namespace ArchivePasswordTestTool.Properties
         }
 
         /// <summary>
+        ///   查找类似 The archive contains no entries, so there is nothing to test. 的本地化字符串。
+        /// </summary>
+        public static string ArchiveHasNoEntries
+        {
+            get
+            {
+                return EmbeddedResourceManager.GetString("ArchiveHasNoEntries", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   查找类似 The archive is truncated, damaged or missing volumes, so its structure cannot be read. Password testing is impossible in this state. 的本地化字符串。
+        /// </summary>
+        public static string ArchiveIncomplete
+        {
+            get
+            {
+                return EmbeddedResourceManager.GetString("ArchiveIncomplete", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   查找类似 Incomplete volume set: {0} is missing. Restore it before password testing, because a partial set can neither confirm nor rule out any password. 的本地化字符串。
+        /// </summary>
+        public static string ArchiveVolumeMissing
+        {
+            get
+            {
+                return EmbeddedResourceManager.GetString("ArchiveVolumeMissing", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   查找类似 Failed to create the archive interface. 的本地化字符串。
         /// </summary>
         public static string CreateArchiveInterfaceFailed
@@ -357,6 +390,17 @@ namespace ArchivePasswordTestTool.Properties
             get
             {
                 return EmbeddedResourceManager.GetString("TestResultPasswordNotFound", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   查找类似 Not confirmed: content signatures rejected every candidate, but the fast filter cannot rule out a correct password. Re-run with the fast filter disabled to verify. 的本地化字符串。
+        /// </summary>
+        public static string TestResultPasswordTentative
+        {
+            get
+            {
+                return EmbeddedResourceManager.GetString("TestResultPasswordTentative", resourceCulture);
             }
         }
 
@@ -988,6 +1032,17 @@ namespace ArchivePasswordTestTool.Properties
             get
             {
                 return EmbeddedResourceManager.GetString("TitlePasswordNotFound", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   查找类似 Password not confirmed 的本地化字符串（控制台窗口标题用，需短）。
+        /// </summary>
+        public static string TitlePasswordUnconfirmed
+        {
+            get
+            {
+                return EmbeddedResourceManager.GetString("TitlePasswordUnconfirmed", resourceCulture);
             }
         }
 

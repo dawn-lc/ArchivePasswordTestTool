@@ -145,6 +145,15 @@ Veuillez d'abord télécharger et installer 7-Zip.</value>
   <data name="ArchiveFileNotFound" xml:space="preserve">
     <value>Fichier d'archive introuvable.</value>
   </data>
+  <data name="ArchiveVolumeMissing" xml:space="preserve">
+    <value>Ensemble de volumes incomplet : {0} est manquant. Restaurez-le avant de tester, car un ensemble partiel ne permet ni de confirmer ni d'infirmer un mot de passe.</value>
+  </data>
+  <data name="ArchiveIncomplete" xml:space="preserve">
+    <value>L'archive est tronquée, endommagée ou des volumes manquent : sa structure est illisible. Le test de mot de passe est impossible dans cet état.</value>
+  </data>
+  <data name="ArchiveHasNoEntries" xml:space="preserve">
+    <value>L'archive ne contient aucune entrée : rien à tester.</value>
+  </data>
   <data name="UsingInstalledSevenZip" xml:space="preserve">
     <value>Utilisation de 7-Zip installé : {0}</value>
   </data>
@@ -168,6 +177,9 @@ Veuillez d'abord télécharger et installer 7-Zip.</value>
   </data>
   <data name="TitlePasswordFound" xml:space="preserve">
     <value>Mot de passe trouvé</value>
+  </data>
+  <data name="TitlePasswordUnconfirmed" xml:space="preserve">
+    <value>Mot de passe non confirmé</value>
   </data>
   <data name="TitlePasswordNotFound" xml:space="preserve">
     <value>Mot de passe introuvable</value>
@@ -201,6 +213,9 @@ Veuillez d'abord télécharger et installer 7-Zip.</value>
   </data>
   <data name="TestResultDecompressionPassword" xml:space="preserve">
     <value>Mot de passe de décompression : {0}</value>
+  </data>
+  <data name="TestResultPasswordTentative" xml:space="preserve">
+    <value>Non confirmé : les signatures de contenu ont rejeté tous les candidats, mais le filtrage rapide ne peut pas exclure un mot de passe correct. Relancez avec le filtrage rapide désactivé pour vérifier.</value>
   </data>
   <data name="TestResultArchiveNotEncrypted" xml:space="preserve">
     <value>L'archive n'est pas chiffrée</value>
