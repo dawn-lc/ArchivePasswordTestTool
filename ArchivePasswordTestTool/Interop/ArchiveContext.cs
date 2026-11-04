@@ -298,18 +298,15 @@ namespace ArchivePasswordTestTool
             // 进程级共享库：同一路径只加载一次（详见 SevenZipLibrary）
             var library = SevenZipLibrary.GetShared(dllPath);
 
-            // 分卷压缩包（secret.7z.001 等）：7-Zip 的分卷链接逻辑因格式而异，
-            // 7z.dll 内并不统一，所以「要不要自己拼流」必须按格式判断：
-            //   7z / zip —— 链接在 UI 层（7z.exe 的 OpenArchive.cpp 拼出 CMultiStream 再递归打开），
-            //               7z.dll 的 handler 收到流后不会去找下一卷 → 必须由调用方拼成连续虚拟流；
-            //   RAR      —— 链接在 handler 内部（它 QI IArchiveOpenVolumeCallback 并按 .partN / .rNN 推导），
-            //               调用方抢先拼流会让 handler 同时看到「连续流」和「Multivolume 标志」，
-            //               它仍会按自己的规则请求下一卷（如 x.r00）→ 打开失败。
-            //               实测：7-Zip 自己的 CLI 对改名为 x.rar.001 的 RAR5 也报 Missing volume，
-            //               说明这是参考实现也不支持的命名，我们不必假装能读。
-            bool isRar = Type == SevenZipGuids.CLSID_CFormatRar || Type == SevenZipGuids.CLSID_CFormatRar5;
-            List<string> volumePaths = [];
-            bool multiVolume = !isRar && TryGetVolumePaths(archivePath, out volumePaths);
+            // 分卷压缩包（secret.7z.001 等）：7-Zip 的分卷链接逻辑因格式而异——
+            // 7z / zip 在 UI 层（7z.exe 的 OpenArchive.cpp 拼出 CMultiStream 再递归打开，7z.dll 的 handler
+            // 收到流后不会去找下一卷），必须由调用方拼成可 Seek 的连续虚拟流；
+            // RAR 在 handler 内部（它 QI IArchiveOpenVolumeCallback 并按 .partN / .rNN 自己推导）。
+            // 但后者的标准命名不命中下面的「纯数字后缀」规则，天然不会被拼流，所以不必按格式分叉。
+            // 唯一重叠的情形是「RAR 分卷被改名成 .001」：实测拼流与不拼流对密码判定的结果相同
+            // （handler 都会按自己的规则去请求 X.r00 并失败，只读到首卷的条目，见 NumericSuffixRarVolumesAreAnUnsupportedNaming），
+            // 而拼流能给出准确的分卷数与磁盘占用，所以这里统一拼流。
+            bool multiVolume = TryGetVolumePaths(archivePath, out var volumePaths);
             IArchiveSourceStream stream = multiVolume
                 ? new MultiVolumeInStream(volumePaths)
                 : new FileInStream(archivePath);

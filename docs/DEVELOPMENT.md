@@ -651,21 +651,23 @@ The header 加密分支判密码只有一句话：`Open` 是否返回 `S_OK`。�
 不做的理由：Windows 生态里没有这种命名的分卷，7z/zip/RAR 三种格式也不会长成这样；加进来要多一条
 难以构造样本的分支，收益接近零。这是有意的取舍，不是遗漏。
 
-### 机制差异：7z/zip 自己拼流，RAR 交给 handler
+### 为什么不按格式分叉「要不要拼流」
 
-同一件事在 7-Zip 里是两套机制，我们也照抄这个分工：
+同一件事在 7-Zip 里是两套机制：7z/zip 的链接在 UI 层（调用方拼流），RAR 的链接在 handler 内部
+（它 QI `IArchiveOpenVolumeCallback` 自己推导卷名）。看上去应当按格式分叉，但实测下来不必：
 
-- **7z / zip**：链接逻辑在 UI 层，`7z.dll` 的 handler 不会 QI `IArchiveOpenVolumeCallback`。
-  必须由调用方收集路径、拼成可 Seek 的连续流（我们的 `MultiVolumeInStream`，对应它的 `CMultiStream`）。
-- **RAR**：链接在 handler 内部，它按 `CVolumeName` 自己请求下一卷。调用方抢先拼流会让 handler 同时看到
-  「连续流」和主头里的 `Multivolume` 标志，仍去请求按自己规则推导的卷名——两套机制打架。
+- **RAR 的标准命名不命中数字后缀规则**（`x.rar`、`x.partN.rar` 的后缀是 `rar`），
+  所以 `TryGetVolumePaths` 本来就返回 false，天然走 handler 自己的链接路径。
+- **唯一重叠的情形是「RAR 分卷被改名成 `.001`」**。实测两种做法对密码判定的结果**完全相同**：
+  handler 都会按自己的规则去请求 `X.r00` 并失败，然后只用首卷里读到的条目（`FileCount = 1`）。
+  差别只在信息量——拼流时 `VolumeCount` 与磁盘占用是准确的（3 卷 / 51 KB），
+  不拼流时只剩首卷的大小（17 KB，会让人以为整个包就这么大，耗时估算也会偏小）。
 
-所以 `ArchiveContext` 只对 7z/zip 调 `TryGetVolumePaths`。RAR 的 `x.partN.rar` 一直走 handler 原生路径
-（`Rar5SplitFindsPassword`、`Rar5HeaderEncryptedSplitFindsPassword` 锁定）。
+既然测密能力一样，就选信息更准的那个：**统一拼流，不按格式分叉**。
 
-### 已知局限：`X.rar.001` 这种命名
+### 实测证据：`X.rar.001` 连 7-Zip 都读不全
 
-把 RAR 分卷改名成数字后缀后**读不全，7-Zip 自己也一样**。实测 `7z t X.rar.001`：
+把三分卷的 RAR5 改名成 `X.rar.001/.002/.003` 后，`7z t X.rar.001` 的输出（7-Zip 26.00）：
 
 ```text
 Type = Split / Volumes = 3          ← Split handler 确实把三卷拼起来了
@@ -674,11 +676,12 @@ Type = Rar5
 ERROR = Missing volume : X.r00      ← 内层 RAR5 handler 仍按自己的规则找 X.r00
 ```
 
-根因是 RAR5 主头的 `Multivolume` 标志让 handler 自己去链卷，与调用方拼的流无关；
-`OpenArchive.cpp` 只对 **RAR4** 把 RAR handler 提到 Split 之前（检查 `buf[9] == 0x73 && (buf[10] & 1)`），
-RAR5 不在特判里。我们这边不报错，但只读到首卷里的条目（`FileCount = 1`）、密码判定仍然正确。
+根因与调用方是否拼流无关：RAR5 主头的 `Multivolume` 标志让 handler 自己去链卷，
+而它对 `X.rar` 推导出的是老式分卷名 `X.r00`。`OpenArchive.cpp` 只对 **RAR4** 把 RAR handler
+提到 Split 之前（检查 `buf[9] == 0x73 && (buf[10] & 1)`），RAR5 不在特判里。
 
-`NumericSuffixRarVolumesAreAnUnsupportedNaming` 把这个边界钉成断言，同时否掉「再拼一次流就能支持」的猜想。
+`NumericSuffixRarVolumesAreAnUnsupportedNaming` 把这条边界钉成断言——我们拼了流也读不全（`FileCount = 1`），
+密码判定仍正确。它同时否掉「再拼一次流就能支持」的猜想。
 
 ## 快速判错的正确性边界：扩展名与内容不符
 
