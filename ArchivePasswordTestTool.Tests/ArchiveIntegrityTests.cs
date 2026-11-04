@@ -115,6 +115,22 @@ public sealed class ArchiveIntegrityTests(TestDataFixture fx, ITestOutputHelper 
         Assert.Equal(Resources.ArchiveIncomplete, ex.Message);
     }
 
+    /// <summary>
+    /// 首卷与更靠后的卷都在、中间缺一卷（<c>.001</c> + <c>.003</c>）：拼流根本不会启用（收集遇到缺口即停），
+    /// 但目录里存在更大的卷号是确凿证据——要报出缺的是 <c>.002</c>，而不是笼统的「归档不完整」。
+    /// </summary>
+    [Fact]
+    public void GapAfterFirstVolumeIsNamedEvenWhenLinkingIsNotEnabled()
+    {
+        File.Copy(fx.Archive($"{SplitStem}.001"), Target($"{SplitStem}.001"));
+        File.Copy(fx.Archive($"{SplitStem}.003"), Target($"{SplitStem}.003"));
+
+        var ex = Assert.Throws<ArchiveIncompleteException>(() => OpenContext(Target($"{SplitStem}.001")));
+
+        output.WriteLine(ex.Message);
+        Assert.Equal(string.Format(Resources.ArchiveVolumeMissing, $"{SplitStem}.002"), ex.Message);
+    }
+
     // ---------- 截断 ----------
 
     /// <summary>被截断的单卷包：结构走不通，结论是文件不全而不是密码不对</summary>

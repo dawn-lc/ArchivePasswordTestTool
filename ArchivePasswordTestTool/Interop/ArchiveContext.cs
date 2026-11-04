@@ -115,13 +115,18 @@ namespace ArchivePasswordTestTool
         /// 于是缺卷的归档会被当成「完整但内容不完整」，最终把「文件不全」报成「密码不对」。
         /// 保留它是有意的差异。
         /// </para>
+        /// <para>
+        /// <paramref name="collected"/> 为空也有效：那表示只确认了首卷本身存在（后续卷缺失导致
+        /// 拼流没启用）。此时缺口从「首卷 + 1」开始找，于是 <c>.001</c> + <c>.003</c>（缺 <c>.002</c>）
+        /// 也能报出具体缺哪一卷，而不是笼统地说「归档不完整」。
+        /// </para>
         /// </summary>
         /// <param name="missing">缺失的第一卷完整路径（按编号顺序）</param>
         internal static bool TryFindMissingVolume(string firstPath, IReadOnlyList<string> collected, out string missing)
         {
             missing = string.Empty;
 
-            if (collected.Count == 0 || !TryParseVolumeNaming(firstPath, out var naming))
+            if (!TryParseVolumeNaming(firstPath, out var naming))
             {
                 return false;
             }
@@ -129,8 +134,8 @@ namespace ArchivePasswordTestTool
             try
             {
                 // 已收集的是从首卷开始的连续前缀，所以缺口只可能从它的下一个号开始；
-                // 目录里存在比它更大的号，就说明那里断过
-                int expected = naming.StartNumber + collected.Count;
+                // 目录里存在比它更大的号，就说明那里断过。collected 为空时表示只拿到了首卷
+                int expected = naming.StartNumber + Math.Max(collected.Count, 1);
 
                 foreach (string candidate in Directory.EnumerateFiles(naming.Directory, $"{naming.Stem}.*"))
                 {
@@ -363,7 +368,9 @@ namespace ArchivePasswordTestTool
         /// </summary>
         private void ReclassifyZeroItems(string archivePath, bool multiVolume, List<string> volumePaths, ArchiveExtent? extent)
         {
-            if (multiVolume && TryFindMissingVolume(archivePath, volumePaths, out string missing))
+            // 缺卷判定不要求拼流已启用：多卷时 collected 是连续前缀，只拿到首卷时它为空，
+            // 两种情况都能指出缺的是哪一卷。单卷归档（后缀非数字）这里直接不命中
+            if (TryFindMissingVolume(archivePath, volumePaths, out string missing))
             {
                 throw new ArchiveIncompleteException(string.Format(Resources.ArchiveVolumeMissing, Path.GetFileName(missing)));
             }
