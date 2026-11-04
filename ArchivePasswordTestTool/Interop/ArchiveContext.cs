@@ -43,8 +43,20 @@ namespace ArchivePasswordTestTool
         /// </summary>
         private readonly int _openResult;
 
+        /// <summary>卷号的最大位数（<see cref="int"/> 解析上限；真实分卷不会超过这个量级）</summary>
+        private const int MaxVolumeDigits = 9;
+
         /// <summary>
-        /// 收集分卷物理文件路径：传入 name.ext.001 时按此目录收集 .001..N 直至缺失。
+        /// 分卷命名：<c>&lt;目录&gt;&lt;前缀&gt;.NNN</c>，最后一个点之后是卷号。
+        /// </summary>
+        /// <param name="Directory">分卷所在目录</param>
+        /// <param name="Stem">卷号之前的部分（含 <c>.7z</c> 这类真扩展名）</param>
+        /// <param name="StartNumber">首卷编号（0 或 1）</param>
+        /// <param name="Width">首卷卷号的位数，决定零填充宽度；数值超出宽度时自然变长</param>
+        internal readonly record struct VolumeNaming(string Directory, string Stem, int StartNumber, int Width);
+
+        /// <summary>
+        /// 收集分卷物理文件路径：传入 <c>name.ext.001</c> 时按此目录收集后续卷直至缺失。
         /// 仅当传入的是第一分卷且存在至少两个分卷时启用链接。
         /// internal 以便测试项目直接单元测试分卷收集规则。
         /// </summary>
@@ -52,21 +64,23 @@ namespace ArchivePasswordTestTool
         {
             paths = [];
 
-            if (!TryParseVolumeNaming(firstPath, out string directory, out string stem, out int width))
+            if (!TryParseVolumeNaming(firstPath, out var naming))
             {
                 return false;
             }
 
             try
             {
-                for (int i = 1; ; i++)
+                // 上界用 number >= 0 而不是无限递增：到达 int.MaxValue 后自增变负即退出，
+                // 不可能因目录里存在畸形大号而越界
+                for (int number = naming.StartNumber; number >= 0; number++)
                 {
-                    string vol = Path.Combine(directory, $"{stem}.{i.ToString($"D{width}")}");
-                    if (!File.Exists(vol))
+                    string volume = VolumePath(naming, number);
+                    if (!File.Exists(volume))
                     {
                         break;
                     }
-                    paths.Add(vol);
+                    paths.Add(volume);
                 }
 
                 if (paths.Count > 1)
@@ -86,40 +100,48 @@ namespace ArchivePasswordTestTool
         }
 
         /// <summary>
+        /// 卷号 → 路径。<c>D{width}</c> 在数值超出宽度时自然变长，与 7-Zip
+        /// <c>CSeqName::GetNextName</c>（最高位进位时 <c>InsertAtFront('1')</c>）行为一致：
+        /// <c>.999</c> 的下一个卷是 <c>.1000</c>。
+        /// </summary>
+        private static string VolumePath(VolumeNaming naming, int number) =>
+            Path.Combine(naming.Directory, $"{naming.Stem}.{number.ToString($"D{naming.Width}")}");
+
+        /// <summary>
         /// 已收集的分卷是否缺了中间的号：收集逻辑遇到第一个不存在的号就停，
         /// 因此缺 .004 时只会拿到 .001-.003 而看上去一切正常。
-        /// 目录里存在比已收集编号更大的同宽编号，就说明这里断过。
+        /// <para>
+        /// 这一步 7-Zip 没有：它的 <c>CSeqName</c> 遇到 <c>GetStream</c> 返回 <c>S_FALSE</c> 就静默停，
+        /// 于是缺卷的归档会被当成「完整但内容不完整」，最终把「文件不全」报成「密码不对」。
+        /// 保留它是有意的差异。
+        /// </para>
         /// </summary>
         /// <param name="missing">缺失的第一卷完整路径（按编号顺序）</param>
         internal static bool TryFindMissingVolume(string firstPath, IReadOnlyList<string> collected, out string missing)
         {
             missing = string.Empty;
 
-            if (collected.Count == 0 || !TryParseVolumeNaming(firstPath, out _, out string stem, out int width))
+            if (collected.Count == 0 || !TryParseVolumeNaming(firstPath, out var naming))
             {
                 return false;
             }
 
             try
             {
-                int highest = collected.Count;
+                // 已收集的是从首卷开始的连续前缀，所以缺口只可能从它的下一个号开始；
+                // 目录里存在比它更大的号，就说明那里断过
+                int expected = naming.StartNumber + collected.Count;
 
-                foreach (string candidate in Directory.EnumerateFiles(Path.GetDirectoryName(firstPath)!, $"{stem}.*"))
+                foreach (string candidate in Directory.EnumerateFiles(naming.Directory, $"{naming.Stem}.*"))
                 {
-                    string digits = Path.GetFileName(candidate)[(stem.Length + 1)..];
-                    if (digits.Length == width && digits.All(char.IsAsciiDigit) && int.TryParse(digits, out int number) && number > highest)
+                    if (TryParseVolumeNumber(Path.GetFileName(candidate), naming.Stem, out int number) && number > expected)
                     {
-                        highest = number;
+                        missing = VolumePath(naming, expected);
+                        return true;
                     }
                 }
 
-                if (highest == collected.Count)
-                {
-                    return false;
-                }
-
-                missing = Path.Combine(Path.GetDirectoryName(firstPath)!, $"{stem}.{(collected.Count + 1).ToString($"D{width}")}");
-                return true;
+                return false;
             }
             catch
             {
@@ -128,18 +150,46 @@ namespace ArchivePasswordTestTool
         }
 
         /// <summary>
-        /// 解析 <c>name.ext.001</c> 这种分卷命名：必须是三位以内全数字后缀且编号为 1（从中间分卷拼不出完整流）。
-        /// 收集与缺卷判定共用这一份规则，否则「能收集到什么」与「缺了哪一卷」会各说各话。
+        /// 从文件名解析卷号。不比较位宽：<c>.999</c> 与 <c>.1000</c> 属于同一序列，
+        /// 只按「前缀匹配 + 后缀全数字」认。
         /// </summary>
-        private static bool TryParseVolumeNaming(string firstPath, out string directory, out string stem, out int width)
+        private static bool TryParseVolumeNumber(string fileName, string stem, out int number)
         {
-            directory = string.Empty;
-            stem = string.Empty;
-            width = 0;
+            number = 0;
+
+            if (fileName.Length <= stem.Length + 1 || !fileName.StartsWith($"{stem}.", StringComparison.Ordinal))
+            {
+                return false;
+            }
+
+            string digits = fileName[(stem.Length + 1)..];
+
+            return digits.Length <= MaxVolumeDigits
+                && digits.All(char.IsAsciiDigit)
+                && int.TryParse(digits, out number);
+        }
+
+        /// <summary>
+        /// 解析 <c>name.ext.001</c> 这类分卷命名。
+        /// <para>
+        /// 判据对齐 7-Zip 的 <c>CSeqName</c>（<c>CPP/7zip/Archive/SplitHandler.cpp</c>）：最后一个点之后
+        /// 必须<b>整段都是数字</b>且长度 ≥ 2，且数值为 0 或 1——7-Zip 的写法是「末两位是 <c>00</c>/<c>01</c>
+        /// 且更前面的位全是 <c>0</c>」，与「数值 ∈ {0,1}」完全等价。位宽不设上限：7-Zip 也不限，
+        /// <c>.0001</c> 是合法的四位卷号。允许从 0 开始也是对齐它的（Unix <c>split -d</c> 生成 <c>.00</c> 起）。
+        /// </para>
+        /// <para>
+        /// 比 7-Zip 更严的一点：<b>首卷编号必须是 0 或 1</b>。它的 <c>CSeqName</c> 直接拿传入的文件名
+        /// 当首卷往下递增，传入 <c>.005</c> 会从 <c>.006</c> 开始收集，得到的是错位的流；
+        /// 从中间分卷拼不出完整归档，所以这里直接拒绝。
+        /// </para>
+        /// </summary>
+        private static bool TryParseVolumeNaming(string firstPath, out VolumeNaming naming)
+        {
+            naming = default;
 
             try
             {
-                directory = Path.GetDirectoryName(firstPath)!;
+                string directory = Path.GetDirectoryName(firstPath)!;
                 string name = Path.GetFileName(firstPath);
 
                 int dot = name.LastIndexOf('.');
@@ -149,18 +199,19 @@ namespace ArchivePasswordTestTool
                 }
 
                 string digits = name[(dot + 1)..];
-                if (digits.Length is < 2 or > 3 || !digits.All(char.IsAsciiDigit))
+
+                // 长度 ≥ 2：7-Zip 同样拒绝单数字后缀，因为无法与普通扩展名区分
+                if (digits.Length is < 2 or > MaxVolumeDigits || !digits.All(char.IsAsciiDigit))
                 {
                     return false;
                 }
 
-                if (int.Parse(digits) != 1)
+                if (!int.TryParse(digits, out int number) || number > 1)
                 {
                     return false;
                 }
 
-                stem = name[..dot];
-                width = digits.Length;
+                naming = new VolumeNaming(directory, name[..dot], number, digits.Length);
                 return true;
             }
             catch
@@ -247,10 +298,18 @@ namespace ArchivePasswordTestTool
             // 进程级共享库：同一路径只加载一次（详见 SevenZipLibrary）
             var library = SevenZipLibrary.GetShared(dllPath);
 
-            // 分卷压缩包（secret.7z.001 等）：7-Zip 的分卷链接逻辑在 UI 层（7z.exe 的 OpenArchive.cpp），
-            // 不在 7z.dll 内，因此需由调用方自行把全部分卷拼成连续虚拟流再交给 Open。
-            // 顺手记下分卷数与磁盘占用——信息面板要展示，而这里正是唯一解析过路径的地方
-            bool multiVolume = TryGetVolumePaths(archivePath, out var volumePaths);
+            // 分卷压缩包（secret.7z.001 等）：7-Zip 的分卷链接逻辑因格式而异，
+            // 7z.dll 内并不统一，所以「要不要自己拼流」必须按格式判断：
+            //   7z / zip —— 链接在 UI 层（7z.exe 的 OpenArchive.cpp 拼出 CMultiStream 再递归打开），
+            //               7z.dll 的 handler 收到流后不会去找下一卷 → 必须由调用方拼成连续虚拟流；
+            //   RAR      —— 链接在 handler 内部（它 QI IArchiveOpenVolumeCallback 并按 .partN / .rNN 推导），
+            //               调用方抢先拼流会让 handler 同时看到「连续流」和「Multivolume 标志」，
+            //               它仍会按自己的规则请求下一卷（如 x.r00）→ 打开失败。
+            //               实测：7-Zip 自己的 CLI 对改名为 x.rar.001 的 RAR5 也报 Missing volume，
+            //               说明这是参考实现也不支持的命名，我们不必假装能读。
+            bool isRar = Type == SevenZipGuids.CLSID_CFormatRar || Type == SevenZipGuids.CLSID_CFormatRar5;
+            List<string> volumePaths = [];
+            bool multiVolume = !isRar && TryGetVolumePaths(archivePath, out volumePaths);
             IArchiveSourceStream stream = multiVolume
                 ? new MultiVolumeInStream(volumePaths)
                 : new FileInStream(archivePath);

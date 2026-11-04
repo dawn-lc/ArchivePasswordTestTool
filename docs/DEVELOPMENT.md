@@ -609,6 +609,77 @@ The header 加密分支判密码只有一句话：`Open` 是否返回 `S_OK`。�
 
 负例验证：把 `ReclassifyZeroItems` 的调用去掉，缺卷/截断四个用例与两个端到端用例立即失败。
 
+## 分卷识别：照 7-Zip 的规则，两处刻意更严
+
+### 两个参考实现，各管一半
+
+7-Zip 里没有统一的「分卷名识别」，规则分在两处，用途不同：
+
+| 参考实现 | 位置 | 负责 |
+| ---- | ---- | ---- |
+| `CSeqName` | `CPP/7zip/Archive/SplitHandler.cpp` | 扩展名整段是数字的（`x.7z.001`），Split handler 自己逐卷 `GetStream` |
+| `CVolumeName` | `CPP/7zip/Archive/Rar/RarVol.h` | RAR 的 `x.rar` / `x.partN.rar` / `x.exe`，由 RAR handler 递增卷号 |
+
+我们的 `TryParseVolumeNaming` 对齐的是前者——因为 7z.dll 的 7z/zip handler 收到流后不会去找下一卷
+（链接逻辑在 7z.exe 的 UI 层），这两类分卷必须由调用方拼成连续虚拟流。
+
+`CSeqName` 的判据逐字拆开是：取最后一个点之后的 `ext`，要求「末两位是 `00` 或 `01`」且「更前面的位全是 `0`」，
+即**整段都是数字 + 数值 ∈ {0,1}**。长度 ≥ 2（单数字无法与普通扩展名区分）。`GetNextName` 在最高位
+进位时插入 `'1'`，于是 `.999` 的下一卷是 `.1000`——位宽会自然增长。
+
+### 对齐了什么
+
+- **位宽不设上限**：旧实现卡了 2—3 位，`.0001` 这种四位卷号被拒。7-Zip 不限，已改为不限（上限 9 位只为防 `int` 溢出）。
+- **允许从 0 开始**：Unix `split -d` 生成 `.00`、`.01`…，7-Zip 接受，现在也接受。
+- **位宽增长**：`number.ToString($"D{width}")` 在数值超出宽度时自然变长，与 `InsertAtFront('1')` 等价。
+- **缺卷判定不再比较位宽**：跨 `.99` / `.100` 的序列也能正确报出缺的是哪一卷。
+
+### 刻意比 7-Zip 更严的两处
+
+这两条是我们比参考实现更好的地方，保留：
+
+1. **首卷编号必须是 0 或 1**。`CSeqName` 直接拿传入的文件名当首卷往下递增——传 `x.005` 它会从 `x.006`
+   开始收集，拼出一条错位的流，最终把「文件是分卷中间的一段」报成「密码不对」。从中间分卷拼不出完整归档，
+   直接拒绝比默默错位正确。
+2. **缺卷检测**。`CSeqName` 遇到 `GetStream` 返回 `S_FALSE` 就静默停，缺了 `.004` 的七卷包会被当成
+   「三卷完整」。`TryFindMissingVolume` 额外扫一遍目录，发现存在比已收集编号更大的号就报出缺的是哪一卷。
+   这条直接支撑了上一节的残缺归档分类。
+
+### 不实现：字母分卷
+
+`CSeqName` 还支持 `splitStyle`——扩展名是 `aa`/`ab`… 的字母序列（Unix `split` 的默认产物）。
+不做的理由：Windows 生态里没有这种命名的分卷，7z/zip/RAR 三种格式也不会长成这样；加进来要多一条
+难以构造样本的分支，收益接近零。这是有意的取舍，不是遗漏。
+
+### 机制差异：7z/zip 自己拼流，RAR 交给 handler
+
+同一件事在 7-Zip 里是两套机制，我们也照抄这个分工：
+
+- **7z / zip**：链接逻辑在 UI 层，`7z.dll` 的 handler 不会 QI `IArchiveOpenVolumeCallback`。
+  必须由调用方收集路径、拼成可 Seek 的连续流（我们的 `MultiVolumeInStream`，对应它的 `CMultiStream`）。
+- **RAR**：链接在 handler 内部，它按 `CVolumeName` 自己请求下一卷。调用方抢先拼流会让 handler 同时看到
+  「连续流」和主头里的 `Multivolume` 标志，仍去请求按自己规则推导的卷名——两套机制打架。
+
+所以 `ArchiveContext` 只对 7z/zip 调 `TryGetVolumePaths`。RAR 的 `x.partN.rar` 一直走 handler 原生路径
+（`Rar5SplitFindsPassword`、`Rar5HeaderEncryptedSplitFindsPassword` 锁定）。
+
+### 已知局限：`X.rar.001` 这种命名
+
+把 RAR 分卷改名成数字后缀后**读不全，7-Zip 自己也一样**。实测 `7z t X.rar.001`：
+
+```text
+Type = Split / Volumes = 3          ← Split handler 确实把三卷拼起来了
+----
+Type = Rar5
+ERROR = Missing volume : X.r00      ← 内层 RAR5 handler 仍按自己的规则找 X.r00
+```
+
+根因是 RAR5 主头的 `Multivolume` 标志让 handler 自己去链卷，与调用方拼的流无关；
+`OpenArchive.cpp` 只对 **RAR4** 把 RAR handler 提到 Split 之前（检查 `buf[9] == 0x73 && (buf[10] & 1)`），
+RAR5 不在特判里。我们这边不报错，但只读到首卷里的条目（`FileCount = 1`）、密码判定仍然正确。
+
+`NumericSuffixRarVolumesAreAnUnsupportedNaming` 把这个边界钉成断言，同时否掉「再拼一次流就能支持」的猜想。
+
 ## 快速判错的正确性边界：扩展名与内容不符
 
 ### 问题：扩展名是打包者定的，不是事实

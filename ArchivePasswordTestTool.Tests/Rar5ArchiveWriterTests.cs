@@ -174,6 +174,77 @@ public sealed class Rar5ArchiveWriterTests(TestDataFixture fx, ITestOutputHelper
     }
 
     /// <summary>
+    /// 已知局限：把 RAR 分卷改名成「整个扩展名是数字」（<c>X.rar.001</c>）后，<b>连 7-Zip 自己都读不全</b>。
+    /// <para>
+    /// 原因不在命名识别，而在 RAR 的卷链接机制：RAR5 handler 看到主头里的 <c>Multivolume</c> 标志后，
+    /// 会按自己的 <c>CVolumeName</c> 规则请求下一卷——对 <c>X.rar</c> 推导出的是 <c>X.r00</c>
+    /// （老式 RAR 分卷名），而不是 <c>X.rar.002</c>。实测 <c>7z t X.rar.001</c> 输出
+    /// <c>ERROR = Missing volume : X.r00</c>（exit=2），即使 7-Zip 的 Split handler 已经把三卷
+    /// 拼成了连续流也无济于事（<c>OpenArchive.cpp</c> 只对 RAR4 把 RAR handler 提到 Split 之前，
+    /// RAR5 不在特判里）。
+    /// </para>
+    /// <para>
+    /// 我们这边不报错，但只读到首卷里的条目（<c>FileCount</c> = 1），密码判定仍是正确的。
+    /// 这条测试锁的是这个<b>真实边界</b>，避免以后误以为「再拼一次流就能支持」——
+    /// 拼流解决不了 handler 主动请求 <c>X.r00</c> 的问题。
+    /// </para>
+    /// </summary>
+    [Fact]
+    public void NumericSuffixRarVolumesAreAnUnsupportedNaming()
+    {
+        string directory = NewTempDirectory();
+        try
+        {
+            IReadOnlyList<string> volumes = Rar5ArchiveWriter.Create(
+                Path.Combine(directory, "Numeric.rar"),
+                new Rar5WriterOptions
+                {
+                    EntryName = EntryName,
+                    Plaintext = CreatePlaintext(),
+                    Password = CorrectPassword,
+                    DataSalt = DataSalt,
+                    DataIv = DataIv,
+                    VolumeCount = 3,
+                });
+
+            // 改名成 Renamed.rar.001/.002/.003：卷号写在归档内容里，改文件名不影响解析
+            string stem = Path.Combine(directory, "Renamed.rar");
+            var renamed = new List<string>(volumes.Count);
+            for (int i = 0; i < volumes.Count; i++)
+            {
+                string target = $"{stem}.{i + 1:D3}";
+                File.Move(volumes[i], target);
+                renamed.Add(target);
+            }
+
+            // 参考实现也读不全：它会在 Split 拼流之后仍报「缺少 X.r00」
+            Assert.NotEqual(0, RunSevenZip($"t -y -p{CorrectPassword} \"{renamed[0]}\""));
+
+            using var context = new ArchiveContext(SevenZipDll, renamed[0], password: null);
+
+            // 只看到首卷的条目：证据是「三个分卷里的条目只出现了一个」
+            Assert.Equal(1u, context.Info.FileCount);
+
+            // 但密码判据没有被这个局限弄坏：对就是对，错就是错
+            Assert.True(context.TestPassword(CorrectPassword), "正确密码必须被判为正确");
+            Assert.False(context.TestPassword(WrongPassword), "错误密码必须被判为错误");
+        }
+        finally
+        {
+            // handler 通过 IArchiveOpenVolumeCallback 打开的分卷由 7z 持有引用，
+            // GC 回收前句柄不会释放；测试不等 GC，删不掉就留给系统清理
+            try
+            {
+                Directory.Delete(directory, recursive: true);
+            }
+            catch (IOException)
+            {
+                // 句柄仍被占用：不影响本测试的任何断言
+            }
+        }
+    }
+
+    /// <summary>
     /// SFX：签名之前插入 MZ 桩，格式检测必须报 RAR5 且偏移大于 0。
     /// </summary>
     [Fact]
@@ -276,6 +347,8 @@ public sealed class Rar5ArchiveWriterTests(TestDataFixture fx, ITestOutputHelper
     }
 
     // ---------- 工具 ----------
+
+    private string SevenZipDll => Path.ChangeExtension(fx.SevenZipExe, ".dll");
 
     private int RunSevenZip(string arguments)
     {
