@@ -247,8 +247,26 @@
   <data name="InfoDiskSize" xml:space="preserve">
     <value>ディスク使用量</value>
   </data>
-  <data name="InfoSfxOffset" xml:space="preserve">
-    <value>データ位置</value>
+  <data name="InfoNonArchiveData" xml:space="preserve">
+    <value>アーカイブ外データ</value>
+  </data>
+  <data name="ValueNonArchiveLeading" xml:space="preserve">
+    <value>前 {0}</value>
+  </data>
+  <data name="ValueNonArchiveTrailing" xml:space="preserve">
+    <value>後 {0}</value>
+  </data>
+  <data name="SeparateArchiveWritten" xml:space="preserve">
+    <value>クリーンなコピーを出力しました：{0}</value>
+  </data>
+  <data name="SeparateArchiveMultiVolume" xml:space="preserve">
+    <value>分割アーカイブには分離を適用できません。</value>
+  </data>
+  <data name="SeparateArchiveUnknownEnd" xml:space="preserve">
+    <value>アーカイブの終端を特定できないため、分離をスキップしました。</value>
+  </data>
+  <data name="SeparateArchiveNotNeeded" xml:space="preserve">
+    <value>アーカイブがファイル全体を占めているため、分離の必要はありません。</value>
   </data>
   <data name="InfoHash" xml:space="preserve">
     <value>ハッシュ</value>

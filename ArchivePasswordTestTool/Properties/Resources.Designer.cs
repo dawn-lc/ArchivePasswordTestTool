@@ -509,13 +509,79 @@ namespace ArchivePasswordTestTool.Properties
         }
 
         /// <summary>
-        ///   查找类似 Data Offset 的本地化字符串。
+        ///   Looks up a localized string similar to Non-Archive Data.
         /// </summary>
-        public static string InfoSfxOffset
+        public static string InfoNonArchiveData
         {
             get
             {
-                return EmbeddedResourceManager.GetString("InfoSfxOffset", resourceCulture);
+                return EmbeddedResourceManager.GetString("InfoNonArchiveData", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Before {0}.
+        /// </summary>
+        public static string ValueNonArchiveLeading
+        {
+            get
+            {
+                return EmbeddedResourceManager.GetString("ValueNonArchiveLeading", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to After {0}.
+        /// </summary>
+        public static string ValueNonArchiveTrailing
+        {
+            get
+            {
+                return EmbeddedResourceManager.GetString("ValueNonArchiveTrailing", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Clean copy written: {0}.
+        /// </summary>
+        public static string SeparateArchiveWritten
+        {
+            get
+            {
+                return EmbeddedResourceManager.GetString("SeparateArchiveWritten", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Multi-volume archive: separation is not applicable..
+        /// </summary>
+        public static string SeparateArchiveMultiVolume
+        {
+            get
+            {
+                return EmbeddedResourceManager.GetString("SeparateArchiveMultiVolume", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Cannot determine where the archive ends, separation skipped..
+        /// </summary>
+        public static string SeparateArchiveUnknownEnd
+        {
+            get
+            {
+                return EmbeddedResourceManager.GetString("SeparateArchiveUnknownEnd", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Archive data fills the whole file, nothing to separate..
+        /// </summary>
+        public static string SeparateArchiveNotNeeded
+        {
+            get
+            {
+                return EmbeddedResourceManager.GetString("SeparateArchiveNotNeeded", resourceCulture);
             }
         }
 

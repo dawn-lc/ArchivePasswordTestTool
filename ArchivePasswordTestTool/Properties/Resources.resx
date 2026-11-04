@@ -247,8 +247,26 @@ Please download and install 7-Zip first.</value>
   <data name="InfoDiskSize" xml:space="preserve">
     <value>On Disk</value>
   </data>
-  <data name="InfoSfxOffset" xml:space="preserve">
-    <value>Data Offset</value>
+  <data name="InfoNonArchiveData" xml:space="preserve">
+    <value>Non-Archive Data</value>
+  </data>
+  <data name="ValueNonArchiveLeading" xml:space="preserve">
+    <value>Before {0}</value>
+  </data>
+  <data name="ValueNonArchiveTrailing" xml:space="preserve">
+    <value>After {0}</value>
+  </data>
+  <data name="SeparateArchiveWritten" xml:space="preserve">
+    <value>Clean copy written: {0}</value>
+  </data>
+  <data name="SeparateArchiveMultiVolume" xml:space="preserve">
+    <value>Multi-volume archive: separation is not applicable.</value>
+  </data>
+  <data name="SeparateArchiveUnknownEnd" xml:space="preserve">
+    <value>Cannot determine where the archive ends, separation skipped.</value>
+  </data>
+  <data name="SeparateArchiveNotNeeded" xml:space="preserve">
+    <value>Archive data fills the whole file, nothing to separate.</value>
   </data>
   <data name="InfoHash" xml:space="preserve">
     <value>Hash</value>

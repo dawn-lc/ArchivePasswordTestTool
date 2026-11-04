@@ -37,6 +37,7 @@ ArchivePasswordTestTool.exe -D <字典文件> -F <压缩包文件>
 | `-NoQuery`  | 关闭"测试前按哈希请求在线共享密码"（默认开启）                           |
 | `-NoReport` | 关闭"找到密码后自动回传"（默认开启）                                     |
 | `-FallbackFullDecode` | 快速筛选按文件签名排除全部候选后，直接用 7-Zip 完整解密复核（默认询问）     |
+| `-SeparateArchive` | 把归档数据单独拷成 `<名称>[clean]<扩展名>`（前提：文件里确实夹着非归档数据） |
 
 无任何参数直接启动（如双击 exe）时进入交互引导：把密码本与压缩包拖入窗口即自动识别路径开始测试（无需回车）；
 拖放后控制台窗口自动回到前台，无需再手动点击窗口。带参启动则完全按参数行事（缺失必需参数报错退出）。
@@ -118,6 +119,21 @@ ArchivePasswordTestTool.exe -D dict.txt -F installer.exe -lib "C:\Program Files\
 - 任何时候都可用 `APTT_NO_FAST_FILTER=1` 彻底关闭快速判错
 
 复核的代价就是这个包「不走快筛」的代价——1.2GB + 250 万字典约 100 小时，所以默认不自动执行。
+
+## 夹带其它数据的压缩包
+
+文件里除了归档本身还夹着别的字节时（自解压包的 PE stub、前面被拼接了另一个文件、
+下载工具追加的尾部数据），程序照常能测——签名会在文件前 64MB 内被找到，
+信息面板会写明「非归档数据 前 X · 后 Y」。
+
+需要一份只含归档的干净文件时加 `-SeparateArchive`，会写出 `<名称>[clean]<扩展名>`：
+
+```text
+ArchivePasswordTestTool.exe -D dict.txt -F movie.mp4 -SeparateArchive
+```
+
+分卷包不支持分离（多文件拼成的流切成单文件既不符合格式也不符合预期）；
+头部加密的 RAR 无法确定归档末尾时会明确拒绝，而不是写出一个坏包。
 
 ## 运行要求
 

@@ -144,6 +144,13 @@ namespace ArchivePasswordTestTool
                 // 归档已打开、信息已知：后续无论加密与否都要给用户留一份报告
                 archiveInspected = true;
 
+                // 显式要求时把归档部分单独拷出来。放在加密判断之前：
+                // 「这个文件里哪部分才是归档」与加不加密无关，未加密的包同样值得导出一份
+                if (options.SeparateArchive)
+                {
+                    TrySeparateArchive(archiveInfo, archivePath);
+                }
+
                 if (!archiveInfo.IsEncrypted)
                 {
                     archiveEncrypted = false;
@@ -294,6 +301,45 @@ namespace ArchivePasswordTestTool
                 // 那期间标题应该还是结果（或进度），不该提前变回壳层标题
                 ConsoleTitle.Restore();
             }
+        }
+
+        /// <summary>
+        /// 把归档数据单独拷成 <c>&lt;名称&gt;[clean]&lt;扩展名&gt;</c>（-SeparateArchive）。
+        /// <para>
+        /// 三种情形明确拒绝而不是尽力而为：分卷（多文件拼成的流，切成单文件既不符合格式也不符合预期）、
+        /// 末尾未知（头部加密的 RAR5 等，猜一个长度写出来只会得到坏文件）、
+        /// 本来就没有多余数据（写一份与原文等大的副本纯属浪费磁盘）。
+        /// </para>
+        /// <para>
+        /// 范围直接取自探测结果：<see cref="ArchiveInfo.SignatureOffset"/> 是起点，
+        /// 终点 = 文件长度 - <see cref="ArchiveInfo.TrailingBytes"/>，不重新解析一遍。
+        /// </para>
+        /// </summary>
+        private static void TrySeparateArchive(ArchiveInfo info, string archivePath)
+        {
+            if (info.VolumeCount > 1)
+            {
+                Ui.WriteWarning(Resources.SeparateArchiveMultiVolume);
+                return;
+            }
+
+            if (info.TrailingBytes is not long trailing)
+            {
+                Ui.WriteWarning(Resources.SeparateArchiveUnknownEnd);
+                return;
+            }
+
+            bool hasLeadingData = info.SignatureOffset > 0;
+            if (!hasLeadingData && trailing == 0)
+            {
+                Ui.WriteWarning(Resources.SeparateArchiveNotNeeded);
+                return;
+            }
+
+            string targetPath = ArchiveSeparator.BuildTargetPath(archivePath);
+            ArchiveSeparator.Write(archivePath, info.SignatureOffset, info.DiskSize - trailing, targetPath);
+
+            Ui.WriteWarning(string.Format(Resources.SeparateArchiveWritten, targetPath));
         }
 
         /// <summary>

@@ -247,8 +247,26 @@ Veuillez d'abord télécharger et installer 7-Zip.</value>
   <data name="InfoDiskSize" xml:space="preserve">
     <value>Sur disque</value>
   </data>
-  <data name="InfoSfxOffset" xml:space="preserve">
-    <value>Décalage des données</value>
+  <data name="InfoNonArchiveData" xml:space="preserve">
+    <value>Données hors archive</value>
+  </data>
+  <data name="ValueNonArchiveLeading" xml:space="preserve">
+    <value>Avant {0}</value>
+  </data>
+  <data name="ValueNonArchiveTrailing" xml:space="preserve">
+    <value>Après {0}</value>
+  </data>
+  <data name="SeparateArchiveWritten" xml:space="preserve">
+    <value>Copie propre écrite : {0}</value>
+  </data>
+  <data name="SeparateArchiveMultiVolume" xml:space="preserve">
+    <value>Archive multivolume : la séparation ne s'applique pas.</value>
+  </data>
+  <data name="SeparateArchiveUnknownEnd" xml:space="preserve">
+    <value>Impossible de déterminer la fin de l'archive, séparation ignorée.</value>
+  </data>
+  <data name="SeparateArchiveNotNeeded" xml:space="preserve">
+    <value>L'archive occupe tout le fichier, rien à séparer.</value>
   </data>
   <data name="InfoHash" xml:space="preserve">
     <value>Hachage</value>

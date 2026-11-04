@@ -11,12 +11,12 @@ ArchivePasswordTestTool/
 ├─ Interop/          7-Zip 原生互操作：COM 契约与回调、库加载、归档生命周期包装（ArchiveContext）、
 │  │                 归档属性采集（ArchiveInspector）、格式 GUID
 │  └─ Native/        其余原生调用：Windows 控制台 API、CPU 拓扑、两套 bcrypt 密钥派生
-├─ Formats/          纯托管的格式知识：文件头识别、明文魔数表、7z 头解析
+├─ Formats/          纯托管的格式知识：文件头识别、明文魔数表、7z 头解析、归档范围（起止）探测
 ├─ FastFilter/       快速判错子系统：探针接口与实现、密码流、调度器与候选分发
 ├─ Services/         业务核心：Runner（主流程）、Planner（执行规划）、MultiProcess（多进程引擎）、
 │                    SevenZip（环境定位）、Sync（在线共享交互）、PasswordDictionary、
-│                    DictionaryEncoding（字典编码探测）、ResultsWriter、HttpTransport、
-│                    Upgrade、OnlineService、EmbeddedSevenZip（内嵌 7z.dll 提取）
+│                    DictionaryEncoding（字典编码探测）、ResultsWriter、ArchiveSeparator、
+│                    HttpTransport、Upgrade、OnlineService、EmbeddedSevenZip（内嵌 7z.dll 提取）
 ├─ Ui/               界面输出与交互引导（Spectre.Console）
 └─ Properties/       多语言资源（resx，en/zh-CN/ja/fr/ru）
 
@@ -467,6 +467,86 @@ CNG 的 SHA-256 走 SHA-NI 硬件指令，本机实测约 2 GB/s（比 SHA-1 的
 写入 15.7 MB 缓冲）。批大小实测无影响（256 次调用 vs 8 次调用仅差 1%），
 所以 `RecordsPerBatch` 不需要调。
 
+## 夹带其它数据的压缩包：定位、边界与分离
+
+### 先分清哪些情形是真问题
+
+拿同一份归档分别拼上 128KB 杂数据（前置 / 尾随 / 前后都有），逐格式实测：
+
+| 情形 | 7-Zip / WinRAR | 改造前的本程序 |
+| ---- | ---- | ---- |
+| 前置杂数据（非 MZ 开头） | 都能正常列出与提取 | **exit 1，格式不识别** |
+| 尾随杂数据（测到 16MB） | 三格式全部 `Everything is Ok` | 正常 |
+| SFX（MZ stub + 归档） | 正常 | 正常（旧实现只扫描 MZ 文件） |
+
+所以真正的断点只有一个：**签名不在文件头，而文件又不是 MZ 开头**。
+尾随数据 7-Zip 本来就宽容，读取不需要任何改动——但它值得**报告**和**分离**，
+因为「文件 5MB、包内只有 2MB」这个差异需要一个能落地的解释。
+
+### 定位：扫描窗口与「取最早偏移」
+
+旧实现的判断是 `head[0..2] == "MZ"` 才扫描签名，其余一律要求偏移 0。
+现在改为：头部签名命中就走快路径（不产生额外 IO），未命中则在文件前 64MB 内分块扫描。
+
+两个决定值得记下来：
+
+- **窗口 64MB**：正常归档在头部就命中，走扫描路径的都是「开头不像归档」的文件，
+  而非归档文件（视频、文档）也走这条路。64MB 覆盖实际会遇到的前置数据，
+  同时把误传非压缩包的代价限制在几十毫秒。分块读取（1MB/块）并按「最长签名 - 1」字节重叠，
+  签名跨块也能命中，且不会把大文件整体读进内存。
+- **取最早出现的签名，而不是按签名表顺序取第一个命中**。旧实现的 `DetectAfterStub` 是后者：
+  只要表里靠前的格式在文件任意位置出现，就压过实际更早出现的归档。位置优先才是对的——
+  最先像归档的地方才是归档起点。同一偏移仍按表序决定优先级（实际不会撞：RAR5/RAR4 在第 7 字节区分）。
+
+扫描出的偏移原样交给 `IInArchive.Open` 的 `maxCheckStartPosition`，7-Zip 自己在该范围内定位签名，
+前置数据不会被当成归档的一部分。已验证快筛探测器也吃到了正确的偏移
+（`SevenZipStoreProbe.TryCreate` 把 offset 传给解析器，`Rar4StoreProbe` 直接 seek 过去）。
+
+### 边界：按格式自身结构算，不靠猜
+
+`ArchiveExtentDetector` 给出 `[Start, End)`：
+
+| 格式 | 依据 | 备注 |
+| ---- | ---- | ---- |
+| 7z | 起始头的 `NextHeaderOffset`(12..20) / `NextHeaderSize`(20..28) | 终点 = 32 + 两者之和；带恢复记录的包切掉的是恢复记录，归档本身仍可读 |
+| RAR4 | 块链走到 `0x7B`（结束块） | 每块 `HEAD_SIZE` 加可选的 `ADD_SIZE`（标志 `0x8000`） |
+| RAR5 | 头部链走到类型 5（结束头） | 遇到类型 4（归档加密头）即停止并对终点返回**未知** |
+| Zip | 从文件尾向前找 EOCD | 用「中央目录紧贴 EOCD 之前」校验候选，见下 |
+
+Zip 的边界有两个坑：
+
+1. **注释**：EOCD 后可能跟着归档注释，长度写在 EOCD 的 `commentLength` 里。
+   只按固定 22 字节算会少切一截，分离出的副本就坏了。
+2. **尾部可能有垃圾**：不能靠「EOCD 之后没有多余字节」判断，否则尾随数据一存在就永远找不到。
+   改用一条与前缀无关的结构事实校验候选——**中央目录紧贴在 EOCD 之前**，
+   因此 `EOCD 位置 - 中央目录大小` 处必须是 `PK\x01\x02`。前缀会同等平移两者，这条依然成立，
+   而垃圾里偶然出现的 EOCD 签名几乎不可能同时满足它。
+
+终点未知时一律返回 `null` 并**拒绝分离**。猜一个长度写出来的只会是坏文件，比拒绝更糟。
+
+### 分离：只在明确要求时写盘
+
+`-SeparateArchive` 写出 `<名称>[clean]<扩展名>`（如 `Secret[clean].7z`）。默认关闭的理由：
+测密完全不需要它，而写一份与原文件同样大的副本属于用户应当自己决定的磁盘开销。
+
+三种情形明确拒绝而不是尽力而为——分卷（多文件拼成的流切成单文件既不符合格式也不符合预期）、
+末尾未知、本来就没有多余数据（写一份与原文等大的副本纯属浪费）。
+
+### 测试
+
+`NonArchiveDataTests` 分三层，共 22 例：
+
+- **定位**：三种格式的前置数据、跨扫描分块边界的签名、前置数据下的端到端测密
+- **边界**：三种格式的精确 `[Start, End)`、Zip 注释计入、头部加密 RAR5 报未知
+- **分离**：分离出的字节与原始归档**逐字节相同**且 7-Zip 完整通过、目标命名、
+  `-SeparateArchive` 才写盘、分卷拒绝、快筛在偏移下仍命中正确密码
+
+杂数据刻意只用 `0x41..0x4F`（A..O）：避开所有归档签名的首字节（`0x37` 7z、`0x50` PK、`0x52` Rar），
+于是杂数据里不可能含有任何签名，判据不会因随机碰撞偶发失败。
+
+负例验证：把「非 MZ 不扫描」的旧行为改回去，18 个用例立即失败，而 SFX 相关用例不受影响——
+说明这些断言确实钉在「任意位置的前置数据」这一个能力上。
+
 ## 快速判错的正确性边界：扩展名与内容不符
 
 ### 问题：扩展名是打包者定的，不是事实
@@ -758,6 +838,7 @@ dotnet test ArchivePasswordTestTool.Tests\ArchivePasswordTestTool.Tests.csproj
 | `EndToEndTests.EmbeddedSevenZipWorksWhenNoInstalledSevenZip` | 强制走内嵌 dll 时真的能解包破密（语言无关判据：exit 0 + ASCII 密码命中）                             |
 | `Rar5ArchiveWriterTests`                                     | 合成 RAR5 被真实 7-Zip 解开且内容逐字节一致、错误密码必被拒、头部 CRC 覆盖范围、样本可重复          |
 | `Rar5ReferenceCompareTests`                                  | 与本地 WinRAR 产出的同参数归档做结构对照（无 WinRAR 时空跑，属开发期手段）                          |
+| `NonArchiveDataTests`                                        | 前置/尾随杂数据下的格式定位、归档精确起止、分离结果逐字节相同且 7-Zip 通过、分卷拒绝分离            |
 
 ## 字典编码
 

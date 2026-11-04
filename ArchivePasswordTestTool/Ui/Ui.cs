@@ -166,10 +166,12 @@ namespace ArchivePasswordTestTool
             AddRow(grid, Resources.InfoEncryption, DescribeEncryption(info));
             AddRow(grid, Resources.InfoTestTarget, DescribeTestTarget(info));
 
-            // 自解压包的数据起点不是 0；写出来便于用户核对「为什么文件头签名在 240KB 处」
-            if (info.SignatureOffset > 0)
+            // 非归档数据：自解压 stub、被拼接的文件头、尾随垃圾都属于这一类。
+            // 它们不影响测密（7-Zip 会自己跳过），但用户看到文件大小与包内大小对不上时，
+            // 这一行就是解释；也是「可以分离出干净副本」的唯一提示
+            if (HasNonArchiveData(info))
             {
-                AddRow(grid, Resources.InfoSfxOffset, info.SignatureOffset.ToString("N0"));
+                AddRow(grid, Resources.InfoNonArchiveData, DescribeNonArchiveData(info));
             }
 
             if (archiveHash is not null)
@@ -189,6 +191,38 @@ namespace ArchivePasswordTestTool
             AnsiConsole.WriteLine();
             AnsiConsole.Write(panel);
             AnsiConsole.WriteLine();
+        }
+
+        /// <summary>
+        /// 文件里是否存在不属于归档的字节（前置 stub/拼接数据 或 尾随垃圾）。
+        /// 尾随量未知（null）时不算「有」——不能拿「不知道」当结论展示。
+        /// </summary>
+        private static bool HasNonArchiveData(ArchiveInfo info) =>
+            info.SignatureOffset > 0 || info.TrailingBytes > 0;
+
+        /// <summary>
+        /// 「前 X · 后 Y」：只列出真实存在的部分。尾随量未知时整段省略，
+        /// 因为「未知」写成 0 或 <c>?</c> 都会被读成确定的结论。
+        /// </summary>
+        private static string DescribeNonArchiveData(ArchiveInfo info)
+        {
+            var parts = new List<string>(2);
+
+            if (info.SignatureOffset > 0)
+            {
+                parts.Add(string.Format(
+                    Resources.ValueNonArchiveLeading,
+                    CostEstimate.FormatBytes((ulong)info.SignatureOffset)));
+            }
+
+            if (info.TrailingBytes is long trailing && trailing > 0)
+            {
+                parts.Add(string.Format(
+                    Resources.ValueNonArchiveTrailing,
+                    CostEstimate.FormatBytes((ulong)trailing)));
+            }
+
+            return string.Join(" · ", parts);
         }
 
         /// <summary>

@@ -36,6 +36,15 @@ namespace ArchivePasswordTestTool
         /// </summary>
         public bool FallbackFullDecode { get; init; }
 
+        /// <summary>
+        /// 文件里存在不属于归档的字节时，是否把归档部分单独拷成 <c>&lt;名称&gt;[clean]&lt;扩展名&gt;</c>（-SeparateArchive）。
+        /// <para>
+        /// 默认关闭：测密并不需要它（7-Zip 自己会跳过前置 stub 与尾随垃圾），
+        /// 而写出一份与原文件同样大的副本属于用户应当自己决定的磁盘开销。
+        /// </para>
+        /// </summary>
+        public bool SeparateArchive { get; init; }
+
         /// <summary>大小写不敏感的开关检测</summary>
         private static bool HasFlag(string[] args, string name)
         {
@@ -90,6 +99,7 @@ namespace ArchivePasswordTestTool
                 QueryOnline = !HasFlag(args, "NoQuery"),
                 ReportOnline = !HasFlag(args, "NoReport"),
                 FallbackFullDecode = HasFlag(args, "FallbackFullDecode"),
+                SeparateArchive = HasFlag(args, "SeparateArchive"),
             };
         }
 

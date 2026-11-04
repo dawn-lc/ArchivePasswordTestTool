@@ -247,8 +247,26 @@
   <data name="InfoDiskSize" xml:space="preserve">
     <value>На диске</value>
   </data>
-  <data name="InfoSfxOffset" xml:space="preserve">
-    <value>Смещение данных</value>
+  <data name="InfoNonArchiveData" xml:space="preserve">
+    <value>Данные вне архива</value>
+  </data>
+  <data name="ValueNonArchiveLeading" xml:space="preserve">
+    <value>До {0}</value>
+  </data>
+  <data name="ValueNonArchiveTrailing" xml:space="preserve">
+    <value>После {0}</value>
+  </data>
+  <data name="SeparateArchiveWritten" xml:space="preserve">
+    <value>Чистая копия записана: {0}</value>
+  </data>
+  <data name="SeparateArchiveMultiVolume" xml:space="preserve">
+    <value>Многотомный архив: разделение неприменимо.</value>
+  </data>
+  <data name="SeparateArchiveUnknownEnd" xml:space="preserve">
+    <value>Не удалось определить конец архива, разделение пропущено.</value>
+  </data>
+  <data name="SeparateArchiveNotNeeded" xml:space="preserve">
+    <value>Архив занимает весь файл, разделять нечего.</value>
   </data>
   <data name="InfoHash" xml:space="preserve">
     <value>Хеш</value>

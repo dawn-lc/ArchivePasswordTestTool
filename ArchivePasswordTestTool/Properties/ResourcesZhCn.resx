@@ -247,8 +247,26 @@
   <data name="InfoDiskSize" xml:space="preserve">
     <value>磁盘占用</value>
   </data>
-  <data name="InfoSfxOffset" xml:space="preserve">
-    <value>数据偏移</value>
+  <data name="InfoNonArchiveData" xml:space="preserve">
+    <value>非归档数据</value>
+  </data>
+  <data name="ValueNonArchiveLeading" xml:space="preserve">
+    <value>前 {0}</value>
+  </data>
+  <data name="ValueNonArchiveTrailing" xml:space="preserve">
+    <value>后 {0}</value>
+  </data>
+  <data name="SeparateArchiveWritten" xml:space="preserve">
+    <value>已分离出干净副本：{0}</value>
+  </data>
+  <data name="SeparateArchiveMultiVolume" xml:space="preserve">
+    <value>分卷压缩包不适用分离。</value>
+  </data>
+  <data name="SeparateArchiveUnknownEnd" xml:space="preserve">
+    <value>无法确定归档数据的末尾，已跳过分离。</value>
+  </data>
+  <data name="SeparateArchiveNotNeeded" xml:space="preserve">
+    <value>归档数据已占据整个文件，无需分离。</value>
   </data>
   <data name="InfoHash" xml:space="preserve">
     <value>哈希值</value>

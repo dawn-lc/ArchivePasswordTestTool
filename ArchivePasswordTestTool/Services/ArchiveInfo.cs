@@ -90,6 +90,16 @@ namespace ArchivePasswordTestTool
         /// <summary>压缩数据在文件中的起始偏移。普通包为 0，自解压（SFX）为 PE stub 之后的偏移</summary>
         public long SignatureOffset { get; set; }
 
+        /// <summary>
+        /// 归档数据之后的多余字节数（尾随的非归档数据）。<see langword="null"/> 表示无法确定——
+        /// 头部加密的 RAR5、结构不符或尾随数据超出扫描窗口时都会落到这里。
+        /// <para>
+        /// 7-Zip 对尾随数据是宽容的（实测各格式追加 16MB 仍能完整通过），所以它不影响测密；
+        /// 记录它只是为了告诉用户「文件里还有不属于归档的东西」，并在分离时知道该切到哪里。
+        /// </para>
+        /// </summary>
+        public long? TrailingBytes { get; set; }
+
         /// <summary>分卷数量。单文件包为 1</summary>
         public int VolumeCount { get; set; } = 1;
 

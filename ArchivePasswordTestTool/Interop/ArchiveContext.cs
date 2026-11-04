@@ -192,6 +192,14 @@ namespace ArchivePasswordTestTool
                     ? volumePaths.Sum(path => new FileInfo(path).Length)
                     : new FileInfo(archivePath).Length;
 
+                // 非归档数据的范围只用于展示与分离：分卷时多个文件拼成一条流，「某文件末尾」没有意义；
+                // 终点未知（头部加密的 RAR5 等）时只保留起始偏移，尾随量留空而不是猜一个数
+                if (!multiVolume)
+                {
+                    Info.TrailingBytes = ArchiveExtentDetector
+                        .Detect(archivePath, Type, signatureOffset)?.TrailingBytes(Info.DiskSize);
+                }
+
                 ArchiveInspector.Populate(archive, Info);
             }
         }
