@@ -92,6 +92,44 @@ public sealed class NonArchiveDataTests(TestDataFixture fx, ITestOutputHelper ou
         Assert.Contains(CorrectPassword, text);
     }
 
+    /// <summary>
+    /// 大文件里偶然出现 Zip 本地文件头签名（4 字节）时不能被当成压缩包。
+    /// <para>
+    /// 这不是假想的：64MB 窗口内随机出现 <c>PK\x03\x04</c> 的概率约 1.5%（64MB / 2^32），
+    /// 误判的后果是把一个正常文件报成「压缩包损坏 / 密码错误」，比「格式不支持」更误导。
+    /// 因此扫描出的 Zip 候选必须通过「中央目录结束记录自洽」这一结构校验。
+    /// </para>
+    /// <para>
+    /// 只对扫描路径加校验，不校验偏移 0 的头部命中：那是「用户明确说这是压缩包，但文件坏了」的情形，
+    /// 报「损坏」比报「格式不支持」更准确。
+    /// </para>
+    /// </summary>
+    [Fact]
+    public void IsolatedZipSignatureIsRejectedByStructuralCheck()
+    {
+        using var workspace = new Workspace();
+
+        const int signatureOffset = 4096;
+        byte[] bytes = new byte[JunkLength];
+        for (int i = 0; i < bytes.Length; i++)
+        {
+            bytes[i] = (byte)(0x41 + (i % 15));
+        }
+
+        // 孤立签名：后面没有本地文件头该有的字段，也没有中央目录
+        bytes[signatureOffset] = 0x50;
+        bytes[signatureOffset + 1] = 0x4B;
+        bytes[signatureOffset + 2] = 0x03;
+        bytes[signatureOffset + 3] = 0x04;
+
+        string path = workspace.TargetPath("Fake.zip");
+        File.WriteAllBytes(path, bytes);
+
+        var (format, _) = ArchiveFormatDetector.DetectArchiveFormat(path);
+
+        Assert.Equal(Guid.Empty, format);
+    }
+
     // ---------- 第二层：边界 ----------
 
     /// <summary>

@@ -67,9 +67,26 @@ namespace ArchivePasswordTestTool
             try
             {
                 using var stream = File.OpenRead(archivePath);
+                return Detect(stream, format, signatureOffset);
+            }
+            catch (Exception)
+            {
+                // 探测失败不该影响测密本身——范围只用于展示与分离，读不到就当作未知
+                return null;
+            }
+        }
+
+        /// <summary>
+        /// 同上，复用调用方已打开的流（格式检测在扫描时要靠它校验候选，避免重复打开文件）。
+        /// 会在流上移动位置，调用方不应依赖调用后的 <c>Position</c>。
+        /// </summary>
+        public static ArchiveExtent? Detect(FileStream stream, Guid format, long signatureOffset)
+        {
+            try
+            {
                 long fileLength = stream.Length;
 
-                if (fileLength <= signatureOffset)
+                if (signatureOffset < 0 || fileLength <= signatureOffset)
                 {
                     return null;
                 }
@@ -99,7 +116,6 @@ namespace ArchivePasswordTestTool
             }
             catch (Exception)
             {
-                // 探测失败不该影响测密本身——范围只用于展示与分离，读不到就当作未知
                 return null;
             }
         }

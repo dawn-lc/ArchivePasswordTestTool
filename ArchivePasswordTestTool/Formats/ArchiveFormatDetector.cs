@@ -23,6 +23,12 @@ namespace ArchivePasswordTestTool
         /// <summary>扫描分块大小：逐块读入并按需保留跨块的签名重叠部分，不整体读入大文件</summary>
         private const int ScanChunkBytes = 1024 * 1024;
 
+        /// <summary>
+        /// 扫描期间允许否决的结构不成立候选数上限。
+        /// 正常文件里几乎不会出现，设上限只为让畸形输入不至于把扫描拖成死循环
+        /// </summary>
+        private const int MaxRejectedCandidates = 64;
+
         // 格式检测按路径缓存：并行场景下多个 context 会重复检测同一文件
         private static readonly ConcurrentDictionary<string, (Guid Format, long Offset)> FormatDetectionCache = new();
 
@@ -118,6 +124,12 @@ namespace ArchivePasswordTestTool
         /// <summary>
         /// 在文件前 <see cref="MaxLeadingDataBytes"/> 内分块扫描签名，返回最早命中的位置。
         /// 分块之间保留「最长签名 - 1」字节重叠，避免签名被块边界切断。
+        /// <para>
+        /// 扫描出来的候选要过一道结构校验：Zip 的本地文件头签名只有 4 字节，
+        /// 64MB 随机数据里出现它的概率约 1.5%（64MB / 2^32），足以把一个被误传进来的视频
+        /// 说成「压缩包损坏、密码错误」。因此 Zip 候选必须能通过「找到自洽的中央目录结束记录」这一步；
+        /// 7z（6 字节）与 RAR（7/8 字节）的碰撞概率低到不值得付这个代价，不作额外校验。
+        /// </para>
         /// </summary>
         private static (Guid Format, long Offset) DetectByScanning(FileStream stream, long fileLength)
         {
@@ -126,7 +138,10 @@ namespace ArchivePasswordTestTool
 
             long windowStart = 0;
             int carry = 0;
-            stream.Position = 0;
+
+            // 已被否决的候选起点：同一位置不再重复命中。上限防止畸形文件把这里变成死循环
+            long rejectedThrough = -1;
+            int rejections = 0;
 
             while (windowStart + carry < limit)
             {
@@ -137,6 +152,7 @@ namespace ArchivePasswordTestTool
                     break;
                 }
 
+                stream.Position = windowStart + carry;
                 int read = stream.Read(buffer, carry, want);
                 if (read <= 0)
                 {
@@ -146,9 +162,25 @@ namespace ArchivePasswordTestTool
                 int length = carry + read;
                 ReadOnlySpan<byte> window = buffer.AsSpan(0, length);
 
-                if (FindEarliestSignature(window, out Guid format, out int offset))
+                int searchFrom = (int)Math.Max(0, rejectedThrough - windowStart + 1);
+                while (searchFrom < length
+                    && FindEarliestSignature(window[searchFrom..], out Guid format, out int relative))
                 {
-                    return (format, windowStart + offset);
+                    long absolute = windowStart + searchFrom + relative;
+
+                    if (format != SevenZipGuids.CLSID_CFormatZip || IsStructurallyValidZip(stream, absolute))
+                    {
+                        return (format, absolute);
+                    }
+
+                    // 位置像 Zip 但结构不成立：否决它，从下一个字节继续找
+                    rejectedThrough = absolute;
+                    searchFrom = searchFrom + relative + 1;
+
+                    if (++rejections >= MaxRejectedCandidates)
+                    {
+                        return (Guid.Empty, 0);
+                    }
                 }
 
                 // 保留尾部若干字节与下一块拼接；Span.CopyTo 支持源与目标重叠
@@ -160,6 +192,13 @@ namespace ArchivePasswordTestTool
 
             return (Guid.Empty, 0);
         }
+
+        /// <summary>
+        /// Zip 候选的结构校验：必须存在中央目录结束记录，且其指向的中央目录确实紧贴在它之前。
+        /// 复用范围探测器——它对 Zip 的判断本来就是这套结构约束（含注释长度与前缀平移）。
+        /// </summary>
+        private static bool IsStructurallyValidZip(FileStream stream, long offset) =>
+            ArchiveExtentDetector.Detect(stream, SevenZipGuids.CLSID_CFormatZip, offset)?.End is not null;
 
         /// <summary>
         /// 找出窗口内最早出现的签名（同一位置时按表序取优先级更高的）。
