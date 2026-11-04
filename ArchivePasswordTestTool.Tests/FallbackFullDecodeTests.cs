@@ -252,6 +252,188 @@ public sealed class FallbackFullDecodeTests
     /// </summary>
     internal static string KeepProse(string text) => OutputText.LettersDigitsAndSpaces(text);
 
+    // ---------- 「未找到」的结论强度 ----------
+
+    /// <summary>
+    /// 快筛否决全部候选、且没做完整复核时，结果面板必须承认结论不确定。
+    /// <para>
+    /// 这是产品诚实性要求：签名比对只能排除「首块不像任何已知格式」的密码，
+    /// 扩展名与真实内容不符时正确密码会被误判。若这时照旧输出斩钉截铁的
+    /// 「未找到正确的解压密码」，用户（尤其是重定向/CI 场景——那里连询问都不会出现）
+    /// 会把不确定当成确定，直接放弃这个包。
+    /// </para>
+    /// </summary>
+    [Fact]
+    public void UnreviewedSignatureRejectionIsReportedAsTentative()
+    {
+        string dir = CreateDirectory();
+        try
+        {
+            string archivePath = Path.Combine(dir, "NoMagic3.7z");
+            CreateStoredArchive(dir, archivePath, CreatePlainText(60000));
+            string dictPath = WriteDictionary(archivePath);
+
+            var result = RunTool(dictPath, archivePath, fallback: false);
+
+            Assert.Equal(0, result.ExitCode);
+            string squashed = OutputText.SquashForMatch(result.Output);
+
+            // ① 标题必须是限定版
+            Assert.NotNull(FirstLocalizedIn(squashed, "PasswordNotFoundFiltered"));
+
+            // ② 必须说清「为什么可能漏」与补救开关，否则用户只知道存疑却不知怎么办
+            Assert.NotNull(FirstLocalizedIn(squashed, "ResultSignatureFilteredNote"));
+
+            // ③ 不能同时给出肯定的「未找到正确的解压密码」
+            Assert.Null(FirstLocalizedIn(squashed, "PasswordNotFound"));
+        }
+        finally
+        {
+            TryDeleteDirectory(dir);
+        }
+    }
+
+    /// <summary>
+    /// 反面：复核真的跑过之后，结论是确定的，就不能再带「可能漏」的限定。
+    /// 这一条防止把限定文案做成「无条件显示」——那样每条未命中都会显得可疑。
+    /// </summary>
+    [Fact]
+    public void ReviewedExhaustiveSearchIsReportedAsFinal()
+    {
+        string dir = CreateDirectory();
+        try
+        {
+            string archivePath = Path.Combine(dir, "NoMagic4.7z");
+            CreateStoredArchive(dir, archivePath, CreatePlainText(60000));
+            string dictPath = WriteWrongOnlyDictionary(archivePath);
+
+            var result = RunTool(dictPath, archivePath, fallback: true);
+
+            Assert.Equal(0, result.ExitCode);
+            string squashed = OutputText.SquashForMatch(result.Output);
+
+            Assert.NotNull(FirstLocalizedIn(squashed, "PasswordNotFound"));
+            Assert.Null(FirstLocalizedIn(squashed, "PasswordNotFoundFiltered"));
+        }
+        finally
+        {
+            TryDeleteDirectory(dir);
+        }
+    }
+
+    /// <summary>
+    /// 在「已压掉空白的输出」里找某个资源键的文案，返回命中的那个语言版本（未命中返回 null）。
+    /// <para>
+    /// 遍历全部语言是项目约定：只写死一种语言的文案，在其它 UI 语言下会永不命中
+    /// （CI 跑在英文系统上曾因此失败）。
+    /// </para>
+    /// </summary>
+    private static string? FirstLocalizedIn(string squashedOutput, string key)
+    {
+        foreach (string culture in new[] { "en", "zh-CN", "ja", "fr", "ru" })
+        {
+            string? value = ArchivePasswordTestTool.Properties.EmbeddedResourceManager.GetString(
+                key, new System.Globalization.CultureInfo(culture));
+
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                continue;
+            }
+
+            string marker = OutputText.SquashForMatch(value);
+            if (marker.Length > 0 && squashedOutput.Contains(marker, StringComparison.Ordinal))
+            {
+                return value;
+            }
+        }
+
+        return null;
+    }
+
+    // ---------- 文案契约 ----------
+
+    /// <summary>
+    /// 复核选项的代价文案必须保留 <c>{0}</c> 占位符。
+    /// <para>
+    /// 如果改文案时删掉它，<see cref="string.Format(string, object?)"/> 不会报任何错，
+    /// 用户却再也看不到「复核要多久」——而那正是做这个决定唯一需要的信息。
+    /// 这类失效没有运行时症状，只能靠断言发现。
+    /// </para>
+    /// </summary>
+    [Theory]
+    [InlineData("en")]
+    [InlineData("zh-CN")]
+    [InlineData("ja")]
+    [InlineData("fr")]
+    [InlineData("ru")]
+    public void ReviewCostKeepsDurationPlaceholder(string culture)
+    {
+        string text = ArchivePasswordTestTool.Properties.EmbeddedResourceManager.GetString(
+            "FastFilterExhaustedReviewCost", new System.Globalization.CultureInfo(culture))!;
+
+        Assert.Contains("{0}", text, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// 复核开始提示同样会经过 <c>string.Format</c>（带入密码条数），必须保留占位符。
+    /// </summary>
+    [Theory]
+    [InlineData("en")]
+    [InlineData("zh-CN")]
+    [InlineData("ja")]
+    [InlineData("fr")]
+    [InlineData("ru")]
+    public void StartedMessageKeepsCountPlaceholder(string culture)
+    {
+        string text = ArchivePasswordTestTool.Properties.EmbeddedResourceManager.GetString(
+            "FallbackFullDecodeStarted", new System.Globalization.CultureInfo(culture))!;
+
+        Assert.Contains("{0}", text, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// 询问句<b>不该</b>再带占位符：它由 <c>InteractivePrompts.ConfirmSingleKey</c> 直接输出，
+    /// 不经过 <c>string.Format</c>。加回占位符会让用户看到字面量 <c>{0}</c>。
+    /// 耗时等动态内容已经移进上方的决策面板。
+    /// </summary>
+    [Fact]
+    public void PromptCarriesNoPlaceholders()
+    {
+        foreach (string culture in new[] { "en", "zh-CN", "ja", "fr", "ru" })
+        {
+            string text = ArchivePasswordTestTool.Properties.EmbeddedResourceManager.GetString(
+                "FallbackFullDecodePrompt", new System.Globalization.CultureInfo(culture))!;
+
+            Assert.DoesNotContain("{", text, StringComparison.Ordinal);
+        }
+    }
+
+    /// <summary>
+    /// 决策面板的五段文案（首句、原因、两个选项、跳过代价）在每种语言下都不能为空。
+    /// 空值会让面板出现空白行，用户看不到任何解释，等于回到改文案之前的状态。
+    /// </summary>
+    [Theory]
+    [InlineData("FastFilterExhaustedTitle")]
+    [InlineData("FastFilterExhaustedLead")]
+    [InlineData("FastFilterExhaustedReason")]
+    [InlineData("FastFilterExhaustedReview")]
+    [InlineData("FastFilterExhaustedSkip")]
+    [InlineData("FastFilterExhaustedSkipCost")]
+    [InlineData("PasswordNotFoundFiltered")]
+    [InlineData("ResultSignatureFilteredNote")]
+    public void DecisionPanelTextsAreNonEmptyInEveryLanguage(string key)
+    {
+        foreach (string culture in new[] { "en", "zh-CN", "ja", "fr", "ru" })
+        {
+            string? text = ArchivePasswordTestTool.Properties.EmbeddedResourceManager.GetString(
+                key, new System.Globalization.CultureInfo(culture));
+
+            Assert.False(
+                string.IsNullOrWhiteSpace(text),
+                $"{culture} 的 {key} 为空");
+        }
+    }
+
     private static string WriteDictionary(string archivePath)
     {
         string dictPath = Path.ChangeExtension(archivePath, ".txt");
@@ -259,6 +441,14 @@ public sealed class FallbackFullDecodeTests
         // 正确密码放末尾：需要「测完全部才找到」的用例才能得到确定的测试计数；
         // 前面几条错误密码同时保证快筛会先把它们全部否定掉
         File.WriteAllLines(dictPath, ["DefinitelyWrong1", "DefinitelyWrong2", CorrectPassword]);
+        return dictPath;
+    }
+
+    /// <summary>全错误密码的字典：用于验证「复核过之后仍没找到」应给出确定结论</summary>
+    private static string WriteWrongOnlyDictionary(string archivePath)
+    {
+        string dictPath = Path.ChangeExtension(archivePath, ".stale.txt");
+        File.WriteAllLines(dictPath, ["DefinitelyWrong1", "DefinitelyWrong2", "DefinitelyWrong3"]);
         return dictPath;
     }
 

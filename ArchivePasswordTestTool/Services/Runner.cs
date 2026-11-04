@@ -45,6 +45,12 @@ namespace ArchivePasswordTestTool
         private string? foundPassword;
 
         /// <summary>
+        /// 「未找到」这个结论是否只来自快速筛选的签名比对（没有做完整解密复核）。
+        /// 决定结果面板用哪一种标题：不确定的结论不能用「未找到正确的解压密码」这种肯定语气。
+        /// </summary>
+        private bool signatureFiltered;
+
+        /// <summary>
         /// 出错时的异常信息。留到离开备用屏幕后再打印——备用缓冲区切回主屏时内容整体消失，
         /// 在缓冲区里打印等于没打印
         /// </summary>
@@ -216,7 +222,9 @@ namespace ArchivePasswordTestTool
                     // 扩展名撒谎或载荷被剥头时会漏。这里给用户一次用完整解密复核的机会
                     if (string.IsNullOrEmpty(foundPassword))
                     {
-                        TryFallbackToFullDecode(options, archiveInfo, onlinePassword);
+                        // 复核没做的活，「未找到」就只是签名比对的结论，不是终局：
+                        // 结果面板必须把这一点说出来，否则等于把不确定当确定报给用户
+                        signatureFiltered = !TryFallbackToFullDecode(options, archiveInfo, onlinePassword);
                     }
                 }
                 else
@@ -242,7 +250,8 @@ namespace ArchivePasswordTestTool
                     dictionaryPath,
                     foundPassword,
                     stopwatch.Elapsed,
-                    Interlocked.Read(ref testedCount));
+                    Interlocked.Read(ref testedCount),
+                    signatureFiltered);
 
                 if (string.IsNullOrEmpty(foundPassword))
                 {
@@ -490,25 +499,36 @@ namespace ArchivePasswordTestTool
         /// </list>
         /// </para>
         /// </summary>
-        private void TryFallbackToFullDecode(Options options, ArchiveInfo archiveInfo, string? onlinePassword)
+        /// <returns>是否真的执行了完整复核。返回 false 表示「未找到」这个结论仍只来自签名比对。</returns>
+        private bool TryFallbackToFullDecode(Options options, ArchiveInfo archiveInfo, string? onlinePassword)
         {
             TimeSpan estimate = CostEstimate.Estimate(dictionaryCount, archiveInfo.FailurePathBytes);
-            string prompt = string.Format(
-                Resources.FallbackFullDecodePrompt,
-                dictionaryCount.ToString("N0"),
-                CostEstimate.FormatDuration(estimate));
 
             // 只在真实交互终端里询问。输出被重定向（`> log.txt`、CI）时用户看不到提示，
             // 而 ReadKey 会一直等下去——那会把自动化任务挂死。判据与
             // InteractivePrompts.NeedConfirmBeforeExit 保持一致
             bool interactive = !Console.IsInputRedirected && !Console.IsOutputRedirected;
 
-            bool proceed = options.FallbackFullDecode
-                || (interactive && InteractivePrompts.ConfirmSingleKey($"[yellow]{Ui.Escape(prompt)}[/]", defaultYes: false));
+            bool proceed;
+            if (options.FallbackFullDecode)
+            {
+                proceed = true;
+            }
+            else if (interactive)
+            {
+                // 先摆出「为什么可能漏 / 两个选项各自代价」，再问。单句询问无法支撑这个决定
+                Ui.WriteFastFilterExhausted(estimate);
+                proceed = InteractivePrompts.ConfirmSingleKey(
+                    $"[yellow]{Ui.Escape(Resources.FallbackFullDecodePrompt)}[/]", defaultYes: false);
+            }
+            else
+            {
+                proceed = false;
+            }
 
             if (!proceed)
             {
-                return;
+                return false;
             }
 
             AnsiConsole.WriteLine();
@@ -537,6 +557,8 @@ namespace ArchivePasswordTestTool
             {
                 RunThreaded(options.SevenZipDllPath, archiveInfo, fallbackDictionary, ThreadParallelism);
             }
+
+            return true;
         }
 
         /// <summary>

@@ -65,4 +65,38 @@ internal static class OutputText
 
         return builder.ToString();
     }
+
+    /// <summary>面板边框与连接符（Spectre RoundedBorder / SquareBorder 用到的字符）</summary>
+    private static readonly char[] BoxChars =
+        ['│', '─', '╭', '╮', '╰', '╯', '┌', '┐', '└', '┘', '├', '┤', '┬', '┴', '┼'];
+
+    /// <summary>
+    /// 为「断言某段文案确实出现在面板里」准备文本：剥离 ANSI、去掉边框、去掉<b>全部</b>空白。
+    /// <para>
+    /// 为什么连空白都要去掉：Spectre 按显示宽度折行，跨行处会插入边框字符与缩进，
+    /// 中文甚至可以在任意字符间断开（不插空格）。保留空白就要求子串恰好跨行方式一致，
+    /// 那种断言会随终端宽度变化而飘。两侧都压掉空白后，折行完全不影响匹配。
+    /// </para>
+    /// <para>
+    /// 不能用 <see cref="LettersDigitsAndSpaces"/> 代替：它只保留 ASCII 字母数字，
+    /// 中文/日文/俄文文案会整段消失，断言随之静默失效。
+    /// </para>
+    /// </summary>
+    public static string SquashForMatch(string text)
+    {
+        string plain = StripAnsi(text);
+        var builder = new System.Text.StringBuilder(plain.Length);
+
+        foreach (char c in plain)
+        {
+            if (char.IsWhiteSpace(c) || Array.IndexOf(BoxChars, c) >= 0)
+            {
+                continue;
+            }
+
+            _ = builder.Append(c);
+        }
+
+        return builder.ToString();
+    }
 }

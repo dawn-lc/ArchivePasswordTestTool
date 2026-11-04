@@ -178,6 +178,34 @@ namespace ArchivePasswordTestTool.Properties
         }
 
         /// <summary>
+        ///   查找类似 Password not found (fast filter) 的本地化字符串。
+        /// <para>
+        /// 结果面板标题的「结论不确定」变体：快速筛选按签名否决了全部候选且未做完整复核。
+        /// </para>
+        /// </summary>
+        public static string PasswordNotFoundFiltered
+        {
+            get
+            {
+                return EmbeddedResourceManager.GetString("PasswordNotFoundFiltered", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   查找类似 The fast filter rejected every candidate by file signature 的本地化字符串。
+        /// <para>
+        /// 与 <see cref="PasswordNotFoundFiltered"/> 配套：说明「未找到」不是终局结论。
+        /// </para>
+        /// </summary>
+        public static string ResultSignatureFilteredNote
+        {
+            get
+            {
+                return EmbeddedResourceManager.GetString("ResultSignatureFilteredNote", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   查找类似 Do you want to save the test results? 的本地化字符串。
         /// </summary>
         public static string SaveTestResultsPrompt
@@ -1041,9 +1069,98 @@ namespace ArchivePasswordTestTool.Properties
         }
 
         /// <summary>
-        ///   查找类似 The fast filter rejected all {0} passwords 的本地化字符串。
+        ///   查找类似 Fast filter rejected every password 的本地化字符串。
         /// <para>
-        /// 快速筛选按签名否决了全部候选后的复核询问。两个占位符：已排除的密码条数、预估耗时。
+        /// 决策提示面板的标题：快速筛选否决了全部候选。只在该决定真正发生时展示。
+        /// </para>
+        /// </summary>
+        public static string FastFilterExhaustedTitle
+        {
+            get
+            {
+                return EmbeddedResourceManager.GetString("FastFilterExhaustedTitle", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   查找类似 That does not mean the password is not in your dictionary. 的本地化字符串。
+        /// <para>
+        /// 面板首句：直接否定用户的直觉结论（「否决全部」≠「密码不在字典里」）。
+        /// </para>
+        /// </summary>
+        public static string FastFilterExhaustedLead
+        {
+            get
+            {
+                return EmbeddedResourceManager.GetString("FastFilterExhaustedLead", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   查找类似 The fast filter only decrypts the first block 的本地化字符串。
+        /// <para>
+        /// 说明什么情况下会漏（扩展名与真实内容不符），让用户能对号入座。
+        /// </para>
+        /// </summary>
+        public static string FastFilterExhaustedReason
+        {
+            get
+            {
+                return EmbeddedResourceManager.GetString("FastFilterExhaustedReason", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   查找类似 Full-decode review 的本地化字符串。
+        /// </summary>
+        public static string FastFilterExhaustedReview
+        {
+            get
+            {
+                return EmbeddedResourceManager.GetString("FastFilterExhaustedReview", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   查找类似 about {0}, verdict reliable 的本地化字符串。
+        /// <para>
+        /// 复核选项的代价。占位符是预估耗时。
+        /// </para>
+        /// </summary>
+        public static string FastFilterExhaustedReviewCost
+        {
+            get
+            {
+                return EmbeddedResourceManager.GetString("FastFilterExhaustedReviewCost", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   查找类似 Skip the review 的本地化字符串。
+        /// </summary>
+        public static string FastFilterExhaustedSkip
+        {
+            get
+            {
+                return EmbeddedResourceManager.GetString("FastFilterExhaustedSkip", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   查找类似 finish as "not found" 的本地化字符串。
+        /// </summary>
+        public static string FastFilterExhaustedSkipCost
+        {
+            get
+            {
+                return EmbeddedResourceManager.GetString("FastFilterExhaustedSkipCost", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   查找类似 Re-check with a full 7-Zip decode? 的本地化字符串。
+        /// <para>
+        /// 面板之后的单行询问。耗时已移入面板，此键不再带占位符。
         /// </para>
         /// </summary>
         public static string FallbackFullDecodePrompt
@@ -1055,7 +1172,7 @@ namespace ArchivePasswordTestTool.Properties
         }
 
         /// <summary>
-        ///   查找类似 Full-decode verification started 的本地化字符串。
+        ///   查找类似 Fast-filter verdict discarded 的本地化字符串。
         /// </summary>
         public static string FallbackFullDecodeStarted
         {

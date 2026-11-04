@@ -294,8 +294,20 @@ namespace ArchivePasswordTestTool
         /// 会把超长内容截成 <c>…</c>（实测 52 字符以上的密码会整段变成省略号，用户看不到密码），
         /// 而 Grid 单元格会折行，完整内容不会丢。
         /// </para>
+        /// <para>
+        /// <paramref name="signatureFiltered"/> 为 true 表示「未找到」这个结论只来自快速筛选的签名比对，
+        /// 没有经过完整解密复核。此时不能说「未找到正确的解压密码」——那是把不确定说成了确定。
+        /// 标题改写为限定形式，并在面板里给出原因与补救开关。
+        /// </para>
         /// </summary>
-        public static void WriteOutcome(bool found, string archivePath, string dictionaryPath, string? password, TimeSpan elapsed, long tested)
+        public static void WriteOutcome(
+            bool found,
+            string archivePath,
+            string dictionaryPath,
+            string? password,
+            TimeSpan elapsed,
+            long tested,
+            bool signatureFiltered = false)
         {
             string speed = elapsed.TotalSeconds > 0
                 ? string.Format(Resources.ResultPwPerSec, Math.Round(tested / elapsed.TotalSeconds).ToString("N0"))
@@ -317,17 +329,72 @@ namespace ArchivePasswordTestTool
             AddRow(grid, Resources.ResultElapsed, elapsed.ToString());
             AddRow(grid, Resources.ResultSpeed, speed);
 
+            bool tentative = !found && signatureFiltered;
+
             string header = found
                 ? $"[bold green]√ {Escape(Resources.PasswordFoundSuccess)}[/]"
-                : $"[bold red]× {Escape(Resources.PasswordNotFound)}[/]";
+                : tentative
+                    ? $"[bold yellow]× {Escape(Resources.PasswordNotFoundFiltered)}[/]"
+                    : $"[bold red]× {Escape(Resources.PasswordNotFound)}[/]";
 
-            var panel = new Panel(grid)
+            Spectre.Console.Rendering.IRenderable content = grid;
+            if (tentative)
+            {
+                content = new Rows(
+                    grid,
+                    new Markup(string.Empty),
+                    new Markup($"[yellow]{Escape(Resources.ResultSignatureFilteredNote)}[/]"));
+            }
+
+            var panel = new Panel(content)
                 .Header(header)
                 .RoundedBorder()
-                .BorderColor(found ? Color.Green : Color.Red);
+                .BorderColor(found ? Color.Green : tentative ? Color.Yellow : Color.Red);
 
             AnsiConsole.WriteLine();
             AnsiConsole.Write(panel);
+        }
+
+        /// <summary>
+        /// 快速筛选否决全部候选后的决策面板（只在交互终端显示）。
+        /// <para>
+        /// 这里必须回答三个问题，否则用户无从决定：
+        /// <list type="number">
+        /// <item>结论是什么、不是什么——「否决全部」不等于「密码不在字典里」；</item>
+        /// <item>什么情况下会漏——扩展名与真实内容不符，用户可以据此判断自己的包是否会中招；</item>
+        /// <item>两个选项各自的代价——复核要多久，跳过会得到什么。</item>
+        /// </list>
+        /// 早先只有一句「已按文件签名排除全部 N 个密码，是否复核？预计 X」：
+        /// 用户既不知道「按签名排除」意味着什么，也不知道不做的后果，等于把决定压给了一个无法判断的问题。
+        /// </para>
+        /// </summary>
+        public static void WriteFastFilterExhausted(TimeSpan estimate)
+        {
+            var options = new Grid();
+            _ = options.AddColumn();
+            _ = options.AddColumn();
+            _ = options.AddRow(
+                $"[bold yellow]{Escape(Resources.FastFilterExhaustedReview)}[/]",
+                $"[white]{Escape(string.Format(Resources.FastFilterExhaustedReviewCost, CostEstimate.FormatDuration(estimate)))}[/]");
+            _ = options.AddRow(
+                $"[grey]{Escape(Resources.FastFilterExhaustedSkip)}[/]",
+                $"[grey]{Escape(Resources.FastFilterExhaustedSkipCost)}[/]");
+
+            var content = new Rows(
+                new Markup($"[white]{Escape(Resources.FastFilterExhaustedLead)}[/]"),
+                new Markup(string.Empty),
+                new Markup($"[grey]{Escape(Resources.FastFilterExhaustedReason)}[/]"),
+                new Markup(string.Empty),
+                options);
+
+            var panel = new Panel(content)
+                .Header($"[bold yellow]! {Escape(Resources.FastFilterExhaustedTitle)}[/]")
+                .RoundedBorder()
+                .BorderColor(Color.Yellow);
+
+            AnsiConsole.WriteLine();
+            AnsiConsole.Write(panel);
+            AnsiConsole.WriteLine();
         }
 
         /// <summary>

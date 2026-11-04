@@ -383,13 +383,40 @@
     <value>Обновлено до {0}.</value>
   </data>
   <data name="FastFilterActive" xml:space="preserve">
-    <value>Несжатые зашифрованные данные ({0}): включён быстрый отбор паролей — расшифровывается только первый блок, данные не распаковываются. Совпавшие кандидаты всё равно проверяются полным тестом 7-Zip.</value>
+    <value>Быстрый фильтр ожидает содержимое {0} по расширению записи: расшифровывается только первый блок и сравнивается с сигнатурами, а совпадения всё равно проверяются полным тестом 7-Zip.</value>
+  </data>
+  <data name="FastFilterExhaustedTitle" xml:space="preserve">
+    <value>Быстрый фильтр отклонил все пароли</value>
+  </data>
+  <data name="FastFilterExhaustedLead" xml:space="preserve">
+    <value>Это не значит, что пароля нет в словаре.</value>
+  </data>
+  <data name="FastFilterExhaustedReason" xml:space="preserve">
+    <value>Быстрый фильтр расшифровывает только первый блок и сравнивает его с сигнатурами форматов. Если расширение файла в архиве не соответствует его реальному содержимому (веб-страница или текст, сохранённые как .mp4), правильный пароль будет принят за неверный.</value>
+  </data>
+  <data name="FastFilterExhaustedReview" xml:space="preserve">
+    <value>Полное дешифрование</value>
+  </data>
+  <data name="FastFilterExhaustedReviewCost" xml:space="preserve">
+    <value>≈ {0} · результат достоверен</value>
+  </data>
+  <data name="FastFilterExhaustedSkip" xml:space="preserve">
+    <value>Пропустить проверку</value>
+  </data>
+  <data name="FastFilterExhaustedSkipCost" xml:space="preserve">
+    <value>завершить как «не найден»</value>
   </data>
   <data name="FallbackFullDecodePrompt" xml:space="preserve">
-    <value>Быстрый отбор отклонил все {0} паролей по подписи файла. Проверить их полной расшифровкой 7-Zip? Ожидаемое время: {1}.</value>
+    <value>Перепроверить полным дешифрованием 7-Zip?</value>
   </data>
   <data name="FallbackFullDecodeStarted" xml:space="preserve">
-    <value>Начата проверка полной расшифровкой (быстрый отбор ранее отклонил все {0} паролей по подписи).</value>
+    <value>Результат быстрого фильтра отменён; все {0} паролей проверяются полным дешифрованием.</value>
+  </data>
+  <data name="PasswordNotFoundFiltered" xml:space="preserve">
+    <value>Пароль не найден (быстрый фильтр)</value>
+  </data>
+  <data name="ResultSignatureFilteredNote" xml:space="preserve">
+    <value>Быстрый фильтр отклонил все кандидаты только по сигнатуре, полная проверка не выполнялась, поэтому результат не окончателен: если расширение записи не соответствует её реальному содержимому, правильный пароль мог быть пропущен. Добавьте -FallbackFullDecode, чтобы форсировать проверку.</value>
   </data>
   <data name="SlowFullDecodeWarning" xml:space="preserve">
     <value>Архив зашифрован без сжатия (store), имена файлов не зашифрованы: поэтому каждый неверный пароль требует полной расшифровки данных ({0} на попытку), и только CRC файла может его отклонить. Ожидаемое время для текущего словаря: примерно {1}. Это ограничение формата — увеличение параллелизма не поможет (узкое место — пропускная способность памяти, а не вывод ключа). Рассмотрите использование меньшего словаря.</value>

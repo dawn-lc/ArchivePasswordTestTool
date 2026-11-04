@@ -383,13 +383,40 @@
     <value>已更新到 {0}。</value>
   </data>
   <data name="FastFilterActive" xml:space="preserve">
-    <value>不压缩加密数据（{0}）：已启用快速密码筛选，仅解密首块、不解包数据。命中的候选仍会由 7-Zip 完整测试确认。</value>
+    <value>快速筛选按归档内文件的扩展名期望内容为 {0}：只解密首块比对签名，命中者仍由 7-Zip 完整确认。</value>
+  </data>
+  <data name="FastFilterExhaustedTitle" xml:space="preserve">
+    <value>快速筛选否决了全部密码</value>
+  </data>
+  <data name="FastFilterExhaustedLead" xml:space="preserve">
+    <value>这不等于密码不在字典里。</value>
+  </data>
+  <data name="FastFilterExhaustedReason" xml:space="preserve">
+    <value>快速筛选只解密首块、比对文件格式签名。当归档内文件的扩展名与真实内容不符时（例如网页、文本被存成 .mp4），正确密码会被误判成错误。</value>
+  </data>
+  <data name="FastFilterExhaustedReview" xml:space="preserve">
+    <value>完整解密复核</value>
+  </data>
+  <data name="FastFilterExhaustedReviewCost" xml:space="preserve">
+    <value>约 {0} · 结论可靠</value>
+  </data>
+  <data name="FastFilterExhaustedSkip" xml:space="preserve">
+    <value>跳过复核</value>
+  </data>
+  <data name="FastFilterExhaustedSkipCost" xml:space="preserve">
+    <value>直接报「未找到」</value>
   </data>
   <data name="FallbackFullDecodePrompt" xml:space="preserve">
-    <value>快速筛选已按文件签名排除全部 {0} 个密码。是否改用 7-Zip 完整解密复核？预计耗时 {1}。</value>
+    <value>改用 7-Zip 完整解密复核？</value>
   </data>
   <data name="FallbackFullDecodeStarted" xml:space="preserve">
-    <value>已开始完整解密复核（快速筛选曾按签名排除全部 {0} 个密码）。</value>
+    <value>已作废快速筛选的结论，改由 7-Zip 完整解密复核全部 {0} 个密码。</value>
+  </data>
+  <data name="PasswordNotFoundFiltered" xml:space="preserve">
+    <value>未找到解压密码（快速筛选）</value>
+  </data>
+  <data name="ResultSignatureFilteredNote" xml:space="preserve">
+    <value>快速筛选仅按文件签名排除了全部候选，未做完整复核，因此这个结论不是终局：若归档内文件的扩展名与实际内容不符，正确密码可能已被漏掉。加 -FallbackFullDecode 可强制复核。</value>
   </data>
   <data name="SlowFullDecodeWarning" xml:space="preserve">
     <value>该压缩包使用了不压缩（store）编码且未加密文件名：每个错误密码都必须完整解出数据（每次 {0}）才能靠文件 CRC 判错。按当前字典预计耗时约 {1}。这是格式自身的限制，增加并行度也无法改善（瓶颈是内存带宽而非密钥派生）。建议改用更小的字典。</value>

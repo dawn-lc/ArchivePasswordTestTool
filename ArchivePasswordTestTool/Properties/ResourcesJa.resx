@@ -383,13 +383,40 @@
     <value>{0} に更新しました。</value>
   </data>
   <data name="FastFilterActive" xml:space="preserve">
-    <value>無圧縮の暗号化データ（{0}）：高速パスワード絞り込みを有効にしました。先頭ブロックのみ復号し、データは展開しません。一致した候補は 7-Zip による完全テストで確認します。</value>
+    <value>アーカイブ内ファイルの拡張子から内容を {0} と想定して高速フィルターを有効にしました：先頭ブロックのみ復号してシグネチャと照合し、一致した候補は 7-Zip で完全に確認します。</value>
+  </data>
+  <data name="FastFilterExhaustedTitle" xml:space="preserve">
+    <value>高速フィルターが全パスワードを除外しました</value>
+  </data>
+  <data name="FastFilterExhaustedLead" xml:space="preserve">
+    <value>これはパスワードが辞書に無いという意味ではありません。</value>
+  </data>
+  <data name="FastFilterExhaustedReason" xml:space="preserve">
+    <value>高速フィルターは先頭ブロックだけを復号し、ファイル形式のシグネチャと照合します。アーカイブ内のファイルの拡張子が実際の内容と異なる場合（ウェブページやテキストに .mp4 という名前を付けた場合など）、正しいパスワードが誤りと判定されます。</value>
+  </data>
+  <data name="FastFilterExhaustedReview" xml:space="preserve">
+    <value>完全復号で再確認</value>
+  </data>
+  <data name="FastFilterExhaustedReviewCost" xml:space="preserve">
+    <value>約 {0}・判定は確実</value>
+  </data>
+  <data name="FastFilterExhaustedSkip" xml:space="preserve">
+    <value>再確認しない</value>
+  </data>
+  <data name="FastFilterExhaustedSkipCost" xml:space="preserve">
+    <value>「見つかりません」で終了</value>
   </data>
   <data name="FallbackFullDecodePrompt" xml:space="preserve">
-    <value>高速絞り込みはファイル署名により {0} 件すべてのパスワードを除外しました。7-Zip による完全復号で再確認しますか？推定所要時間は {1} です。</value>
+    <value>7-Zip の完全復号で再確認しますか？</value>
   </data>
   <data name="FallbackFullDecodeStarted" xml:space="preserve">
-    <value>完全復号による再確認を開始しました（高速絞り込みは署名により {0} 件すべてを除外していました）。</value>
+    <value>高速フィルターの判定を破棄し、全 {0} 件のパスワードを完全復号で再確認します。</value>
+  </data>
+  <data name="PasswordNotFoundFiltered" xml:space="preserve">
+    <value>パスワードが見つかりません（高速フィルター）</value>
+  </data>
+  <data name="ResultSignatureFilteredNote" xml:space="preserve">
+    <value>高速フィルターがシグネチャのみで全候補を除外し、完全な再確認は行っていません。そのためこの結論は確定ではありません。拡張子が実際の内容と異なる場合、正しいパスワードを見落としている可能性があります。-FallbackFullDecode で強制的に再確認できます。</value>
   </data>
   <data name="SlowFullDecodeWarning" xml:space="preserve">
     <value>この書庫は無圧縮（store）で暗号化され、ファイル名も暗号化されていません。そのため誤ったパスワードでは、ファイル CRC で判定できるまで毎回データ全体（1 回あたり {0}）を展開する必要があります。現在の辞書での推定所要時間は約 {1} です。これは形式固有の制限で、並列度を上げても改善しません（ボトルネックは鍵導出ではなくメモリ帯域です）。より小さい辞書の使用をご検討ください。</value>

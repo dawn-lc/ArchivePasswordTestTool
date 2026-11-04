@@ -383,13 +383,40 @@ You can also download it manually from the releases page.</value>
     <value>Updated to {0}.</value>
   </data>
   <data name="FastFilterActive" xml:space="preserve">
-    <value>Uncompressed encrypted data ({0}): fast password filter enabled — only the first block is decrypted, archive data is not unpacked. Candidates matching the file signature are still verified by a full 7-Zip test.</value>
+    <value>Fast filter expects {0} content based on the entry's extension: only the first block is decrypted and matched against format signatures, and any match is still verified by a full 7-Zip test.</value>
+  </data>
+  <data name="FastFilterExhaustedTitle" xml:space="preserve">
+    <value>Fast filter rejected every password</value>
+  </data>
+  <data name="FastFilterExhaustedLead" xml:space="preserve">
+    <value>That does not mean the password is not in your dictionary.</value>
+  </data>
+  <data name="FastFilterExhaustedReason" xml:space="preserve">
+    <value>The fast filter only decrypts the first block and matches it against file format signatures. If a file inside the archive has a misleading extension (a web page or plain text saved as .mp4), the correct password gets mistaken for a wrong one.</value>
+  </data>
+  <data name="FastFilterExhaustedReview" xml:space="preserve">
+    <value>Full-decode review</value>
+  </data>
+  <data name="FastFilterExhaustedReviewCost" xml:space="preserve">
+    <value>about {0}, verdict reliable</value>
+  </data>
+  <data name="FastFilterExhaustedSkip" xml:space="preserve">
+    <value>Skip the review</value>
+  </data>
+  <data name="FastFilterExhaustedSkipCost" xml:space="preserve">
+    <value>finish as "not found"</value>
   </data>
   <data name="FallbackFullDecodePrompt" xml:space="preserve">
-    <value>The fast filter rejected all {0} passwords based on the file signature. Re-check them with a full 7-Zip decode? Estimated {1}.</value>
+    <value>Re-check with a full 7-Zip decode?</value>
   </data>
   <data name="FallbackFullDecodeStarted" xml:space="preserve">
-    <value>Full-decode verification started (the fast filter had rejected all {0} passwords by signature).</value>
+    <value>Fast-filter verdict discarded; re-testing all {0} passwords with a full 7-Zip decode.</value>
+  </data>
+  <data name="PasswordNotFoundFiltered" xml:space="preserve">
+    <value>Password not found (fast filter)</value>
+  </data>
+  <data name="ResultSignatureFilteredNote" xml:space="preserve">
+    <value>The fast filter rejected every candidate by file signature and no full review was run, so the verdict is not final: if an entry's extension does not match its real content, the correct password may have been missed. Add -FallbackFullDecode to force a review.</value>
   </data>
   <data name="SlowFullDecodeWarning" xml:space="preserve">
     <value>This archive is encrypted without compression (store) and its file names are not encrypted, so every wrong password must be fully decoded ({0} per attempt) before the file CRC can reject it. Estimated time for the current dictionary: {1}. This is a limitation of the format — more parallelism will not help (the bottleneck is memory bandwidth, not the key derivation). Consider using a smaller dictionary.</value>
